@@ -68,6 +68,27 @@ def test_extract_timeseries_from_csvdata(loadcsvdir):
             assert abs(time - value) == 0
 
 
+def test_tryinvalidattribute_singlefile(loadcsvdir):
+    filepath_list, rawcsvdata_list = loadcsvdir
+    for filepath in filepath_list:
+        scandata = dcparsing.fetch_csv_as_unfit_scandata(
+                                    filepath, 'invalid', False)
+        assert scandata.scaninfo['Attribute'] == "scancoord"
+        for time, value in scandata.timeseries():
+            assert abs(time - value) == 0  # should default to scancoord
+
+
+def test_tryinvalidattribute_directory(loadcsvdir):
+    dirpath = ("C:\\pythonprojects\\experimentdataanalysis_project\\" +
+               "tests\\representativetwocosdata")
+    scandatalist = dcparsing.fetch_dir_as_unfit_scandata_iterator(
+                            directorypath=dirpath, attribute="invalid")
+    for scandata in scandatalist:
+        assert scandata.scaninfo['Attribute'] == "scancoord"
+        for time, value in scandata.timeseries():
+            assert abs(time - value) == 0  # should default to scancoord
+
+
 def test_filenameparsing():
     filepath = ("C:\\Voltage_0_Experiment_Channel3_033XT-B11" +
                 "_819.0nm_30K_2Dscan_BExternal_DelayTime_run2\\" +

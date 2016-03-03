@@ -32,15 +32,15 @@ def two_decays_sinusoidal(t, a, b, c, d, e, f, g):
 
 
 # %%
-def two_decays_two_cosines(t, a, b, c, d, e, f, g, h, k):
+def two_decays_two_cosines(t, a, b, c, d, e, f, g, h, k, m, n):
     """
     note: does NOT handle "wrapping around" t values less than zero.
     see wrap_negative_times()
     """
     def single_pulse_fcn(t2):
         return (b*np.exp(-t2/c) +
-                d*np.exp(-t2/e)*np.cos(f*t2 + 0) +
-                g*np.exp(-t2/h)*np.cos(k*t2 + 0))
+                d*np.exp(-t2/e)*np.cos(f*t2 + m) +
+                g*np.exp(-t2/h)*np.cos(k*t2 + n))
 
     last_t = t + LASER_REPRATE
     last_t_2 = t + 2*LASER_REPRATE
@@ -75,7 +75,7 @@ def fit_nonlinear_fcn_timeseries_sorted(timeseries, fitfcn, initialparams,
     tdata = np.array(times)
     zdata = np.array(list(timeseries.values(unsorted=False)))
 
-    with np.errstate(all='warn'):
+    with np.errstate(all='ignore'):
         fitparams, covariances = curve_fit(fitfcn, tdata, zdata,
                                            p0=initialparams, maxfev=maxfev)
         fitstds = np.sqrt(np.diag(covariances))
@@ -94,6 +94,17 @@ def get_max_value_data_pt(timeseries):
 
 
 # %%
+def get_abs_max_value_data_pt(timeseries):
+    time_at_valuemax = None
+    valuemax = 0
+    for time, value in timeseries.datatuples():
+        if abs(value) > valuemax:
+            time_at_valuemax = time
+            valuemax = abs(value)
+    return time_at_valuemax, valuemax
+
+
+# %%
 def fit_sorted_series_to_decaying_cos(timeseries):
     Tshortguess = 100
     Tlongguess = 1000
@@ -101,31 +112,44 @@ def fit_sorted_series_to_decaying_cos(timeseries):
 
     initguess = [0, datamax*0.15, Tshortguess,
                  datamax*0.1, Tlongguess, 2*np.pi/800, 0]
-    fitparams, fitstds = fit_nonlinear_fcn_timeseries_sorted(
-                             timeseries, two_decays_sinusoidal, initguess)
-
-    times = timeseries.times(unsorted=True, unfiltered=True)
-    fittimes = wrap_negative_times(times)
-    fitvalues = []
-    for time in fittimes:
-        if time in wrap_negative_times(timeseries.times(unfiltered=False)):
-            fitvalues.append(two_decays_sinusoidal(time, *fitparams))
-        else:
-            # print("excluding time {}".format(time))  # for bug testing
-            fitvalues.append(0)
-    fittimeseries = TimeSeries(
-                        zip(times, fitvalues),
-                        excluded_intervals=timeseries.excluded_intervals())
-    fitparamstring = (
-        "Fit Properties\n" +
-        "Offset: {:.5g}\n".format(fitparams[0]) +
-        "Short Amplitude: {:.5g}\n".format(fitparams[1]) +
-        "Short Lifetime: {:.5g}\n".format(fitparams[2]) +
-        "Long Amplitude: {:.5g}\n".format(fitparams[3]) +
-        "Long Lifetime: {:.5g}\n".format(fitparams[4]) +
-        "Long Frequency: {:.5g}\n".format(fitparams[5]) +
-        "Long Cosine Phase: {:.5g}\n".format(fitparams[6]))
-    return FitData(fitparams, fitstds, fitparamstring, fittimeseries)
+    try:
+        fitparams, fitstds = fit_nonlinear_fcn_timeseries_sorted(
+                                 timeseries, two_decays_sinusoidal, initguess)
+    except TypeError as err:
+        print("Warning: TypeError during " +
+              "fit_sorted_series_to_decaying_cos:")
+        print(err)
+        return None
+    except RuntimeError as err:
+        print("Warning: RuntimeError during " +
+              "fit_sorted_series_to_decaying_cos:")
+        print(err)
+        return None
+    else:
+        times = timeseries.times(unsorted=True, unfiltered=True)
+        fittimes = wrap_negative_times(times)
+        fitvalues = []
+        for time in fittimes:
+            if time in wrap_negative_times(timeseries.times(unfiltered=False)):
+                fitvalues.append(two_decays_sinusoidal(time, *fitparams))
+            else:
+                # print("excluding time {}".format(time))  # for bug testing
+                fitvalues.append(0)
+        fittimeseries = TimeSeries(
+                            zip(times, fitvalues),
+                            excluded_intervals=timeseries.excluded_intervals())
+        fitparamstring = (
+            "Fit Properties\n" +
+            "Offset: {:.5g}\n".format(fitparams[0]) +
+            "Short Amplitude: {:.5g}\n".format(fitparams[1]) +
+            "Short Lifetime: {:.5g}\n".format(fitparams[2]) +
+            "Long Amplitude: {:.5g}\n".format(fitparams[3]) +
+            "Long Lifetime: {:.5g}\n".format(fitparams[4]) +
+            "     +-{:.5g}\n".format((fitstds[4])) +
+            "Long Frequency: {:.5g}\n".format(fitparams[5]) +
+            "     +-{:.5g}\n".format((fitstds[5])) +
+            "Long Cosine Phase: {:.5g}\n".format(fitparams[6]))
+        return FitData(fitparams, fitstds, fitparamstring, fittimeseries)
 
 
 # %%
@@ -137,35 +161,48 @@ def fit_sorted_series_to_two_decaying_cos(timeseries):
 
     initguess = [0, datamax*0.15, Tshortguess,
                  datamax*0.1, Tlongguess, 2*np.pi/800,
-                 -datamax*0.05, Tlongerguess, 2*np.pi/800]
-    fitparams, fitstds = fit_nonlinear_fcn_timeseries_sorted(
-                             timeseries, two_decays_two_cosines, initguess)
-
-    times = timeseries.times(unsorted=True, unfiltered=True)
-    fittimes = wrap_negative_times(times)
-    fitvalues = []
-    for time in fittimes:
-        if time in wrap_negative_times(timeseries.times(unfiltered=False)):
-            fitvalues.append(two_decays_two_cosines(time, *fitparams))
-        else:
-            # print("excluding time {}".format(time))  # for bug testing
-            fitvalues.append(0)
-
-    fittimeseries = TimeSeries(
-                        zip(times, fitvalues),
-                        excluded_intervals=timeseries.excluded_intervals())
-    fitparamstring = (
-        "Fit Properties\n" +
-        "Offset: {:.5g}\n".format(fitparams[0]) +
-        "Short Amplitude: {:.5g}\n".format(fitparams[1]) +
-        "Short Lifetime: {:.5g}\n".format(fitparams[2]) +
-        "Long Amplitude 1: {:.5g}\n".format(fitparams[3]) +
-        "Long Amplitude 2: {:.5g}\n".format(fitparams[6]) +
-        "Long Lifetime 1: {:.5g}\n".format(fitparams[4]) +
-        "Long Lifetime 2: {:.5g}\n".format(fitparams[7]) +
-        "Long Frequency 1: {:.5g}\n".format(fitparams[5]) +
-        "Long Frequency 2: {:.5g}\n".format(fitparams[8]))
-    return FitData(fitparams, fitstds, fitparamstring, fittimeseries)
+                 -datamax*0.05, Tlongerguess, 2*np.pi/800,
+                 0, 0]
+    try:
+        fitparams, fitstds = fit_nonlinear_fcn_timeseries_sorted(
+            timeseries, two_decays_two_cosines, initguess)
+    except TypeError as err:
+        print("Warning: TypeError during " +
+              "fit_sorted_series_to_two_decaying_cos:")
+        print(err)
+        return None
+    except RuntimeError as err:
+        print("Warning: RuntimeError during " +
+              "fit_sorted_series_to_two_decaying_cos:")
+        print(err)
+        return None
+    else:
+        times = timeseries.times(unsorted=True, unfiltered=True)
+        fittimes = wrap_negative_times(times)
+        fitvalues = []
+        for time in fittimes:
+            if time in wrap_negative_times(timeseries.times(unfiltered=False)):
+                fitvalues.append(two_decays_two_cosines(time, *fitparams))
+            else:
+                # print("excluding time {}".format(time))  # for bug testing
+                fitvalues.append(0)
+        fittimeseries = TimeSeries(
+                            zip(times, fitvalues),
+                            excluded_intervals=timeseries.excluded_intervals())
+        fitparamstring = (
+            "Fit Properties\n" +
+            "Offset: {:.5g}\n".format(fitparams[0]) +
+            "Short Amplitude: {:.5g}\n".format(fitparams[1]) +
+            "Short Lifetime: {:.5g}\n".format(fitparams[2]) +
+            "Long Amplitude 1: {:.5g}\n".format(fitparams[3]) +
+            "Long Amplitude 2: {:.5g}\n".format(fitparams[6]) +
+            "Long Lifetime 1: {:.5g}\n".format(fitparams[4]) +
+            "Long Lifetime 2: {:.5g}\n".format(fitparams[7]) +
+            "Long Frequency 1: {:.5g}\n".format(fitparams[5]) +
+            "Long Frequency 2: {:.5g}\n".format(fitparams[8]) +
+            "Long Phase 1: {:.5g}\n".format(fitparams[9]) +
+            "Long Phase 2: {:.5g}\n".format(fitparams[10]))
+        return FitData(fitparams, fitstds, fitparamstring, fittimeseries)
 
 
 # %%

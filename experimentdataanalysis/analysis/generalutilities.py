@@ -10,11 +10,38 @@ import time
 
 
 # %%
-def multiprocessable_map(processfunction, input_iterable,
+def fcn_with_unpacked_args(fcn_arglist_tuple):
+    """
+    Allows variable length argument list for ProcessPoolExecutor
+    at the cost of being a bit confusing. To use, need to pack
+    function alongside arguments. For example, if you want to map
+    the function "map_function" with arg lists from
+    input_args_iterable, you would write:
+    fcn_arglist_tuples = ((map_function, args)
+                          for args in input_args_iterable)
+    map(fcn_with_unpacked_args, fcn_arglist_tuples)
+    """
+    fcn, arglist = fcn_arglist_tuple
+    return fcn(*arglist)
+
+
+def pack_args_for_fcn(function, input_args_iterable):
+    """
+    implements
+    fcn_arglist_tuples = ((map_function, args)
+                          for args in input_args_iterable)
+    """
+    return ((function, args) for args in input_args_iterable)
+
+
+# %%
+def multiprocessable_map(processfunction, input_args_iterable,
                          multiprocessing=False):
     """
     multiprocessing = False:
-    identical to map(processfunction, input_iterable)
+    identical to
+    for input_args in input_args_iterable:
+        yield processfunction(*input_args)
     ---
     multiprocessing = True:
     Generic ProcessPoolExecutor loop. Supports any arbitrary
@@ -36,55 +63,27 @@ def multiprocessable_map(processfunction, input_iterable,
                         return processfunction(timeseries)
                         except <stuff>...
 
-    Returns iterable pointing to the outputs of the processfunction
+    Generator yielding each of the outputs of the processfunction
     acting on each input value.
 
     Positional arguments:
         processfunction -- should take a timeseries and return in form
-        input_iterable -- iterable pointing to TimeSeries
-                               objects containing data to map.
-                               should not be reused elsewhere.
+        input_args_iterable -- iterable pointing to a series of argument
+                                lists for the mapped function
     """
     if multiprocessing:
+        packed_fcn_args = pack_args_for_fcn(processfunction,
+                                            input_args_iterable)
         start_processing_time = time.time()
-        input_iterable = list(input_iterable)
-#        processfunction_iterable = [processfunction]*len(input_iterable)
-#        with ThreadPoolExecutor(max_workers=None) as executor:
         with ProcessPoolExecutor(max_workers=None) as executor:
-            output_iter = executor.map(processfunction, input_iterable,
+            output_iter = executor.map(fcn_with_unpacked_args,
+                                       packed_fcn_args,
                                        timeout=30, chunksize=1)
         elapsed_processing_time = time.time() - start_processing_time
         print('{} seconds elapsed during multiprocessing'.format(
                                                     elapsed_processing_time))
-        return output_iter
+        for output in output_iter:
+            yield output
     else:
-        return map(processfunction, input_iterable)
-
-
-# %%
-def mltprctstfcn1(x=0):
-    return x+2
-def mltprctstfcn2(x=0, stuff=False):
-    if stuff:
-        return x+2
-    else:
-        return (x, x+2)
-def testprintoutput(a):
-    print(next(a))
-    print(next(a))
-    print(next(a))
-    try:
-        print(next(a))
-    except StopIteration:
-        print('iterable exhausted')
-if __name__ == "__main__":
-    a = multiprocessable_map(mltprctstfcn1, [1,2,3], multiprocessing=False)
-    testprintoutput(a)
-    a = multiprocessable_map(mltprctstfcn2, [1,2,3], multiprocessing=False)
-    testprintoutput(a)
-    a = multiprocessable_map(mltprctstfcn1, [1,2,3], multiprocessing=True)
-    testprintoutput(a)
-    a = multiprocessable_map(mltprctstfcn2, [1,2,3], multiprocessing=True)
-    testprintoutput(a)
-    # result: OK to have multiple args in function given
-    # to multiprocessable_map as long as rest have defaults
+        for input_args in input_args_iterable:
+            yield processfunction(*input_args)

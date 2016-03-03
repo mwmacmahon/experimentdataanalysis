@@ -21,6 +21,11 @@ from experimentdataanalysis.analysis.generalutilities \
 def simple_fcn(x):
     return x*2
 
+
+def simple_fcn_two_args(x=1, y=1):
+    return x*y
+
+
 # %% TEST FIXTURES
 
 
@@ -37,10 +42,23 @@ def simple_fcn(x):
 
 # %% TESTS
 def test_can_mmap_simple_helper_fcn():
-    output = multiprocessable_map(simple_fcn, [1, 2, 3], multiprocessing=False)
+    input_args_list = [[1], [2], [3]]
+    output = multiprocessable_map(simple_fcn, input_args_list,
+                                  multiprocessing=False)
     assert list(output) == [2, 4, 6]
-    output = multiprocessable_map(simple_fcn, [1, 2, 3], multiprocessing=True)
+    output = multiprocessable_map(simple_fcn, input_args_list,
+                                  multiprocessing=True)
     assert list(output) == [2, 4, 6]
+
+
+def test_can_mmap_variable_num_args():
+    input_args_list = [[1], [5], [3, 5]]
+    output = multiprocessable_map(simple_fcn_two_args, input_args_list,
+                                  multiprocessing=False)
+    assert list(output) == [1, 5, 15]
+    output = multiprocessable_map(simple_fcn_two_args, input_args_list,
+                                  multiprocessing=True)
+    assert list(output) == [1, 5, 15]
 
 
 # NOPE, hangs forever

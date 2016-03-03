@@ -11,7 +11,7 @@ from collections.abc import Sequence
 
 # %%
 # returned from curvefitting.py functions
-FitData = namedtuple("FitData", ["fitparams", "fiterror",
+FitData = namedtuple("FitData", ["fitparams", "fitparamstds",
                                  "fitparamstring", "fittimeseries"])
 # default way of storing each csv file's data for active use
 # "scaninfo" is a dict containing scan parameters, e.g. "Voltage: 5"
@@ -231,37 +231,31 @@ class TimeSeries(Sequence):
         excluded_intervals = []
         map_to_unsorted = self.map_to_unsorted
         if isinstance(other, Iterable):
-            if isinstance(other, self.__class__):
-                if self._times != other._times:
-                    raise TypeError('TimeSeries instances have different' +
-                                    ' time values, so they cannot be added')
-                if self.map_to_unsorted != other.map_to_unsorted:
-                    print('Warning: combining two TimeSeries instances' +
-                          ' with different sort orders, resulting sort' +
-                          ' order uncertain.')
-                    if self.map_to_unsorted == tuple(range(len(self))):
-                        map_to_unsorted = other.map_to_unsorted
+            try:
                 otherlist = other._values
-                # Combine filter lists, excluding duplicates
-                excluded_intervals = list(self.excluded_intervals())
-                excluded_intervals.extend(
-                    interval for interval in list(other.excluded_intervals())
-                    if interval not in self.excluded_intervals())
-#                if other.start_time is not None:
-#                    if self.start_time is not None:
-#                        start_time = max(self.start_time, other.start_time)
-#                    else:
-#                        start_time = other.start_time
-#                if other.end_time is not None:
-#                    if self.end_time is not None:
-#                        end_time = min(self.end_time, other.end_time)
-#                    else:
-#                        end_time = other.end_time
-            else:
+                othertimes = other._times
+                other_intervals = other.excluded_intervals()
+            except AttributeError:  # not a TimeSeries
                 otherlist = list(other)
                 if len(otherlist) is not len(self):
                     raise TypeError('attemped to add list of non-matching' +
                                     ' length to TimeSeries instance')
+            else:  # is a TimeSeries
+                othermap = other.map_to_unsorted
+                if self._times != othertimes:
+                    raise TypeError('TimeSeries instances have different' +
+                                    ' time values, so they cannot be added')
+                if self.map_to_unsorted != othermap:
+                    print('Warning: combining two TimeSeries instances' +
+                          ' with different sort orders, resulting sort' +
+                          ' order uncertain.')
+                    if self.map_to_unsorted == tuple(range(len(self))):
+                        map_to_unsorted = othermap
+                # Combine filter lists, excluding duplicates
+                excluded_intervals = list(self.excluded_intervals())
+                excluded_intervals.extend(
+                    interval for interval in other_intervals
+                    if interval not in self.excluded_intervals())
             newvalues = [value + otherlist[index]
                          for index, value in enumerate(self._values)]
             # Only unsort after adding sorted so 1:1 correspondence between

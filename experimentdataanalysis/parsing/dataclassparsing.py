@@ -39,16 +39,21 @@ def fetch_dir_as_unfit_scandata_iterator(directorypath=None,
     else:
         csvfiles = csvparser.parse_csv_directory_gui('C:\\Data\\',
                                                      delimiter='\t')
-    for csvfile in csvfiles:
-        filepath = csvfile[0]
-        rawdata = csvfile[1]
-        timeseries = unpack_raw_csv_data_as_timeseries(rawdata, attribute,
-                                                       scale_by_laserpower)
+    for filepath, rawdata in csvfiles:
+        try:
+            timeseries = unpack_raw_csv_data_as_timeseries(rawdata, attribute,
+                                                           scale_by_laserpower)
+        except AttributeError:  # invalid attribute
+            print("Warning: Attribute {} not found in ".format(attribute) +
+                  "csv file, using first field instead.")
+            attribute = rawdata._fields[0]
+            timeseries = unpack_raw_csv_data_as_timeseries(rawdata, attribute,
+                                                           scale_by_laserpower)
         scaninfo = analyze_scan_filepath(filepath)
-        scaninfo['filepath'] = filepath
-        scaninfo['file last modified'] = time.ctime(os.path.getmtime(filepath))
-        scaninfo['attribute'] = attribute
-        scaninfo['csv raw data'] = rawdata
+        scaninfo['Filepath'] = filepath
+        scaninfo['File Last Modified'] = time.ctime(os.path.getmtime(filepath))
+        scaninfo['Attribute'] = attribute
+        scaninfo['CSV Raw Data'] = rawdata
         scandata = ScanData(filepath, scaninfo, timeseries, None)
         yield scandata
 
@@ -62,8 +67,15 @@ def fetch_csv_as_unfit_scandata(filepath=None,
     else:
         filepath, rawdata = csvparser.parse_csv_gui('C:\\Data\\',
                                                     delimiter='\t')
-    timeseries = unpack_raw_csv_data_as_timeseries(rawdata, attribute,
-                                                   scale_by_laserpower)
+    try:
+        timeseries = unpack_raw_csv_data_as_timeseries(rawdata, attribute,
+                                                       scale_by_laserpower)
+    except AttributeError:  # invalid attribute
+        print("Warning: Attribute {} not found in ".format(attribute) +
+              "csv file, using first field instead.")
+        attribute = rawdata._fields[0]
+        timeseries = unpack_raw_csv_data_as_timeseries(rawdata, attribute,
+                                                       scale_by_laserpower)
     scaninfo = analyze_scan_filepath(filepath)
     scaninfo['Filepath'] = filepath
     scaninfo['File Last Modified'] = time.ctime(os.path.getmtime(filepath))

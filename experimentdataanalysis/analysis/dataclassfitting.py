@@ -15,51 +15,64 @@ from experimentdataanalysis.analysis.dataclasses \
 # %%
 def fit_scandata_iterable(scandata_iterable,
                           timeseriesfitfunction=None,
-                          drift_fit=True,
+                          fit_drift=False,
                           multiprocessing=False):
+    """
+    To use drift fitting, must send a function that accepts a fit_drift
+    flag as 2nd argument after timeseries and returns a tuple
+    (drift-corrected TimeSeries, FitData) instead of just FitData
+    when flag is set to True.
+    """
     if not multiprocessing:
         for scandata in scandata_iterable:
-            yield fit_scandata(scandata, timeseriesfitfunction, drift_fit)
+            yield fit_scandata(scandata, timeseriesfitfunction, fit_drift)
     else:  # more complicated, must break down
         filepaths, scaninfos, timeserieses, _ = zip(*scandata_iterable)
-        timeserieses = (get_time_offset_timeseries(timeseries)
-                        for timeseries in timeserieses)
+        # need this multiple times: it MUST be a list comp, NOT genexp:
+        timeserieses = [get_time_offset_timeseries(timeseries)
+                        for timeseries in timeserieses]
+        if fit_drift:
+            fitfunction_args_iter = ([timeseries, True]  # fit_drift flag
+                                     for timeseries in timeserieses)
+        else:
+            fitfunction_args_iter = ([timeseries]
+                                     for timeseries in timeserieses)
         fitoutput_iterator = multiprocessable_map(timeseriesfitfunction,
-                                                  timeserieses,
+                                                  fitfunction_args_iter,
                                                   multiprocessing=True)
         for filepath, scaninfo, timeseries, fitoutput in zip(
                 filepaths, scaninfos, timeserieses, fitoutput_iterator):
-            if drift_fit:
+            if fit_drift:
                 newscaninfo = scaninfo.copy()  # shallow dict copy!
-                newscaninfo['pre-drift_fit timeseries'] = timeseries
+                newscaninfo['pre-fit_drift timeseries'] = timeseries
                 yield ScanData(filepath, newscaninfo, *fitoutput)
             else:
                 yield ScanData(filepath, scaninfo, timeseries, fitoutput)
 
 
 # %%
-def fit_scandata(scandata, timeseriesfitfunction=None, drift_fit=True):
+def fit_scandata(scandata, timeseriesfitfunction=None, fit_drift=False):
     """
     Fits a ScanData object with the given function and returns a new
     ScanData object with a new time offset and the fitted result.
-    If drift_fit is used, given function must support drift fitting
-    and return (TimeSeries, FitData). Otherwise, it should just
-    return FitData.
+    If fit_drift is used, given function must have fit_drift flag as
+    2nd argument after timeseries and return
+    (drift-corrected TimeSeries, FitData) instead of just FitData
+    when flag is set to True.
     """
     if timeseriesfitfunction is not None:
         scandata = get_time_offset_scandata(scandata)
-        if drift_fit:
-            timeseries = scandata.timeseries
+        timeseries = scandata.timeseries
+        if fit_drift:
             newscaninfo = scandata.scaninfo.copy()  # shallow dict copy!
-            newscaninfo['pre-drift_fit timeseries'] = timeseries
-            timeseries, fitdata = timeseriesfitfunction(timeseries)
+            newscaninfo['pre-fit_drift timeseries'] = timeseries
             return ScanData(scandata.filepath,
                             newscaninfo,
-                            *timeseriesfitfunction(timeseries))
+                            *timeseriesfitfunction(timeseries, True))
         else:
             return ScanData(scandata.filepath,
                             scandata.scaninfo,
-                            scandata.timeseries,
+                            timeseries,
                             timeseriesfitfunction(timeseries))
     else:
         return ScanData(scandata.filepath,
@@ -70,11 +83,11 @@ def fit_scandata(scandata, timeseriesfitfunction=None, drift_fit=True):
 
 # %%
 def fit_timeseries_with_one_decaying_cos(timeseries,
-                                         fit_drift=True):
+                                         fit_drift=False):
     """
     Takes a TimeSeries and fits as a function of a decaying cosine
     with variable phase, plus a sharp exponential and a flat offset
-    using fit_timeseries__drift_fitting(timeseries, fitfunction)
+    using fit_timeseries__fit_driftting(timeseries, fitfunction)
 
     if fit_drift is False:
         returns FitData(timeseries)
@@ -82,6 +95,9 @@ def fit_timeseries_with_one_decaying_cos(timeseries,
         returns (no_bkgd_timeseries, FitData(timeseries))
             where no_bkgd_timeseries is timeseries with background
             drift subtracted out.
+
+    Note: fit_drift must be default off, so that it may be used in
+    functions that are unaware of drift fitting capabilities
     """
     if fit_drift:
         return fit_timeseries_plus_drift_fitting(
@@ -92,7 +108,7 @@ def fit_timeseries_with_one_decaying_cos(timeseries,
 
 
 def fit_timeseries_with_two_decaying_cos(timeseries,
-                                         fit_drift=True):
+                                         fit_drift=False):
     """
     Takes a TimeSeries and fits as a function of two decaying cosines,
     plus a sharp exponential and a flat offset using
@@ -118,8 +134,8 @@ def fit_timeseries_plus_drift_fitting(timeseries, fitfunction):
     """
     Takes a TimeSeries and fits as a function of two decaying cosines,
     plus a sharp exponential and a flat offset.
-
     After the first fit attempt, fits a 5th order polynomial to the
+
     background, subtracts the polynomial, then repeats. The third fit
     (after two background correction steps) is returned, along with
     a background-corrected version of the TimeSeries input.
@@ -138,23 +154,27 @@ def fit_timeseries_plus_drift_fitting(timeseries, fitfunction):
                         "must be a container object, not an iterator.")
 
     firstfit = fitfunction(timeseries)
-    data_bkgd = timeseries - firstfit.fittimeseries
+    try:
+        data_bkgd = timeseries - firstfit.fittimeseries
+        firstbkgdfit = \
+            curvefitting.fit_unsorted_series_to_polynomial(data_bkgd, 5)
+        data_minusbkgd = timeseries - firstbkgdfit.fittimeseries
+        secondfit = fitfunction(data_minusbkgd)
+    except AttributeError:  # fit failed
+        print("Warning: drift fit failed, aborting...")
+        return timeseries, firstfit
 
-    firstbkgdfit = curvefitting.fit_unsorted_series_to_polynomial(data_bkgd, 5)
-    data_minusbkgd = timeseries - firstbkgdfit.fittimeseries
+    try:
+        data_bkgd2 = timeseries - secondfit.fittimeseries
+        secondbkgdfit = \
+            curvefitting.fit_unsorted_series_to_polynomial(data_bkgd2, 5)
+        data_minusbkgd2 = timeseries - secondbkgdfit.fittimeseries
+        thirdfit = fitfunction(data_minusbkgd2)
+    except AttributeError:  # fit failed
+        print("Warning: drift fit failed, aborting...")
+        return data_minusbkgd, secondfit
 
-    secondfit = fitfunction(data_minusbkgd)
-    data_bkgd2 = timeseries - secondfit.fittimeseries
-
-    secondbkgdfit = \
-        curvefitting.fit_unsorted_series_to_polynomial(data_bkgd2, 5)
-    data_minusbkgd2 = timeseries - secondbkgdfit.fittimeseries
-
-    thirdfit = fitfunction(data_minusbkgd2)
-
-    time_offset_no_bkgd_data = data_minusbkgd2
-    final_fit = thirdfit
-    return time_offset_no_bkgd_data, final_fit
+    return data_minusbkgd2, thirdfit
 
 
 # %%
@@ -169,14 +189,25 @@ def get_time_offset_scandata(scandata):
 
 
 def get_time_offset_timeseries(timeseries):
-    time_at_datamax, datamax = curvefitting.get_max_value_data_pt(timeseries)
-    excluded_times = [time for time, value in timeseries.datatuples()
-                      if abs(value) >= datamax/2]
+    time_at_datamax, datamax = \
+        curvefitting.get_abs_max_value_data_pt(timeseries)
+    excluded_times = []
+    for time, value in timeseries.datatuples():  # ensure one continuous seg.
+        if not excluded_times:  # if no times yet
+            if abs(value) > datamax/2:
+                excluded_times.append(time)
+        else:  # if already started getting times
+            if abs(value) >= datamax/2:
+                excluded_times.append(time)
+            else:
+                break
+#    excluded_times = [time for time, value in timeseries.datatuples()
+#                      if abs(value) >= datamax/2]
     # insert sanity check if too many times excluded?
     if len(excluded_times) > len(timeseries)/10:
-        excluded_times = [0]
-    time_offset = max(excluded_times)
-    exclusion_start = min(excluded_times) - time_offset
+        excluded_times = excluded_times[0]
+    time_offset = excluded_times[-1]
+    exclusion_start = excluded_times[0] - time_offset
     return TimeSeries(((time - time_offset, value)
                        for time, value in
                        timeseries.datatuples(unsorted=True)),

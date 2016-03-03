@@ -26,7 +26,7 @@ if __name__ == "__main__":
 #        directorypath="C:\\Data\\decdata\\representative")
     scandata_list = list(dcfitting.fit_scandata_iterable(
         rawscandata_iter,
-        timeseriesfitfunction=dcfitting.fit_timeseries_with_one_decaying_cos,
+        dataseriesfitfunction=dcfitting.fit_dataseries_with_one_decaying_cos,
         fit_drift=True, multiprocessing=True))
 
 # %%
@@ -104,5 +104,5 @@ if __name__ == "__main__":
 #        filepath="C:\\Data\\decdata\\representative\\ch3run1_7V.dat")
 #    scandata = dcfitting.fit_scandata(
 #        rawscandata,
-#        timeseriesfitfunction=dcfitting.fit_timeseries_with_one_decaying_cos)
+#        dataseriesfitfunction=dcfitting.fit_dataseries_with_one_decaying_cos)
 #    dcgraphing.plot_scandata(scandata)

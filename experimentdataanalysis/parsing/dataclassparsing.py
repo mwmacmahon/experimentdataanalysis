@@ -10,7 +10,7 @@ import time
 
 import experimentdataanalysis.parsing.csvparser as csvparser
 from experimentdataanalysis.analysis.dataclasses \
-    import FitData, ScanData, TimeSeries
+    import FitData, ScanData, DataSeries
 
 
 # %%
@@ -20,16 +20,16 @@ def fetch_dir_as_unfit_scandata_iterator(directorypath=None,
     """
     Takes a directory and returns an iterator, which upon each call gives
     the contents of a csv file in that directory or its subdirectories in
-    TimeSeries form, along with the filename and filepath.
+    DataSeries form, along with the filename and filepath.
 
-    Yield format: (String filepath, String filename, TimeSeries data)
+    Yield format: (String filepath, String filename, DataSeries data)
 
     Keyword arguments:
     directorypath -- if given, the target directory. If not given, a
         GUI is used to select the directory. (default None)
-    attribute -- the csv column to be used for the TimeSeries values.
+    attribute -- the csv column to be used for the DataSeries values.
         (default 'lockin2x')
-    scale_by_laserpower -- if True, the TimeSeries values consist of the
+    scale_by_laserpower -- if True, the DataSeries values consist of the
         attribute value divided by the laserpower value at each time point.
         (default False)
     """
@@ -41,20 +41,20 @@ def fetch_dir_as_unfit_scandata_iterator(directorypath=None,
                                                      delimiter='\t')
     for filepath, rawdata in csvfiles:
         try:
-            timeseries = unpack_raw_csv_data_as_timeseries(rawdata, attribute,
+            dataseries = unpack_raw_csv_data_as_dataseries(rawdata, attribute,
                                                            scale_by_laserpower)
         except AttributeError:  # invalid attribute
             print("Warning: Attribute {} not found in ".format(attribute) +
                   "csv file, using first field instead.")
             attribute = rawdata._fields[0]
-            timeseries = unpack_raw_csv_data_as_timeseries(rawdata, attribute,
+            dataseries = unpack_raw_csv_data_as_dataseries(rawdata, attribute,
                                                            scale_by_laserpower)
         scaninfo = analyze_scan_filepath(filepath)
         scaninfo['Filepath'] = filepath
         scaninfo['File Last Modified'] = time.ctime(os.path.getmtime(filepath))
         scaninfo['Attribute'] = attribute
         scaninfo['CSV Raw Data'] = rawdata
-        scandata = ScanData(filepath, scaninfo, timeseries, None)
+        scandata = ScanData(filepath, scaninfo, dataseries, None)
         yield scandata
 
 
@@ -68,36 +68,36 @@ def fetch_csv_as_unfit_scandata(filepath=None,
         filepath, rawdata = csvparser.parse_csv_gui('C:\\Data\\',
                                                     delimiter='\t')
     try:
-        timeseries = unpack_raw_csv_data_as_timeseries(rawdata, attribute,
+        dataseries = unpack_raw_csv_data_as_dataseries(rawdata, attribute,
                                                        scale_by_laserpower)
     except AttributeError:  # invalid attribute
         print("Warning: Attribute {} not found in ".format(attribute) +
               "csv file, using first field instead.")
         attribute = rawdata._fields[0]
-        timeseries = unpack_raw_csv_data_as_timeseries(rawdata, attribute,
+        dataseries = unpack_raw_csv_data_as_dataseries(rawdata, attribute,
                                                        scale_by_laserpower)
     scaninfo = analyze_scan_filepath(filepath)
     scaninfo['Filepath'] = filepath
     scaninfo['File Last Modified'] = time.ctime(os.path.getmtime(filepath))
     scaninfo['Attribute'] = attribute
     scaninfo['CSV Raw Data'] = rawdata
-    scandata = ScanData(filepath, scaninfo, timeseries, None)
+    scandata = ScanData(filepath, scaninfo, dataseries, None)
     return scandata
 
 
 # %%
-def unpack_raw_csv_data_as_timeseries(rawdata, attribute,
+def unpack_raw_csv_data_as_dataseries(rawdata, attribute,
                                       scale_by_laserpower):
-    tdata = rawdata.scancoord
-    zdataraw = rawdata.__getattribute__(attribute)
+    xdata = rawdata.scancoord
+    ydataraw = rawdata.__getattribute__(attribute)
     if scale_by_laserpower:
         laserpower = rawdata.laserpower
-        zdata = [zdatapt/laserpowerpt
-                 for zdatapt, laserpowerpt in zip(zdataraw, laserpower)]
-        timeseries = TimeSeries(zip(tdata, zdata))
+        ydata = [ydatapt/laserpowerpt
+                 for ydatapt, laserpowerpt in zip(ydataraw, laserpower)]
+        dataseries = DataSeries(zip(xdata, ydata))
     else:
-        timeseries = TimeSeries(zip(tdata, zdataraw))
-    return timeseries
+        dataseries = DataSeries(zip(xdata, ydataraw))
+    return dataseries
 
 
 # %%

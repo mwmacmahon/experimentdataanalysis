@@ -58,16 +58,16 @@ def multiprocessable_map(processfunction, input_args_iterable,
         create local subfunctions or are local subfunctions
         themselves. Avoid that, I guess.
             e.g. sending this instead of processfunction failed:
-                def safer_map_function(timeseries):
+                def safer_map_function(inputdata):
                     try:
-                        return processfunction(timeseries)
+                        return processfunction(inputdata)
                         except <stuff>...
 
     Generator yielding each of the outputs of the processfunction
     acting on each input value.
 
     Positional arguments:
-        processfunction -- should take a timeseries and return in form
+        processfunction -- takes input_args, returns anything picklable
         input_args_iterable -- iterable pointing to a series of argument
                                 lists for the mapped function
     """

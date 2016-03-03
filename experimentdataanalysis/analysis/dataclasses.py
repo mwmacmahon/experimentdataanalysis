@@ -12,108 +12,108 @@ from collections.abc import Sequence
 # %%
 # returned from curvefitting.py functions
 FitData = namedtuple("FitData", ["fitparams", "fitparamstds",
-                                 "fitparamstring", "fittimeseries"])
+                                 "fitparamstring", "fitdataseries"])
 # default way of storing each csv file's data for active use
 # "scaninfo" is a dict containing scan parameters, e.g. "Voltage: 5"
 ScanData = namedtuple("ScanData", ["filepath", "scaninfo",
-                                   "timeseries", "fitdata"])
+                                   "dataseries", "fitdata"])
 
 
 # %%
-class TimeSeries(Sequence):
+class DataSeries(Sequence):
     """
     Defines an immutable data structure that contains two correlated
-    iterables, times and values. When retreiving them with times() or
-    values(), "unfiltered=False" can be used to retreive the full data
+    iterables, xvals and yvals. When retreiving them with xvals() or
+    yvals(), "unfiltered=False" can be used to retreive the full data
     set, and "unsorted=True" can be used to retreive them in the order
-    provided upon construction. Adding or subtracting TimeSeries
-    instances ensures proper matching of values corresponding to the
-    same time. Scalar values and lists of matching length may also be
+    provided upon construction. Adding or subtracting DataSeries
+    instances ensures proper matching of yvals corresponding to the
+    same xval. Scalar yvals and lists of matching length may also be
     added or subtracted.
 
     Calling this object is equivalent to using its datatuples() method
     """
     def __init__(self, datatuples, *, excluded_intervals=None):
         """
-        Initializes a data structure that correlates a series of time points
+        Initializes a data structure that correlates a series of xval points
         with a set of data, and when adding or subtracting ensures data is
-        properly paired up timewise regardless of order of data points.
+        properly paired up xvalwise regardless of order of data points.
         Also allows setting start/end ranges of "excluded" data points
         that are not returned by most calls.
 
-        param 1: datatuples: iterable of 2-tuples in form (data, value)
-            e.g. TimeSeries(data), where data = [(t1,v1),(t2,v2),...]
-                 TimeSeries(timeseries(raw=True))
-                 TimeSeries(zip(times,values)), where len(times)=len(values)
-                 TimeSeries((t,f(t)) for t in times), where f(t) is unary
+        param 1: datatuples: iterable of 2-tuples in form (data, yval)
+            e.g. DataSeries(data), where data = [(t1,v1),(t2,v2),...]
+                 DataSeries(dataseries(raw=True))
+                 DataSeries(zip(xvals,yvals)), where len(xvals)=len(yvals)
+                 DataSeries((t,f(t)) for t in xvals), where f(t) is unary
 
-        optional param 1: excluded_intervals=None: excluded time ranges given
+        optional param 1: excluded_intervals=None: excluded xval ranges given
                               by iterable of 2-tuples in form (start, end)
-            e.g. TimeSeries(data, excluded_intervals=[(-10000,0),(10,10000)])
+            e.g. DataSeries(data, excluded_intervals=[(-10000,0),(10,10000)])
         """
         # NOTE: unpack operation forces traversal of RHS. Important below...
         # TIMES AND VALUES
         try:
-            times, values = zip(*datatuples)
+            xvals, yvals = zip(*datatuples)
         except ValueError:
-            raise ValueError("all data elements must be in form (time, value)")
-        sortedtimelist = sorted(enumerate(times),
+            raise ValueError("all data elements must be in form (xval, yval)")
+        sortedxvallist = sorted(enumerate(xvals),
                                 key=lambda tuple: tuple[1])
-        self.map_to_sorted, self._times = zip(*sortedtimelist)  # unzip
-        unsortedtimelist = sorted(enumerate(self.map_to_sorted),
+        self.map_to_sorted, self._xvals = zip(*sortedxvallist)  # unzip
+        unsortedxvallist = sorted(enumerate(self.map_to_sorted),
                                   key=lambda tuple: tuple[1])
-        self.map_to_unsorted, _ = zip(*unsortedtimelist)  # unzip
-        self._values = tuple(values[index] for index in self.map_to_sorted)
+        self.map_to_unsorted, _ = zip(*unsortedxvallist)  # unzip
+        self._yvals = tuple(yvals[index] for index in self.map_to_sorted)
 
         # EXCLUDED INTERVALS
         if excluded_intervals is not None:
-            # may need to iterate multiple times to handle
+            # may need to iterate multiple xvals to handle
             # None, empty list, single two-element pair, etc.
             excluded_intervals = list(excluded_intervals)
         try:
             if excluded_intervals is None or len(excluded_intervals) == 0:
-                self._start_times = None
-                self._end_times = None
+                self._start_xvals = None
+                self._end_xvals = None
             else:
-                self._start_times, self._end_times = zip(*excluded_intervals)
+                self._start_xvals, self._end_xvals = zip(*excluded_intervals)
         except TypeError as typeerror:
             # see if they just gave a single interval
             try:
-                self._start_times, self._end_times = zip(excluded_intervals)
+                self._start_xvals, self._end_xvals = zip(excluded_intervals)
             except ValueError:
-                raise ValueError("all time intervals must be in form " +
-                                 "(start_time, end_time)")
+                raise ValueError("all xval intervals must be in form " +
+                                 "(start_xval, end_xval)")
             except TypeError:
                 raise(typeerror)
         except ValueError:
-            raise ValueError("all time intervals must be in form " +
-                             "(start_time, end_time)")
+            raise ValueError("all xval intervals must be in form " +
+                             "(start_xval, end_xval)")
 
-    def times(self, *, unfiltered=False, unsorted=False, raw=False):
+    def xvals(self, *, unfiltered=False, unsorted=False, raw=False):
         """
-        Return this instance's times, possibly filtered or in the
+        Return this instance's xvals, possibly filtered or in the
         original sorting used when this instance was created.
         """
         if raw:
             unfiltered = True
             unsorted = True
-        times, _ = self.datalists(unfiltered=unfiltered, unsorted=unsorted)
-        return times
+        xvals, _ = self.datalists(unfiltered=unfiltered, unsorted=unsorted)
+        return xvals
 
-    def values(self, *, unfiltered=False, unsorted=False, raw=False):
+    def yvals(self, *, unfiltered=False, unsorted=False, raw=False):
         """
-        Return this instance's values, possibly filtered or in the
+        Return this instance's yvals, possibly filtered or in the
         original sorting used when this instance was created.
         """
         if raw:
             unfiltered = True
             unsorted = True
-        _, values = self.datalists(unfiltered=unfiltered, unsorted=unsorted)
-        return values
+        _, yvals = self.datalists(unfiltered=unfiltered, unsorted=unsorted)
+        return yvals
 
     def datatuples(self, *, unfiltered=False, unsorted=False, raw=False):
         """
-        Return this instance's times and associated values, possibly
+        Return this instance's xvals and associated yvals, possibly
         filtered or in the original sorting used when this instance
         was created. Note this is a completely lazy operation,
         consisting of chained generator expressions.
@@ -124,68 +124,68 @@ class TimeSeries(Sequence):
             unfiltered = True
             unsorted = True
         if unsorted:
-            tuples = ((self._times[i], self._values[i])
+            tuples = ((self._xvals[i], self._yvals[i])
                       for i in self.map_to_unsorted)
         else:
-            tuples = zip(self._times, self._values)
-        if not unfiltered and self._start_times is not None:
-            for start, end in zip(self._start_times,
-                                  self._end_times):
-                tuples = ((time, value) for time, value in tuples
-                          if time < start or time > end)
+            tuples = zip(self._xvals, self._yvals)
+        if not unfiltered and self._start_xvals is not None:
+            for start, end in zip(self._start_xvals,
+                                  self._end_xvals):
+                tuples = ((xval, yval) for xval, yval in tuples
+                          if xval < start or xval > end)
         for tup in tuples:
             yield tup
 
     def datalists(self, *, unfiltered=False, unsorted=False, raw=False):
         """
-        Return this instance's times and associated values, possibly
+        Return this instance's xvals and associated yvals, possibly
         filtered or in the original sorting used when this instance
         was created.
-        Format is (times, values), identical to (times(), values())
-        Consider using "pyplot.plot(*timeseries.datalists())" for plots
+        Format is (xvals, yvals), identical to (xvals(), yvals())
+        Consider using "pyplot.plot(*dataseries.datalists())" for plots
         """
         if raw:
             unfiltered = True
             unsorted = True
         try:
-            times, values = zip(*self.datatuples(unfiltered=unfiltered,
-                                                 unsorted=unsorted))
-            times = list(times)
-            values = list(values)
-        except ValueError:  # happens if all values are filtered out
-            times = []
-            values = []
-        return times, values
+            xvals, yvals = zip(*self.datatuples(unfiltered=unfiltered,
+                                                unsorted=unsorted))
+            xvals = list(xvals)
+            yvals = list(yvals)
+        except ValueError:  # happens if all yvals are filtered out
+            xvals = []
+            yvals = []
+        return xvals, yvals
 
     def excluded_intervals(self):
         """
-        Return this instance's list of excluded time intervals.
+        Return this instance's list of excluded xval intervals.
         Note this is a completely lazy operation, consisting of
         chained generator expressions.
         Format is an iterator (start, stop), (start,stop), ...,
         identical to the excluded_intervals input format.
         """
-        if self._start_times is None:
+        if self._start_xvals is None:
             return
         else:
-            for start, end in zip(self._start_times, self._end_times):
+            for start, end in zip(self._start_xvals, self._end_xvals):
                 yield start, end
 
-    def is_excluded(self, time):
-        if self._start_times is not None:
-            for start, end in zip(self._start_times,
-                                  self._end_times):
-                if time >= start and time <= end:
+    def is_excluded(self, xval):
+        if self._start_xvals is not None:
+            for start, end in zip(self._start_xvals,
+                                  self._end_xvals):
+                if xval >= start and xval <= end:
                     return True
         return False
 
     def copy(self):
         """
-        Simple copy constructor making a deep copy of another TimeSeries
-        object. Takes a single TimeSeries instance as a parameter.
+        Simple copy constructor making a deep copy of another DataSeries
+        object. Takes a single DataSeries instance as a parameter.
         """
-        return self.__class__(zip(self.times(raw=True),
-                              self.values(raw=True)),
+        return self.__class__(zip(self.xvals(raw=True),
+                              self.yvals(raw=True)),
                               excluded_intervals=self.excluded_intervals())
 
     def __call__(self, *args, **kwargs):
@@ -198,16 +198,16 @@ class TimeSeries(Sequence):
     def __getitem__(self, index):
         if index >= len(self):
             raise IndexError('Index out of range')
-        return self._times[index], self._values[index]
+        return self._xvals[index], self._yvals[index]
 
     def __len__(self):
-        return len(self._times)
+        return len(self._xvals)
 
     def __repr__(self):
-        outputstr = 'TimeSeries(zip('
-        outputstr += repr(self.times(raw=True)) + ', '
-        outputstr += repr(self.values(raw=True)) + ')'
-        if self._start_times is not None:
+        outputstr = 'DataSeries(zip('
+        outputstr += repr(self.xvals(raw=True)) + ', '
+        outputstr += repr(self.yvals(raw=True)) + ')'
+        if self._start_xvals is not None:
             outputstr += ", excluded_intervals=["
             for interval in list(self.excluded_intervals()):
                 outputstr += str(interval) + ", "
@@ -218,12 +218,12 @@ class TimeSeries(Sequence):
 
     def __str__(self):
         outputstr = ''
-        for index, (time, value) in enumerate(zip(self._times, self._values)):
+        for index, (xval, yval) in enumerate(zip(self._xvals, self._yvals)):
             if index > 0:
                 outputstr += "\n"
-            outputstr += "t = {time}: {value}".format(
-                         time=time, value=value)
-            if self.is_excluded(time):
+            outputstr += "(x = {xval}, y = {yval})".format(xval=xval,
+                                                           yval=yval)
+            if self.is_excluded(xval):
                 outputstr += " [EXCLUDED]"
         return outputstr
 
@@ -232,21 +232,21 @@ class TimeSeries(Sequence):
         map_to_unsorted = self.map_to_unsorted
         if isinstance(other, Iterable):
             try:
-                otherlist = other._values
-                othertimes = other._times
+                otherlist = other._yvals
+                otherxvals = other._xvals
                 other_intervals = other.excluded_intervals()
-            except AttributeError:  # not a TimeSeries
+            except AttributeError:  # not a DataSeries
                 otherlist = list(other)
                 if len(otherlist) is not len(self):
                     raise TypeError('attemped to add list of non-matching' +
-                                    ' length to TimeSeries instance')
-            else:  # is a TimeSeries
+                                    ' length to DataSeries instance')
+            else:  # is a DataSeries
                 othermap = other.map_to_unsorted
-                if self._times != othertimes:
-                    raise TypeError('TimeSeries instances have different' +
-                                    ' time values, so they cannot be added')
+                if self._xvals != otherxvals:
+                    raise TypeError('DataSeries instances have different' +
+                                    ' xvalues, so they cannot be added')
                 if self.map_to_unsorted != othermap:
-                    print('Warning: combining two TimeSeries instances' +
+                    print('Warning: combining two DataSeries instances' +
                           ' with different sort orders, resulting sort' +
                           ' order uncertain.')
                     if self.map_to_unsorted == tuple(range(len(self))):
@@ -256,19 +256,18 @@ class TimeSeries(Sequence):
                 excluded_intervals.extend(
                     interval for interval in other_intervals
                     if interval not in self.excluded_intervals())
-            newvalues = [value + otherlist[index]
-                         for index, value in enumerate(self._values)]
+            newyvals = [yval + otherlist[index]
+                        for index, yval in enumerate(self._yvals)]
             # Only unsort after adding sorted so 1:1 correspondence between
-            # identical times. This might be odd when adding a naked list,
-            # but better practice is to covert that list to TimeSeries first.
-            # Don't filter values at all, as we are setting filters above.
-            newvalues = [newvalues[i] for i in map_to_unsorted]
+            # identical xvals. This might be odd when adding a naked list,
+            # but better practice is to covert that list to DataSeries first.
+            # Don't filter yvals at all, as we are setting filters above.
+            newyvals = [newyvals[i] for i in map_to_unsorted]
         else:
-            newvalues = [value + other
-                         for value in self.values(unsorted=True,
-                                                  unfiltered=True)]
-        newtimes = [self._times[i] for i in map_to_unsorted]
-        return self.__class__(zip(newtimes, newvalues),
+            newyvals = [yval + other for yval in self.yvals(unsorted=True,
+                                                            unfiltered=True)]
+        newxvals = [self._xvals[i] for i in map_to_unsorted]
+        return self.__class__(zip(newxvals, newyvals),
                               excluded_intervals=excluded_intervals)
 
     def __sub__(self, other):
@@ -276,11 +275,9 @@ class TimeSeries(Sequence):
 
     def __mul__(self, other):
         if isinstance(other, Iterable):
-            raise TypeError('Can only multiply TimeSeries by a scalar value')
-        newvalues = [value * other
-                     for value in self.values(raw=True)]
-        return self.__class__(zip(self.times(raw=True),
-                              newvalues),
+            raise TypeError('Can only multiply DataSeries by a scalar value')
+        newyvals = [yval * other for yval in self.yvals(raw=True)]
+        return self.__class__(zip(self.xvals(raw=True), newyvals),
                               excluded_intervals=self.excluded_intervals())
 
     def __radd__(self, other):
@@ -299,8 +296,6 @@ class TimeSeries(Sequence):
         return self
 
     def __abs__(self):
-        newvalues = [abs(value)
-                     for value in self.values(raw=True)]
-        return self.__class__(zip(self.times(raw=True),
-                              newvalues),
+        newyvals = [abs(yval) for yval in self.yvals(raw=True)]
+        return self.__class__(zip(self.xvals(raw=True), newyvals),
                               excluded_intervals=self.excluded_intervals())

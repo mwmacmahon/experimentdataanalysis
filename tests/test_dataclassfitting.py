@@ -14,7 +14,7 @@ Created on Fri Feb 26 06:44:22 2016
 import pytest
 
 from experimentdataanalysis.analysis.dataclasses \
-    import FitData, ScanData, TimeSeries
+    import FitData, ScanData, DataSeries
 import experimentdataanalysis.parsing.dataclassparsing as dcparsing
 import experimentdataanalysis.analysis.dataclassfitting as dcfitting
 
@@ -45,56 +45,56 @@ def loadscandatalist():
 
 # %% TESTS
 def test_no_multiprocessing_fit_scandata_list_twocos(loadscandatalist):
-    fitfunc = dcfitting.fit_timeseries_with_two_decaying_cos
+    fitfunc = dcfitting.fit_dataseries_with_two_decaying_cos
     output = dcfitting.fit_scandata_iterable(loadscandatalist,
-                                             timeseriesfitfunction=fitfunc,
+                                             dataseriesfitfunction=fitfunc,
                                              fit_drift=True,
                                              multiprocessing=False)
     assert abs(next(output).fitdata.fitparamstds[0]) < 100000
     output = dcfitting.fit_scandata_iterable(loadscandatalist,
-                                             timeseriesfitfunction=fitfunc,
+                                             dataseriesfitfunction=fitfunc,
                                              fit_drift=False,
                                              multiprocessing=False)
     assert abs(next(output).fitdata.fitparamstds[0]) < 100000
 
 
 def test_no_multiprocessing_fit_scandata_list_onecos(loadscandatalist):
-    fitfunc = dcfitting.fit_timeseries_with_one_decaying_cos
+    fitfunc = dcfitting.fit_dataseries_with_one_decaying_cos
     output = dcfitting.fit_scandata_iterable([loadscandatalist[1]],
-                                             timeseriesfitfunction=fitfunc,
+                                             dataseriesfitfunction=fitfunc,
                                              fit_drift=True,
                                              multiprocessing=False)
     assert abs(next(output).fitdata.fitparamstds[0]) < 100000
     output = dcfitting.fit_scandata_iterable([loadscandatalist[1]],
-                                             timeseriesfitfunction=fitfunc,
+                                             dataseriesfitfunction=fitfunc,
                                              fit_drift=False,
                                              multiprocessing=False)
     assert abs(next(output).fitdata.fitparamstds[0]) < 100000
 
 
 def test_multiprocessing_fit_scandata_list_twocos(loadscandatalist):
-    fitfunc = dcfitting.fit_timeseries_with_two_decaying_cos
+    fitfunc = dcfitting.fit_dataseries_with_two_decaying_cos
     output = dcfitting.fit_scandata_iterable(loadscandatalist,
-                                             timeseriesfitfunction=fitfunc,
+                                             dataseriesfitfunction=fitfunc,
                                              fit_drift=True,
                                              multiprocessing=True)
     assert abs(next(output).fitdata.fitparamstds[0]) < 100000
     output = dcfitting.fit_scandata_iterable(loadscandatalist,
-                                             timeseriesfitfunction=fitfunc,
+                                             dataseriesfitfunction=fitfunc,
                                              fit_drift=False,
                                              multiprocessing=True)
     assert abs(next(output).fitdata.fitparamstds[0]) < 100000
 
 
 def test_multiprocessing_fit_scandata_list_onecos(loadscandatalist):
-    fitfunc = dcfitting.fit_timeseries_with_one_decaying_cos
+    fitfunc = dcfitting.fit_dataseries_with_one_decaying_cos
     output = dcfitting.fit_scandata_iterable([loadscandatalist[1]],
-                                             timeseriesfitfunction=fitfunc,
+                                             dataseriesfitfunction=fitfunc,
                                              fit_drift=True,
                                              multiprocessing=True)
     assert abs(next(output).fitdata.fitparamstds[0]) < 100000
     output = dcfitting.fit_scandata_iterable([loadscandatalist[1]],
-                                             timeseriesfitfunction=fitfunc,
+                                             dataseriesfitfunction=fitfunc,
                                              fit_drift=False,
                                              multiprocessing=True)
     assert abs(next(output).fitdata.fitparamstds[0]) < 100000

@@ -14,7 +14,7 @@ Created on Fri Feb 26 06:44:32 2016
 import pytest
 
 from experimentdataanalysis.analysis.dataclasses \
-    import FitData, ScanData, TimeSeries
+    import FitData, ScanData, DataSeries
 import experimentdataanalysis.parsing.dataclassparsing as dcparsing
 
 

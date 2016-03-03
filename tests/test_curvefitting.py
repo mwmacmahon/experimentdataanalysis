@@ -15,7 +15,7 @@ import pytest
 
 import experimentdataanalysis.analysis.curvefitting as curvefitting
 from experimentdataanalysis.analysis.dataclasses \
-    import FitData, ScanData, TimeSeries
+    import FitData, ScanData, DataSeries
 import experimentdataanalysis.parsing.dataclassparsing as dcparsing
 
 

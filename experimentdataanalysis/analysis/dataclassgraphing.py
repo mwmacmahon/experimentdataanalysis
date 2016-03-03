@@ -9,7 +9,7 @@ import matplotlib.pyplot as plt
 
 import experimentdataanalysis.analysis.dataclassfitting as dcfitting
 from experimentdataanalysis.analysis.dataclasses \
-    import FitData, ScanData, TimeSeries
+    import FitData, ScanData, DataSeries
 import experimentdataanalysis.parsing.dataclassparsing as dcparsing
 
 
@@ -17,19 +17,21 @@ import experimentdataanalysis.parsing.dataclassparsing as dcparsing
 def graph_fitted_csv(filepath=None,
                      attribute='lockin2x',
                      scale_by_laserpower=False,
+                     time_offset=False,
                      fit_drift=False,
-                     timeseriesfitfunction=None):
+                     dataseriesfitfunction=None):
     """
     To use drift fitting, must send a function that accepts a fit_drift
-    flag as 2nd argument after timeseries and returns a tuple
-    (drift-corrected TimeSeries, FitData) instead of just FitData
+    flag as 2nd argument after dataseries and returns a tuple
+    (drift-corrected DataSeries, FitData) instead of just FitData
     when flag is set to True.
     """
     scandata = dcparsing.fetch_csv_as_unfit_scandata(
                             filepath, attribute, scale_by_laserpower)
-    scandata = dcfitting.get_time_offset_scandata(scandata)
+    if time_offset:
+        scandata = dcfitting.get_time_offset_scandata(scandata)
     scandata = dcfitting.fit_scandata(scandata,
-                                      timeseriesfitfunction, fit_drift)
+                                      dataseriesfitfunction, fit_drift)
     scandata = graph_scandata(scandata)
     return scandata
 
@@ -37,24 +39,28 @@ def graph_fitted_csv(filepath=None,
 def graph_fitted_csv_directory(directorypath=None,
                                attribute='lockin2x',
                                scale_by_laserpower=False,
-                               timeseriesfitfunction=None,
+                               dataseriesfitfunction=None,
+                               time_offset=False,
                                fit_drift=False,
                                multiprocessing=False):
     """
     To use drift fitting, must send a function that accepts a fit_drift
-    flag as 2nd argument after timeseries and returns a tuple
-    (drift-corrected TimeSeries, FitData) instead of just FitData
+    flag as 2nd argument after dataseries and returns a tuple
+    (drift-corrected DataSeries, FitData) instead of just FitData
     when flag is set to True.
     """
     scandata_iterator = dcparsing.fetch_dir_as_unfit_scandata_iterator(
                             directorypath, attribute, scale_by_laserpower)
-    scandata_iterable = [dcfitting.get_time_offset_scandata(scandata)
-                         for scandata in scandata_iterator]
+    if time_offset:
+        scandata_iterable = [dcfitting.get_time_offset_scandata(scandata)
+                             for scandata in scandata_iterator]
+    else:
+        scandata_iterable = list(scandata_iterator)
     scandata_iterable = dcfitting.fit_scandata_iterable(
                             scandata_iterable,
-                            timeseriesfitfunction,
+                            dataseriesfitfunction,
                             fit_drift)
-    graph_scandata_iterable(scandata_iterable, timeseriesfitfunction,
+    graph_scandata_iterable(scandata_iterable, dataseriesfitfunction,
                             fit_drift, multiprocessing)
     return scandata_iterable
 
@@ -63,8 +69,8 @@ def graph_fitted_csv_directory(directorypath=None,
 def graph_scandata(scandata):
     """
     To use drift fitting, must send a function that accepts a fit_drift
-    flag as 2nd argument after timeseries and returns a tuple
-    (drift-corrected TimeSeries, FitData) instead of just FitData
+    flag as 2nd argument after dataseries and returns a tuple
+    (drift-corrected DataSeries, FitData) instead of just FitData
     when flag is set to True.
     """
     fig, ax = plt.subplots()
@@ -80,7 +86,7 @@ def graph_scandata(scandata):
     try:
         plt.clf()
         plot_title = ""
-        plot_timeseries(scandata.timeseries,
+        plot_dataseries(scandata.dataseries,
                         plot_title, ax, scandata.fitdata)
         plt.savefig(file_name)
     except RuntimeError:
@@ -103,7 +109,7 @@ def graph_scandata_iterable(scandata_iterable):
         try:
             plt.clf()
             plot_title = ""
-            plot_timeseries(scandata.timeseries,
+            plot_dataseries(scandata.dataseries,
                             plot_title, ax, scandata.fitdata)
             plt.savefig(file_name)
         except RuntimeError:
@@ -115,19 +121,19 @@ def graph_scandata_iterable(scandata_iterable):
 
 # %%
 def plot_scandata(scandata, title="", axes=None):
-    plot_timeseries(scandata.timeseries, title=title,
+    plot_dataseries(scandata.dataseries, title=title,
                     axes=axes, fitdata=scandata.fitdata)
 
 
-def plot_timeseries(timeseries, title="", axes=None, fitdata=None):
+def plot_dataseries(dataseries, title="", axes=None, fitdata=None):
     if axes is None:
         fig, axes = plt.subplots()
-    plt.plot(timeseries.times(unfiltered=True),
-             timeseries.values(unfiltered=True), 'b.')
+    plt.plot(dataseries.xvals(unfiltered=True),
+             dataseries.yvals(unfiltered=True), 'b.')
     if fitdata is not None:
-        fittimeseries = fitdata.fittimeseries
-        plt.plot(fittimeseries.times(unfiltered=True),
-                 fittimeseries.values(unfiltered=True), 'r.')
+        fitdataseries = fitdata.fitdataseries
+        plt.plot(fitdataseries.xvals(unfiltered=True),
+                 fitdataseries.yvals(unfiltered=True), 'r.')
         # text box with parameters of fit
         props = dict(boxstyle='round', facecolor='palegreen',
                      alpha=0.5)

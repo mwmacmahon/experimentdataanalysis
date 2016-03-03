@@ -59,13 +59,13 @@ def test_extract_scandata_from_filepath(loadcsvdir):
         assert scandata.scaninfo['Voltage'] == filepathinfo['Voltage']
 
 
-def test_extract_timeseries_from_csvdata(loadcsvdir):
+def test_extract_dataseries_from_csvdata(loadcsvdir):
     filepath_list, rawcsvdata_list = loadcsvdir
     for rawcsvdata in rawcsvdata_list:
-        timeseries = dcparsing.unpack_raw_csv_data_as_timeseries(
+        dataseries = dcparsing.unpack_raw_csv_data_as_dataseries(
                                     rawcsvdata, "scancoord", False)
-        for time, value in timeseries():
-            assert abs(time - value) == 0
+        for xval, yval in dataseries():
+            assert abs(xval - yval) == 0
 
 
 def test_tryinvalidattribute_singlefile(loadcsvdir):
@@ -74,8 +74,8 @@ def test_tryinvalidattribute_singlefile(loadcsvdir):
         scandata = dcparsing.fetch_csv_as_unfit_scandata(
                                     filepath, 'invalid', False)
         assert scandata.scaninfo['Attribute'] == "scancoord"
-        for time, value in scandata.timeseries():
-            assert abs(time - value) == 0  # should default to scancoord
+        for xval, yval in scandata.dataseries():
+            assert abs(xval - yval) == 0  # should default to scancoord
 
 
 def test_tryinvalidattribute_directory(loadcsvdir):
@@ -85,8 +85,8 @@ def test_tryinvalidattribute_directory(loadcsvdir):
                             directorypath=dirpath, attribute="invalid")
     for scandata in scandatalist:
         assert scandata.scaninfo['Attribute'] == "scancoord"
-        for time, value in scandata.timeseries():
-            assert abs(time - value) == 0  # should default to scancoord
+        for xval, yval in scandata.dataseries():
+            assert abs(xval - yval) == 0  # should default to scancoord
 
 
 def test_filenameparsing():

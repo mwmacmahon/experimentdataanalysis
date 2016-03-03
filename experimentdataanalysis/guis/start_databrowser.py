@@ -12,7 +12,7 @@ from matplotlib.figure import Figure
 from PyQt4 import QtCore, QtGui, uic
 
 from experimentdataanalysis.analysis.dataclasses \
-    import FitData, ScanData, TimeSeries
+    import FitData, ScanData, DataSeries
 import experimentdataanalysis.analysis.dataclassfitting as dcfitting
 import experimentdataanalysis.analysis.dataclassgraphing as dcgraphing
 import experimentdataanalysis.parsing.dataclassparsing as dcparsing
@@ -107,11 +107,11 @@ class DataBrowserWindow(QtGui.QMainWindow):
         except KeyError:
             fasttype_str = "[Unknown]"
         try:
-            start_str = str(scandata_to_add.timeseries.times()[0])
+            start_str = str(scandata_to_add.dataseries.xvals()[0])
         except KeyError:
             start_str = "[Unknown]"
         try:
-            stop_str = str(scandata_to_add.timeseries.times()[-1])
+            stop_str = str(scandata_to_add.dataseries.xvals()[-1])
         except KeyError:
             stop_str = "[Unknown]"
         scandata_string = \
@@ -169,7 +169,7 @@ class DataBrowserWindow(QtGui.QMainWindow):
         """Update plot to match current settings"""
         scandata = self.get_active_scandata()
         if scandata is not None:
-            self.fig.axes.plot(scandata.times(), scandata.values(), '.')
+            self.fig.axes.plot(scandata.xvals(), scandata.yvals(), '.')
             self.fig.draw()
 
     @classmethod

@@ -13,10 +13,26 @@ from collections.abc import Sequence
 # returned from curvefitting.py functions
 FitData = namedtuple("FitData", ["fitparams", "fitparamstds",
                                  "fitparamstring", "fitdataseries"])
+
+
+# %%
 # default way of storing each csv file's data for active use
 # "scaninfo" is a dict containing scan parameters, e.g. "Voltage: 5"
-ScanData = namedtuple("ScanData", ["filepath", "scaninfo",
+# note "dataseries" and "fitdata" are PLURAL - a tuple of entries is
+# expected, and fields[i], dataseries[i], and fitdata[i] are correlated
+ScanData = namedtuple("ScanData", ["filepath", "scaninfo", "fields",
                                    "dataseries", "fitdata"])
+## ALTERNATE: (just added a few convenience functions)
+#class ScanData(namedtuple("ScanData", ["filepath", "scaninfo", "fields",
+#                                       "dataseries", "fitdata"])):
+#    def primary_field(self):
+#        return self.fields[0]
+#
+#    def primary_dataseries(self):
+#        return self.dataseries[0]
+#
+#    def primary_fitdata(self):
+#        return self.fitdata[0]
 
 
 # %%

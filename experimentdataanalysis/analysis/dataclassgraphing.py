@@ -16,7 +16,6 @@ import experimentdataanalysis.parsing.dataclassparsing as dcparsing
 # %%
 def graph_fitted_csv(filepath=None,
                      attribute='lockin2x',
-                     scale_by_laserpower=False,
                      time_offset=False,
                      fit_drift=False,
                      dataseriesfitfunction=None):
@@ -27,7 +26,7 @@ def graph_fitted_csv(filepath=None,
     when flag is set to True.
     """
     scandata = dcparsing.fetch_csv_as_unfit_scandata(
-                            filepath, attribute, scale_by_laserpower)
+                            filepath, attribute)
     if time_offset:
         scandata = dcfitting.get_time_offset_scandata(scandata)
     scandata = dcfitting.fit_scandata(scandata,
@@ -38,7 +37,6 @@ def graph_fitted_csv(filepath=None,
 
 def graph_fitted_csv_directory(directorypath=None,
                                attribute='lockin2x',
-                               scale_by_laserpower=False,
                                dataseriesfitfunction=None,
                                time_offset=False,
                                fit_drift=False,
@@ -50,7 +48,7 @@ def graph_fitted_csv_directory(directorypath=None,
     when flag is set to True.
     """
     scandata_iterator = dcparsing.fetch_dir_as_unfit_scandata_iterator(
-                            directorypath, attribute, scale_by_laserpower)
+                            directorypath, attribute)
     if time_offset:
         scandata_iterable = [dcfitting.get_time_offset_scandata(scandata)
                              for scandata in scandata_iterator]
@@ -66,7 +64,7 @@ def graph_fitted_csv_directory(directorypath=None,
 
 
 # %%
-def graph_scandata(scandata):
+def graph_scandata(scandata, index=0):
     """
     To use drift fitting, must send a function that accepts a fit_drift
     flag as 2nd argument after dataseries and returns a tuple
@@ -74,11 +72,11 @@ def graph_scandata(scandata):
     when flag is set to True.
     """
     fig, ax = plt.subplots()
-    if scandata.fitdata is not None:
+    if scandata.fitdata[index] is not None:
         prefix = "Fitted_"
     else:
         prefix = "Plot_"
-    suffix = "_" + scandata.scaninfo['Attribute']
+    suffix = "_" + scandata.fields[index]
     file_name = collapse_filepath_one_dir_up(scandata.filepath,
                                              filename_prefix=prefix,
                                              filename_suffix=suffix,
@@ -86,22 +84,21 @@ def graph_scandata(scandata):
     try:
         plt.clf()
         plot_title = ""
-        plot_dataseries(scandata.dataseries,
-                        plot_title, ax, scandata.fitdata)
+        plot_scandata(scandata, index, plot_title, ax)
         plt.savefig(file_name)
     except RuntimeError:
         print("Error generating {}, cancelling...".format(file_name))
     return scandata
 
 
-def graph_scandata_iterable(scandata_iterable):
+def graph_scandata_iterable(scandata_iterable, index=0):
     fig, ax = plt.subplots()
     for scandata in scandata_iterable:
-        if scandata.fitdata is not None:
+        if scandata.fitdata[index] is not None:
             prefix = "Fitted_"
         else:
             prefix = "Plot_"
-        suffix = "_" + scandata.scaninfo['Attribute']
+        suffix = "_" + scandata.fields[index]
         file_name = collapse_filepath_one_dir_up(scandata.filepath,
                                                  filename_prefix=prefix,
                                                  filename_suffix=suffix,
@@ -109,8 +106,7 @@ def graph_scandata_iterable(scandata_iterable):
         try:
             plt.clf()
             plot_title = ""
-            plot_dataseries(scandata.dataseries,
-                            plot_title, ax, scandata.fitdata)
+            plot_scandata(scandata, index, plot_title, ax)
             plt.savefig(file_name)
         except RuntimeError:
             print("Error generating {}".format(file_name))
@@ -120,9 +116,9 @@ def graph_scandata_iterable(scandata_iterable):
 
 
 # %%
-def plot_scandata(scandata, title="", axes=None):
-    plot_dataseries(scandata.dataseries, title=title,
-                    axes=axes, fitdata=scandata.fitdata)
+def plot_scandata(scandata, index=0, title="", axes=None):
+    plot_dataseries(scandata.dataseries[index], title=title,
+                    axes=axes, fitdata=scandata.fitdata[index])
 
 
 def plot_dataseries(dataseries, title="", axes=None, fitdata=None):

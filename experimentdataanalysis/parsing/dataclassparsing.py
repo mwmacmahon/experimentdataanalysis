@@ -15,8 +15,7 @@ from experimentdataanalysis.analysis.dataclasses \
 
 # %%
 def fetch_dir_as_unfit_scandata_iterator(directorypath=None,
-                                         attribute='lockin2x',
-                                         scale_by_laserpower=False):
+                                         attribute='lockin2x'):
     """
     Takes a directory and returns an iterator, which upon each call gives
     the contents of a csv file in that directory or its subdirectories in
@@ -29,75 +28,53 @@ def fetch_dir_as_unfit_scandata_iterator(directorypath=None,
         GUI is used to select the directory. (default None)
     attribute -- the csv column to be used for the DataSeries values.
         (default 'lockin2x')
-    scale_by_laserpower -- if True, the DataSeries values consist of the
-        attribute value divided by the laserpower value at each time point.
-        (default False)
     """
-
+    # Grab raw data
     if directorypath is not None:
         csvfiles = csvparser.parse_csv_directory(directorypath, delimiter='\t')
     else:
         csvfiles = csvparser.parse_csv_directory_gui('C:\\Data\\',
                                                      delimiter='\t')
     for filepath, rawdata in csvfiles:
-        try:
-            dataseries = unpack_raw_csv_data_as_dataseries(rawdata, attribute,
-                                                           scale_by_laserpower)
-        except AttributeError:  # invalid attribute
-            print("Warning: Attribute {} not found in ".format(attribute) +
-                  "csv file, using first field instead.")
-            attribute = rawdata._fields[0]
-            dataseries = unpack_raw_csv_data_as_dataseries(rawdata, attribute,
-                                                           scale_by_laserpower)
-        scaninfo = analyze_scan_filepath(filepath)
-        scaninfo['Filepath'] = filepath
-        scaninfo['File Last Modified'] = time.ctime(os.path.getmtime(filepath))
-        scaninfo['Attribute'] = attribute
-        scaninfo['CSV Raw Data'] = rawdata
-        scandata = ScanData(filepath, scaninfo, dataseries, None)
+        scandata = parsed_csv_to_unfit_scandata(filepath, rawdata, attribute)
         yield scandata
 
 
 # %%
 def fetch_csv_as_unfit_scandata(filepath=None,
-                                attribute='lockin2x',
-                                scale_by_laserpower=False):
+                                attribute='lockin2x'):
+    # Grab raw data
     if filepath is not None:
         filepath, rawdata = csvparser.parse_csv(filepath, delimiter='\t')
     else:
         filepath, rawdata = csvparser.parse_csv_gui('C:\\Data\\',
                                                     delimiter='\t')
-    try:
-        dataseries = unpack_raw_csv_data_as_dataseries(rawdata, attribute,
-                                                       scale_by_laserpower)
-    except AttributeError:  # invalid attribute
-        print("Warning: Attribute {} not found in ".format(attribute) +
-              "csv file, using first field instead.")
-        attribute = rawdata._fields[0]
-        dataseries = unpack_raw_csv_data_as_dataseries(rawdata, attribute,
-                                                       scale_by_laserpower)
-    scaninfo = analyze_scan_filepath(filepath)
-    scaninfo['Filepath'] = filepath
-    scaninfo['File Last Modified'] = time.ctime(os.path.getmtime(filepath))
-    scaninfo['Attribute'] = attribute
-    scaninfo['CSV Raw Data'] = rawdata
-    scandata = ScanData(filepath, scaninfo, dataseries, None)
+    scandata = parsed_csv_to_unfit_scandata(filepath, rawdata, attribute)
     return scandata
 
 
 # %%
-def unpack_raw_csv_data_as_dataseries(rawdata, attribute,
-                                      scale_by_laserpower):
-    xdata = rawdata.scancoord
-    ydataraw = rawdata.__getattribute__(attribute)
-    if scale_by_laserpower:
-        laserpower = rawdata.laserpower
-        ydata = [ydatapt/laserpowerpt
-                 for ydatapt, laserpowerpt in zip(ydataraw, laserpower)]
-        dataseries = DataSeries(zip(xdata, ydata))
-    else:
-        dataseries = DataSeries(zip(xdata, ydataraw))
-    return dataseries
+def parsed_csv_to_unfit_scandata(filepath, rawdata, attribute='lockin2x'):
+    colnames, coldata = rawdata
+    try:
+        attribute_index = colnames.index(attribute)
+    except ValueError:  # invalid attribute, so no matching index found
+        print("Warning: Attribute {} not found in ".format(attribute) +
+              "csv file, order from csv file will be kept.")
+        attribute_index = 0
+    # Work out field ordering based on given attribute - attribute to front
+    rawdata_indices = list(range(len(colnames)))
+    rawdata_indices.remove(attribute_index)
+    rawdata_indices = [attribute_index] + rawdata_indices
+
+    # Assemble ScanData
+    scaninfo = analyze_scan_filepath(filepath)
+    fields = tuple(colnames[ind] for ind in rawdata_indices)
+    dataseries = tuple(DataSeries(zip(coldata[0], coldata[ind]))
+                       for ind in rawdata_indices)
+    fitdata = tuple(None for ind in rawdata_indices)
+    scandata = ScanData(filepath, scaninfo, fields, dataseries, fitdata)
+    return scandata
 
 
 # %%
@@ -109,7 +86,8 @@ def analyze_scan_filepath(filepath):
     Custom keyword lists can be passed by the keywordlists keyword
     argument, where None for a keywordlist type means
     """
-    scaninfo = {}
+    scaninfo = {'Filepath': filepath}
+    scaninfo['File Last Modified'] = time.ctime(os.path.getmtime(filepath))
     # SEARCH TERMS:
     # 1. If first string found, register second string as
     #    tag containing True

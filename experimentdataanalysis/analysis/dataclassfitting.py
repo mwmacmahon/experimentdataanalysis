@@ -23,31 +23,62 @@ def fit_scandata_iterable(scandata_iterable,
     (drift-corrected DataSeries, FitData) instead of just FitData
     when flag is set to True.
     """
-    if not multiprocessing:
+    if dataseriesfitfunction is None or not multiprocessing:
         for scandata in scandata_iterable:
             yield fit_scandata(scandata, dataseriesfitfunction, fit_drift)
     else:  # more complicated, must break down
-        filepaths, scaninfos, dataserieses, _ = zip(*scandata_iterable)
+        filepath_list, scaninfo_list, fields_list, \
+            dataseries_list, fitdatas_list = zip(*scandata_iterable)
+        # extract dataseries for processing, separate primary from others
         # need this multiple times: it MUST be a list comp, NOT genexp:
-        dataserieses = [get_time_offset_dataseries(dataseries)
-                        for dataseries in dataserieses]
+        old_primary_dataseries_list = [dataseries[0]
+                                       for dataseries in dataseries_list]
+        primary_dataseries_list = \
+            [get_time_offset_dataseries(dataseries)
+             for dataseries in old_primary_dataseries_list]
+        nonprimary_dataseries_list = [dataserieses[1:]
+                                      for dataserieses in dataseries_list]
+        nonprimary_fitdatas_list = [fitdatas[1:]
+                                    for fitdatas in fitdatas_list]
+        # perform multiprocess fit
         if fit_drift:
-            fitfunction_args_iter = ([dataseries, True]  # fit_drift flag
-                                     for dataseries in dataserieses)
+            fitfunction_args_iter = \
+                            ([dataseries, True]  # fit_drift flag
+                             for dataseries in primary_dataseries_list)
         else:
-            fitfunction_args_iter = ([dataseries]
-                                     for dataseries in dataserieses)
+            fitfunction_args_iter = \
+                            ([dataseries]
+                             for dataseries in primary_dataseries_list)
         fitoutput_iterator = multiprocessable_map(dataseriesfitfunction,
                                                   fitfunction_args_iter,
                                                   multiprocessing=True)
-        for filepath, scaninfo, dataseries, fitoutput in zip(
-                filepaths, scaninfos, dataserieses, fitoutput_iterator):
+        # unpack fit results, recombine with other dataseries&fitdatas:
+        if fit_drift:
+            new_primary_dataseries_list, \
+                new_primary_fitdatas_list = zip(*list(fitoutput_iterator))
+        else:
+            new_primary_dataseries_list = primary_dataseries_list
+            new_primary_fitdatas_list = tuple(fitoutput_iterator)
+        new_dataseries_list = tuple(
+            tuple([new_primary_dataseries_list[index]] + list(dataserieses))
+            for index, dataserieses in enumerate(nonprimary_dataseries_list))
+        new_fitdatas_list = tuple(
+            tuple([new_primary_fitdatas_list[index]] + list(fitdatas))
+            for index, fitdatas in enumerate(nonprimary_fitdatas_list))
+        # recreate and resend each series back with the new fits:
+        for filepath, scaninfo, fields, dataseries, fitdata, old_series in \
+                zip(filepath_list, scaninfo_list,
+                    fields_list, new_dataseries_list,
+                    new_fitdatas_list, old_primary_dataseries_list):
             if fit_drift:
                 newscaninfo = scaninfo.copy()  # shallow dict copy!
-                newscaninfo['pre-fit_drift dataseries'] = dataseries
-                yield ScanData(filepath, newscaninfo, *fitoutput)
+                key = 'pre-fit_drift {} dataseries'.format(fields[0])
+                newscaninfo[key] = old_series
+                yield ScanData(filepath, newscaninfo, fields,
+                               dataseries, fitdata)
             else:
-                yield ScanData(filepath, scaninfo, dataseries, fitoutput)
+                yield ScanData(filepath, scaninfo, fields,
+                               dataseries, fitdata)
 
 
 # %%
@@ -61,22 +92,35 @@ def fit_scandata(scandata, dataseriesfitfunction=None, fit_drift=False):
     when flag is set to True.
     """
     if dataseriesfitfunction is not None:
-        scandata = get_time_offset_scandata(scandata)
-        dataseries = scandata.dataseries
+        old_primary_dataseries = scandata.dataseries[0]
+        primary_dataseries = \
+            get_time_offset_dataseries(scandata.dataseries[0])
+        nonprimary_dataseries = scandata.dataseries[1:]
+        nonprimary_fitdatas = scandata.fitdata[1:]
         if fit_drift:
-            newscaninfo = scandata.scaninfo.copy()  # shallow dict copy!
-            newscaninfo['pre-fit_drift dataseries'] = dataseries
-            return ScanData(scandata.filepath,
-                            newscaninfo,
-                            *dataseriesfitfunction(dataseries, True))
+            scaninfo = scandata.scaninfo.copy()  # shallow dict copy!
+            key = 'pre-fit_drift {} dataseries'.format(scandata.fields[0])
+            scaninfo[key] = old_primary_dataseries
+            new_primary_dataseries, new_primary_fitdata = \
+                dataseriesfitfunction(primary_dataseries, True)
         else:
-            return ScanData(scandata.filepath,
-                            scandata.scaninfo,
-                            dataseries,
-                            dataseriesfitfunction(dataseries))
+            scaninfo = scandata.scaninfo
+            new_primary_dataseries = primary_dataseries
+            new_primary_fitdata = \
+                dataseriesfitfunction(primary_dataseries)
+        combined_dataseries = tuple(
+            [new_primary_dataseries] + list(nonprimary_dataseries))
+        combined_fitdatas = tuple(
+            [new_primary_fitdata] + list(nonprimary_fitdatas))
+        return ScanData(scandata.filepath,
+                        scaninfo,
+                        scandata.fields,
+                        combined_dataseries,
+                        combined_fitdatas)
     else:
         return ScanData(scandata.filepath,
                         scandata.scaninfo,
+                        scandata.fields,
                         scandata.dataseries,
                         scandata.fitdata)
 
@@ -178,16 +222,6 @@ def fit_dataseries_plus_drift_fitting(dataseries, fitfunction):
 
 
 # %%
-def get_time_offset_scandata(scandata):
-    olddataseries = scandata.dataseries
-    newscaninfo = scandata.scaninfo.copy()  # shallow dict copy!
-    newscaninfo['pre-time_offset dataseries'] = olddataseries
-    return ScanData(scandata.filepath,
-                    newscaninfo,
-                    get_time_offset_dataseries(olddataseries),
-                    scandata.fitdata)
-
-
 def get_time_offset_dataseries(dataseries):
     time_at_datamax, datamax = \
         curvefitting.get_abs_max_value_data_pt(dataseries)

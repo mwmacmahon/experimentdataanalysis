@@ -21,16 +21,17 @@ import experimentdataanalysis.parsing.dataclassparsing as dcparsing
 if __name__ == "__main__":
 # %%
     rawscandata_iter = dcparsing.fetch_dir_as_unfit_scandata_iterator(
-        directorypath="C:\\Data\\febdata\\Experiment - Channel 2")
+        directorypath="C:\\Data\\160306")
 #        directorypath="C:\Data\decdata\Channel 3 Run 1")
 #        directorypath="C:\\Data\\decdata\\representative")
     scandata_list = list(dcfitting.fit_scandata_iterable(
         rawscandata_iter,
-        dataseriesfitfunction=dcfitting.fit_dataseries_with_one_decaying_cos,
+        dataseriesfitfunction=None,
+#        dataseriesfitfunction=dcfitting.fit_dataseries_with_one_decaying_cos,
         fit_drift=True, multiprocessing=True))
 
 # %%
-    dcgraphing.graph_scandata_iterable(scandata_list)
+    _ = dcgraphing.graph_scandata_iterable(scandata_list)
 
 # %%
     fig, ax = plt.subplots()

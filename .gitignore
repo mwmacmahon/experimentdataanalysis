@@ -1,7 +1,7 @@
 # no spyder .cache files
 *.cache
-*.pyc
 __pycache__
+*.pyc
 
 #no ~ files from emacs either
 *~

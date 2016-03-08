@@ -50,12 +50,12 @@ def test_no_multiprocessing_fit_scandata_list_twocos(loadscandatalist):
                                              dataseriesfitfunction=fitfunc,
                                              fit_drift=True,
                                              multiprocessing=False)
-    assert abs(next(output).fitdata.fitparamstds[0]) < 100000
+    assert abs(next(output).fitdata[0].fitparamstds[0]) < 100000
     output = dcfitting.fit_scandata_iterable(loadscandatalist,
                                              dataseriesfitfunction=fitfunc,
                                              fit_drift=False,
                                              multiprocessing=False)
-    assert abs(next(output).fitdata.fitparamstds[0]) < 100000
+    assert abs(next(output).fitdata[0].fitparamstds[0]) < 100000
 
 
 def test_no_multiprocessing_fit_scandata_list_onecos(loadscandatalist):
@@ -64,12 +64,12 @@ def test_no_multiprocessing_fit_scandata_list_onecos(loadscandatalist):
                                              dataseriesfitfunction=fitfunc,
                                              fit_drift=True,
                                              multiprocessing=False)
-    assert abs(next(output).fitdata.fitparamstds[0]) < 100000
+    assert abs(next(output).fitdata[0].fitparamstds[0]) < 100000
     output = dcfitting.fit_scandata_iterable([loadscandatalist[1]],
                                              dataseriesfitfunction=fitfunc,
                                              fit_drift=False,
                                              multiprocessing=False)
-    assert abs(next(output).fitdata.fitparamstds[0]) < 100000
+    assert abs(next(output).fitdata[0].fitparamstds[0]) < 100000
 
 
 def test_multiprocessing_fit_scandata_list_twocos(loadscandatalist):
@@ -78,12 +78,12 @@ def test_multiprocessing_fit_scandata_list_twocos(loadscandatalist):
                                              dataseriesfitfunction=fitfunc,
                                              fit_drift=True,
                                              multiprocessing=True)
-    assert abs(next(output).fitdata.fitparamstds[0]) < 100000
+    assert abs(next(output).fitdata[0].fitparamstds[0]) < 100000
     output = dcfitting.fit_scandata_iterable(loadscandatalist,
                                              dataseriesfitfunction=fitfunc,
                                              fit_drift=False,
                                              multiprocessing=True)
-    assert abs(next(output).fitdata.fitparamstds[0]) < 100000
+    assert abs(next(output).fitdata[0].fitparamstds[0]) < 100000
 
 
 def test_multiprocessing_fit_scandata_list_onecos(loadscandatalist):
@@ -92,12 +92,40 @@ def test_multiprocessing_fit_scandata_list_onecos(loadscandatalist):
                                              dataseriesfitfunction=fitfunc,
                                              fit_drift=True,
                                              multiprocessing=True)
-    assert abs(next(output).fitdata.fitparamstds[0]) < 100000
+    assert abs(next(output).fitdata[0].fitparamstds[0]) < 100000
     output = dcfitting.fit_scandata_iterable([loadscandatalist[1]],
                                              dataseriesfitfunction=fitfunc,
                                              fit_drift=False,
                                              multiprocessing=True)
-    assert abs(next(output).fitdata.fitparamstds[0]) < 100000
+    assert abs(next(output).fitdata[0].fitparamstds[0]) < 100000
+
+
+def test_multiprocessing_fit_no_fitfunc(loadscandatalist):
+    fitfunc = None
+    output = dcfitting.fit_scandata_iterable(loadscandatalist,
+                                             dataseriesfitfunction=fitfunc,
+                                             fit_drift=True,
+                                             multiprocessing=True)
+    assert next(output).fitdata[0] is None
+    output = dcfitting.fit_scandata_iterable(loadscandatalist,
+                                             dataseriesfitfunction=fitfunc,
+                                             fit_drift=False,
+                                             multiprocessing=True)
+    assert next(output).fitdata[0] is None
+
+
+def test_no_multiprocessing_fit_no_fitfunc(loadscandatalist):
+    fitfunc = None
+    output = dcfitting.fit_scandata_iterable(loadscandatalist,
+                                             dataseriesfitfunction=fitfunc,
+                                             fit_drift=True,
+                                             multiprocessing=False)
+    assert next(output).fitdata[0] is None
+    output = dcfitting.fit_scandata_iterable(loadscandatalist,
+                                             dataseriesfitfunction=fitfunc,
+                                             fit_drift=False,
+                                             multiprocessing=False)
+    assert next(output).fitdata[0] is None
 
 
 # JUST HERE FOR SYNTAX REFERENCE

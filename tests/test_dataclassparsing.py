@@ -18,6 +18,12 @@ import experimentdataanalysis.parsing.dataclassparsing as dcparsing
 
 
 # %% NON FIXTURE HELPER FUNCTIONS
+def check_scandata_veracity(scandata, scancoord_index):
+    filepathinfo = dcparsing.analyze_scan_filepath(scandata.filepath)
+    assert scandata.scaninfo['Voltage'] == filepathinfo['Voltage']
+    scancoord_dataseries = scandata.dataseries[scancoord_index]
+    for xval, yval in scancoord_dataseries.datatuples():
+        assert abs(xval - yval) == 0  # should default to scancoord
 
 
 # %% TEST FIXTURES
@@ -28,6 +34,7 @@ def loadcsvdir():
     csvdirdata = csvparser.parse_csv_directory(filepath, delimiter='\t')
     filepath_list, rawcsvdata_list = zip(*csvdirdata)
     return filepath_list, rawcsvdata_list
+
 
 # JUST HERE FOR SYNTAX REFERENCE
 #@pytest.fixture()
@@ -46,51 +53,29 @@ def test_extract_scandata_iter_from_filepath(loadcsvdir):
                 "tests\\representativetwocosdata")
     scandatalist = dcparsing.fetch_dir_as_unfit_scandata_iterator(filepath)
     for scandata in scandatalist:
-        filepathinfo = dcparsing.analyze_scan_filepath(scandata.filepath)
-        assert scandata.scaninfo['Voltage'] == filepathinfo['Voltage']
+        check_scandata_veracity(scandata, scancoord_index=1)
 
 
 def test_extract_scandata_from_filepath(loadcsvdir):
     filepath_list, rawcsvdata_list = loadcsvdir
     for filepath in filepath_list:
-        filepathinfo = dcparsing.analyze_scan_filepath(filepath)
         scandata = dcparsing.fetch_csv_as_unfit_scandata(
-                                    filepath, 'scancoord', False)
-        assert scandata.scaninfo['Voltage'] == filepathinfo['Voltage']
-
-
-def test_extract_dataseries_from_csvdata(loadcsvdir):
-    filepath_list, rawcsvdata_list = loadcsvdir
-    for rawcsvdata in rawcsvdata_list:
-        dataseries = dcparsing.unpack_raw_csv_data_as_dataseries(
-                                    rawcsvdata, "scancoord", False)
-        for xval, yval in dataseries():
-            assert abs(xval - yval) == 0
+                                    filepath, 'scancoord')
+        check_scandata_veracity(scandata, scancoord_index=0)
 
 
 def test_tryinvalidattribute_singlefile(loadcsvdir):
     filepath_list, rawcsvdata_list = loadcsvdir
     for filepath in filepath_list:
         scandata = dcparsing.fetch_csv_as_unfit_scandata(
-                                    filepath, 'invalid', False)
-        assert scandata.scaninfo['Attribute'] == "scancoord"
-        for xval, yval in scandata.dataseries():
-            assert abs(xval - yval) == 0  # should default to scancoord
-
-
-def test_tryinvalidattribute_directory(loadcsvdir):
-    dirpath = ("C:\\pythonprojects\\experimentdataanalysis_project\\" +
-               "tests\\representativetwocosdata")
-    scandatalist = dcparsing.fetch_dir_as_unfit_scandata_iterator(
-                            directorypath=dirpath, attribute="invalid")
-    for scandata in scandatalist:
-        assert scandata.scaninfo['Attribute'] == "scancoord"
-        for xval, yval in scandata.dataseries():
-            assert abs(xval - yval) == 0  # should default to scancoord
+                                    filepath, 'invalid')
+        check_scandata_veracity(scandata, scancoord_index=0)
 
 
 def test_filenameparsing():
-    filepath = ("C:\\Voltage_0_Experiment_Channel3_033XT-B11" +
+    filepath = ("C:\\pythonprojects\\experimentdataanalysis_project\\" +
+                "tests\\csvs_to_test\\" +
+                "Voltage_0_Experiment_Channel3_033XT-B11" +
                 "_819.0nm_30K_2Dscan_BExternal_DelayTime_run2\\" +
                 "Ind_1_DelayTime -400_to_6100 BExternal 0.2x.dat")
     scaninfo = dcparsing.analyze_scan_filepath(filepath)

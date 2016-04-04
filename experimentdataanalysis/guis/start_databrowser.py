@@ -277,21 +277,15 @@ class DataBrowserWindow(QtGui.QMainWindow):
             except AttributeError:
                 print("Scandata expected as list element.")
                 return ('z' * 10, 'z' * 10)
-
-        print('start sort', flush=True)
         newscanlist, newtempfitlist = zip(*sorted(
                                             zip(oldscanlist, oldtempfitlist),
                                             key=scandatasortfcn))
-        print('mid sort', flush=True)
         for scandata in newscanlist:
             self.add_scandata_to_list(scandata)
-        print('mid sort 2', flush=True)
         if len(self.current_scan_list) > 0:
             self.list_scandata.setCurrentRow(0)
-        print('mid sort 3', flush=True)
         self.current_scan_list_changed_since_last_update = True
         self.update_state()
-        print('end sort', flush=True)
         self.ignore_input = False
         self.statusBar.showMessage("Ready")
 

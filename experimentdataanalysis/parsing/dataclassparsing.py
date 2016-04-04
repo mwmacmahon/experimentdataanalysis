@@ -56,25 +56,38 @@ def fetch_csv_as_unfit_scandata(filepath=None,
 # %%
 def parsed_csv_to_unfit_scandata(filepath, rawdata, attribute='lockin2x'):
     colnames, coldata = rawdata
+    # Assemble ScanData
+    scaninfo = analyze_scan_filepath(filepath)
+    fields = tuple(colnames)
+    dataseries = tuple(DataSeries(zip(coldata[0], column))
+                       for column in coldata)
+    fitdata = tuple(None for name in colnames)
+    scandata = ScanData(filepath, scaninfo, fields, dataseries, fitdata)
+    sorted_scandata = move_scandata_attribute_to_front(scandata, attribute)
+    return sorted_scandata
+
+
+# %%
+def move_scandata_attribute_to_front(scandata, attribute):
     try:
-        attribute_index = colnames.index(attribute)
+        attribute_index = scandata.fields.index(attribute)
     except ValueError:  # invalid attribute, so no matching index found
         print("Warning: Attribute {} not found in ".format(attribute) +
               "csv file, order from csv file will be kept.")
         attribute_index = 0
     # Work out field ordering based on given attribute - attribute to front
-    rawdata_indices = list(range(len(colnames)))
+    rawdata_indices = list(range(len(scandata.fields)))
     rawdata_indices.remove(attribute_index)
     rawdata_indices = [attribute_index] + rawdata_indices
 
     # Assemble ScanData
-    scaninfo = analyze_scan_filepath(filepath)
-    fields = tuple(colnames[ind] for ind in rawdata_indices)
-    dataseries = tuple(DataSeries(zip(coldata[0], coldata[ind]))
-                       for ind in rawdata_indices)
-    fitdata = tuple(None for ind in rawdata_indices)
-    scandata = ScanData(filepath, scaninfo, fields, dataseries, fitdata)
-    return scandata
+    filepath = scandata.filepath
+    scaninfo = analyze_scan_filepath(scandata.filepath)
+    fields = tuple(scandata.fields[ind] for ind in rawdata_indices)
+    dataseries = tuple(scandata.dataseries[ind] for ind in rawdata_indices)
+    fitdata = tuple(scandata.fitdata[ind] for ind in rawdata_indices)
+    newscandata = ScanData(filepath, scaninfo, fields, dataseries, fitdata)
+    return newscandata
 
 
 # %%
@@ -114,18 +127,27 @@ def analyze_scan_filepath(filepath):
             if len(next_element_tags) > 0:
                 try:
                     value = float(element)
-                except ValueError:
+                except ValueError:  # if not a numeric value:
+                    # ignore trailing keywords, e.g. units
                     value = element
+                    for matchstr, _ in inside_this_element_keyword_list:
+                        if matchstr in element:
+                            value = element.replace(matchstr, "")
+                    try:
+                        value = float(value)
+                    except ValueError:  # still non-numeric
+                        pass
                 scaninfo[next_element_tags.pop(0)] = value
+            else:
+                for matchstr, tags in next_element_keyword_list:
+                    if element == matchstr:
+                        if isinstance(tags, str):  # only one string
+                            next_element_tags = [tags]
+                        else:
+                            next_element_tags = tags
             for matchstr, tag in this_element_keyword_list:
                 if element == matchstr:
                     scaninfo[tag] = True
-            for matchstr, tags in next_element_keyword_list:
-                if element == matchstr:
-                    if isinstance(tags, str):  # only one string
-                        next_element_tags = [tags]
-                    else:
-                        next_element_tags = tags
             for matchstr, tag in inside_this_element_keyword_list:
                 if matchstr in element:
                     value = element.replace(matchstr, "")

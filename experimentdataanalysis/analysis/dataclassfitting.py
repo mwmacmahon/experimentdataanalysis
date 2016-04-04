@@ -9,13 +9,14 @@ import experimentdataanalysis.analysis.curvefitting as curvefitting
 from experimentdataanalysis.analysis.generalutilities \
     import multiprocessable_map
 from experimentdataanalysis.analysis.dataclasses \
-    import FitData, ScanData, DataSeries
+    import FitData, FitFunc, ScanData, DataSeries
 
 
 # %%
 def fit_scandata_iterable(scandata_iterable,
                           dataseriesfitfunction=None,
-                          fit_drift=False,
+                          fit_drift=False,  # in future: generic kw list
+                          perform_time_offset=True,
                           multiprocessing=False):
     """
     To use drift fitting, must send a function that accepts a fit_drift
@@ -33,9 +34,12 @@ def fit_scandata_iterable(scandata_iterable,
         # need this multiple times: it MUST be a list comp, NOT genexp:
         old_primary_dataseries_list = [dataseries[0]
                                        for dataseries in dataseries_list]
-        primary_dataseries_list = \
-            [get_time_offset_dataseries(dataseries)
-             for dataseries in old_primary_dataseries_list]
+        if perform_time_offset:
+            primary_dataseries_list = \
+                [get_time_offset_dataseries(dataseries)
+                 for dataseries in old_primary_dataseries_list]
+        else:
+            primary_dataseries_list = old_primary_dataseries_list[:]
         nonprimary_dataseries_list = [dataserieses[1:]
                                       for dataserieses in dataseries_list]
         nonprimary_fitdatas_list = [fitdatas[1:]
@@ -82,7 +86,11 @@ def fit_scandata_iterable(scandata_iterable,
 
 
 # %%
-def fit_scandata(scandata, dataseriesfitfunction=None, fit_drift=False):
+def fit_scandata(scandata,
+                 dataseriesfitfunction=None,
+                 fit_drift=False,  # in future: generic kw list
+                 perform_time_offset=True,
+                 ):
     """
     Fits a ScanData object with the given function and returns a new
     ScanData object with a new time offset and the fitted result.
@@ -93,8 +101,11 @@ def fit_scandata(scandata, dataseriesfitfunction=None, fit_drift=False):
     """
     if dataseriesfitfunction is not None:
         old_primary_dataseries = scandata.dataseries[0]
-        primary_dataseries = \
-            get_time_offset_dataseries(scandata.dataseries[0])
+        if perform_time_offset:
+            primary_dataseries = \
+                get_time_offset_dataseries(scandata.dataseries[0])
+        else:
+            primary_dataseries = scandata.dataseries[0]
         nonprimary_dataseries = scandata.dataseries[1:]
         nonprimary_fitdatas = scandata.fitdata[1:]
         if fit_drift:
@@ -123,6 +134,59 @@ def fit_scandata(scandata, dataseriesfitfunction=None, fit_drift=False):
                         scandata.fields,
                         scandata.dataseries,
                         scandata.fitdata)
+
+
+# %%
+def get_dataseries_fit_list():
+    fitlist = []
+    fitlist.append(FitFunc("Fit dataseries to one decaying cos",  # Fit name
+                           fit_dataseries_with_one_decaying_cos,  # fit fcn
+                           ['1',  # param list
+                            '2',
+                            '3',
+                            '4',
+                            '5',
+                            '6',
+                            '7'],
+                           ['curve_fit']))  # list of keyword args
+    fitlist.append(FitFunc("Fit dataseries to two decaying cos",  # Fit name
+                           fit_dataseries_with_two_decaying_cos,  # fit fcn
+                           ['1',  # param list
+                            '2',
+                            '3',
+                            '4',
+                            '5',
+                            '6',
+                            '7',
+                            '8',
+                            '9',
+                            '10',
+                            '11'],
+                           ['curve_fit']))  # list of keyword args
+    return fitlist
+
+
+# %%
+def fit_dataseries_to_two_decays(dataseries, fit_drift=False):
+    """
+    Takes a DataSeries and fits as #### TODO:
+
+    if fit_drift is False:
+        returns FitData(dataseries)
+    if fit_drift is True:
+        returns (no_bkgd_dataseries, FitData(dataseries))
+            where no_bkgd_dataseries is dataseries with background
+            drift subtracted out.
+
+    Note: fit_drift must be default off, so that it may be used in
+    functions that are unaware of drift fitting capabilities
+    """
+    if fit_drift:
+        return fit_dataseries_plus_drift_fitting(
+                dataseries,
+                curvefitting.fit_sorted_series_to_two_decays)
+    else:
+        return curvefitting.fit_sorted_series_to_two_decays(dataseries)
 
 
 # %%
@@ -239,7 +303,7 @@ def get_time_offset_dataseries(dataseries):
 #                      if abs(value) >= datamax/2]
     # insert sanity check if too many times excluded?
     if len(excluded_times) > len(dataseries)/10:
-        excluded_times = excluded_times[0]
+        excluded_times = [excluded_times[0]]
     time_offset = excluded_times[-1]
     exclusion_start = excluded_times[0] - time_offset
     return DataSeries(((time - time_offset, value)

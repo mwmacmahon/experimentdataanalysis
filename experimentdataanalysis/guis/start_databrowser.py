@@ -9,10 +9,11 @@ Created on Tue Mar  1 19:27:08 2016
 from matplotlib.backends.backend_qt4agg \
     import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
+import numpy as np
 from PyQt4 import QtCore, QtGui, uic
 
 from experimentdataanalysis.analysis.dataclasses \
-    import FitData, ScanData, DataSeries
+    import FitData, FitFunc, ScanData, DataSeries
 import experimentdataanalysis.analysis.dataclassfitting as dcfitting
 import experimentdataanalysis.analysis.dataclassgraphing as dcgraphing
 import experimentdataanalysis.parsing.dataclassparsing as dcparsing
@@ -33,35 +34,85 @@ class DataBrowserWindow(QtGui.QMainWindow):
         """
         super(DataBrowserWindow, self).__init__()
         uic.loadUi('experimentdataanalysis\\guis\\ui_databrowser.ui', self)
-        self.fig = MPLCanvas(dpi=90)
-        self.figure_container.addWidget(self.fig)
+        self.ignore_input = True
+        self.canvas = MPLCanvas(dpi=75)
+        self.figure_container.addWidget(self.canvas)
+        # Set up combo boxes, load fit functions
+        for cmbbox in [self.cmb_primarysort, self.cmb_secondarysort]:
+            cmbbox.addItem('MiddleScanCoord')
+            cmbbox.addItem('Voltage')
+        self.cmb_primarysort.setCurrentIndex(0)
+        self.cmb_secondarysort.setCurrentIndex(1)
+        self.fitfunc_list = dcfitting.get_dataseries_fit_list()
+        for fitfunc in self.fitfunc_list:
+            self.cmb_fitfcn.addItem(fitfunc.description)
         # Set up application signals
-        self.btn_loadfile.pressed.connect(self.load_data_file)
-        self.btn_loaddir.pressed.connect(self.load_data_dir)
+        self.btn_loadfile.pressed.connect(
+                                        self.callback_add_file)
+        self.btn_loaddir.pressed.connect(
+                                        self.callback_load_dir)
+        self.btn_excludescandata.pressed.connect(
+                                        self.callback_exclude_scandata)
+        self.btn_clearallscandata.pressed.connect(
+                                        self.callback_clear_all)
+        self.list_scandata.itemSelectionChanged.connect(
+                                        self.callback_update_selection)
+        self.btn_sortdata.pressed.connect(
+                                        self.callback_sort_scan_list)
+        self.btn_setprimary.pressed.connect(
+                                        self.callback_set_primary_datatype)
+        self.btn_plot1d.toggled.connect(
+                                        self.callback_update_plots)
+        self.btn_plot2d.toggled.connect(
+                                        self.callback_update_plots)
+        self.btn_plotfitparam.toggled.connect(
+                                        self.callback_update_plots)
+        self.cmb_datatype.activated.connect(
+                                        self.callback_update_datatype)
+        self.btn_fitstart.pressed.connect(
+                                        self.callback_perform_fit)
+        self.btn_fitstore.pressed.connect(
+                                        self.callback_store_fit)
+        self.btn_fiterasetemp.pressed.connect(
+                                        self.callback_erase_temp_fit)
+        self.btn_fitdelete.pressed.connect(
+                                        self.callback_delete_fit)
 # FROM SERIESEDITOR - FOR REFERENCE ONLY
 #        self.btn_seriesedit.pressed.connect(self.edit_scandata)
 #        self.btn_seriesdelete.pressed.connect(self.delete_scandata)
 #        self.btn_seriesadd.pressed.connect(self.add_scandata)
-#        self.radio_linear.toggled.connect(self.update_settings)
-#        self.radio_log.toggled.connect(self.update_settings)
-#        self.edit_min.editingFinished.connect(self.update_settings)
-#        self.edit_max.editingFinished.connect(self.update_settings)
-#        self.edit_numvalues.editingFinished.connect(self.update_settings)
-#        self.check_combinescandata.toggled.connect(self.update_settings)
-#        self.check_breaksubsections.toggled.connect(self.update_settings)
-#        self.slider_numsubsections.valueChanged.connect(self.update_settings)
-#        self.check_shuffle.toggled.connect(self.update_settings)
+#        self.radio_linear.toggled.connect(self.update_state)
+#        self.radio_log.toggled.connect(self.update_state)
+#        self.edit_min.editingFinished.connect(self.update_state)
+#        self.edit_max.editingFinished.connect(self.update_state)
+#        self.edit_numvalues.editingFinished.connect(self.update_state)
+#        self.check_combinescandata.toggled.connect(self.update_state)
+#        self.check_breaksubsections.toggled.connect(self.update_state)
+#        self.slider_numsubsections.valueChanged.connect(self.update_state)
+#        self.check_shuffle.toggled.connect(self.update_state)
 #        self.btn_finish.pressed.connect(self.close)
         self.connect(self,  # emitter
                      QtCore.SIGNAL('output_signal(PyQt_PyObject)'),  # signal
                      appoutput.receive_output)  # receiver
         self.current_scan_list = []
+        self.temporary_fitdata_list = []
         self.last_scaninfo = None
         if app_saved_state is not None:
             for scandata in app_saved_state['current_scan_list']:
                 self.add_scandata_to_list(scandata)
-        self.update_settings()
+            if len(self.current_scan_list) > 0:
+                self.list_scandata.setCurrentRow(0)
+        self.current_scan_list_changed_since_last_update = True
+        self.update_state()
+        self.ignore_input = False
+        self.statusBar.showMessage("Ready")
         self.show()
+        # plot once more if data pre-loaded since plot can be wonky un-shown:
+        if len(self.current_scan_list) > 0:
+            self.statusBar.showMessage("Plotting...")
+            self.current_scan_list_changed_since_last_update = True
+            self.update_state()
+            self.statusBar.showMessage("Ready")
 
     def closeEvent(self, event):
         """
@@ -74,26 +125,295 @@ class DataBrowserWindow(QtGui.QMainWindow):
                   tuple([app_saved_state, output_data]))
         super(DataBrowserWindow, self).closeEvent(event)
 
-    def load_data_dir(self):
+    def callback_load_dir(self):
+        if self.ignore_input:
+            return
+        self.ignore_input = True
+        self.statusBar.showMessage("Loading...")
         try:
             scandata_list = \
                 list(dcparsing.fetch_dir_as_unfit_scandata_iterator())
         # TODO: catch exceptions!
         except:
+            self.ignore_input = False
             raise
+        self.clear_all_scandata(suppress_update=True)
         for scandata in scandata_list:
             self.add_scandata_to_list(scandata)
+        self.list_scandata.setCurrentRow(0)
+        self.update_state()
+        self.statusBar.showMessage("Ready")
+        self.ignore_input = False
 
-    def load_data_file(self):
+    def callback_add_file(self):
+        if self.ignore_input:
+            return
+        self.ignore_input = True
+        self.statusBar.showMessage("Loading...")
         try:
             scandata = dcparsing.fetch_csv_as_unfit_scandata()
         # TODO: catch exceptions!
         except:
+            self.ignore_input = False
             raise
         self.add_scandata_to_list(scandata)
+        if len(self.current_scan_list) == 1:
+            self.list_scandata.setCurrentRow(0)
+        self.update_state()
+        self.statusBar.showMessage("Ready")
+        self.ignore_input = False
+
+    def callback_exclude_scandata(self):
+        if self.ignore_input:
+            return
+        self.ignore_input = True
+        if self.current_scan_list:  # if any scandata have been saved
+            rownum = self.list_scandata.currentRow()
+            if rownum >= 0:  # if a row has been selected at all
+                self.list_scandata.takeItem(rownum)
+                self.current_scan_list.pop(rownum)
+                self.temporary_fitdata_list.pop(rownum)
+                self.current_scan_list_changed_since_last_update = True
+                self.update_state()
+        self.ignore_input = False
+
+    def callback_clear_all(self, suppress_update=False):
+        if self.ignore_input:
+            return
+        self.ignore_input = True
+        self.clear_all_scandata(suppress_update)
+        self.ignore_input = False
+
+    def callback_update_selection(self):
+        if self.ignore_input:
+            return
+        # Force plot update if plotting 1D
+        if self.btn_plot1d.isChecked():
+            self.current_scan_list_changed_since_last_update = True
+        self.update_state(new_current_selection=True)
+
+    def callback_update_plots(self, toggled_on):
+        # ignore "toggled off" signals in addition to input during processing
+        if self.ignore_input or not toggled_on:
+            return
+        # Force plot update
+        self.current_scan_list_changed_since_last_update = True
+        self.update_state()
+
+    def callback_update_datatype(self):
+        if self.ignore_input:
+            return
+        # Force plot update
+        self.current_scan_list_changed_since_last_update = True
+        self.update_state()
+
+    def callback_set_primary_datatype(self):
+        if self.ignore_input:
+            return
+        self.ignore_input = True
+        if self.get_active_scandata() is not None:
+            self.statusBar.showMessage("Processing...")
+            newfield = self.cmb_datatype.currentText()
+            old_scandata_list = self.current_scan_list[:]  # DEEP COPY
+            new_scandata_list = []
+            for scandata in old_scandata_list:
+                if newfield in scandata.fields:
+                    new_scandata_list.append(scandata)
+            if old_scandata_list != new_scandata_list:
+                yndialog = QtGui.QMessageBox()
+                yndialog.setText("Warning - the following scans lack this " +
+                                 "field and will be removed:")
+                yndialog.setInformativeText(
+                    "\n".join(self.list_scandata.item(ind).text()
+                              for ind, scandata in enumerate(old_scandata_list)
+                              if scandata not in new_scandata_list))
+                yndialog.setStandardButtons(
+                    QtGui.QMessageBox.Cancel | QtGui.QMessageBox.Ok)
+                yndialog.setDefaultButton(QtGui.QMessageBox.Cancel)
+                ynresult = yndialog.exec_()
+                if ynresult != QtGui.QMessageBox.Ok:
+                    self.ignore_input = False
+                    self.statusBar.showMessage("Ready")
+                    return
+            # assume at this point all-clear to delete old data list
+            self.clear_all_scandata(suppress_update=True)
+            for scandata in new_scandata_list:
+                newscandata = dcparsing.move_scandata_attribute_to_front(
+                    scandata, newfield)
+                self.add_scandata_to_list(newscandata)
+            self.list_scandata.setCurrentRow(0)
+            self.temporary_fitdata_list = [None for x in new_scandata_list]
+            self.current_scan_list_changed_since_last_update = True
+            self.update_state()
+            self.ignore_input = False
+            self.statusBar.showMessage("Ready")
+
+    def callback_sort_scan_list(self):
+        # TODO: delegate to another file, e.g. dataclassparsing
+        if self.ignore_input:
+            return
+        self.ignore_input = True
+        self.statusBar.showMessage("Processing...")
+        primarykey = self.cmb_primarysort.currentText()
+        secondarykey = self.cmb_secondarysort.currentText()
+        oldscanlist = self.current_scan_list[:]
+        oldtempfitlist = self.temporary_fitdata_list[:]
+        self.clear_all_scandata(suppress_update=True)
+
+        def scandatasortfcn(scandata_tempfitdata_tuple):
+            scandata, _ = scandata_tempfitdata_tuple
+            try:
+                return (str(scandata.scaninfo[primarykey]),
+                        str(scandata.scaninfo[secondarykey]))
+            except KeyError:
+                try:
+                    return (str(scandata.scaninfo[primarykey]), 'z' * 10)
+                except KeyError:
+                    try:
+                        return ('z' * 10, str(scandata.scaninfo[secondarykey]))
+                    except KeyError:
+                        print("No valid sort keys found in scandata tags!")
+                        return ('z' * 10, 'z' * 10)
+            except AttributeError:
+                print("Scandata expected as list element.")
+                return ('z' * 10, 'z' * 10)
+
+        print('start sort', flush=True)
+        newscanlist, newtempfitlist = zip(*sorted(
+                                            zip(oldscanlist, oldtempfitlist),
+                                            key=scandatasortfcn))
+        print('mid sort', flush=True)
+        for scandata in newscanlist:
+            self.add_scandata_to_list(scandata)
+        print('mid sort 2', flush=True)
+        if len(self.current_scan_list) > 0:
+            self.list_scandata.setCurrentRow(0)
+        print('mid sort 3', flush=True)
+        self.current_scan_list_changed_since_last_update = True
+        self.update_state()
+        print('end sort', flush=True)
+        self.ignore_input = False
+        self.statusBar.showMessage("Ready")
+
+    def callback_perform_fit(self):
+        if self.ignore_input:
+            return
+        self.ignore_input = True
+        self.statusBar.showMessage("Fitting...")
+        fit_all = self.radio_fitall.isChecked()
+        # TODO: REAL CODE
+        if fit_all:
+            self.temporary_fitdata_list = \
+                [scandata.fitdata for scandata in self.current_scan_list]
+        else:
+            newtempfitdata = self.get_active_scandata().fitdata
+            self.replace_active_temp_fitdata(newtempfitdata)
+        self.current_scan_list_changed_since_last_update = True
+        self.update_state()
+        self.ignore_input = False
+        self.statusBar.showMessage("Ready")
+
+    def callback_erase_temp_fit(self):
+        if self.ignore_input:
+            return
+        self.ignore_input = True
+        self.statusBar.showMessage("Erasing Temporary Fit(s)...")
+        fit_all = self.radio_fitall.isChecked()
+        if fit_all:
+            self.temporary_fitdata_list = \
+                [None for scandata in self.current_scan_list]
+        else:
+            self.replace_active_temp_fitdata(None)
+        self.current_scan_list_changed_since_last_update = True
+        self.update_state()
+        self.ignore_input = False
+        self.statusBar.showMessage("Ready")
+
+    def callback_store_fit(self):
+        if self.ignore_input:
+            return
+        self.ignore_input = True
+        self.statusBar.showMessage("Storing Fit(s)...")
+        fit_all = self.radio_fitall.isChecked()
+        if fit_all:
+            new_scan_list = []
+            for ind, scandata in enumerate(self.current_scan_list):
+                newfitdata_list = [fitdata for fitdata in scandata.fitdata]
+                newfitdata_list[0] = self.temporary_fitdata_list[ind]
+                self.temporary_fitdata_list[ind] = None
+                scandata = ScanData(scandata.filepath,
+                                    scandata.scaninfo,
+                                    scandata.fields,
+                                    scandata.dataseries,
+                                    tuple(newfitdata_list))
+                new_scan_list.append(scandata)
+            self.current_scan_list = new_scan_list
+        else:
+            scandata = self.get_active_scandata()
+            newfitdata_list = [fitdata for fitdata in scandata.fitdata]
+            newfitdata_list[0] = self.get_active_temp_fitdata()
+            self.replace_active_temp_fitdata(None)
+            scandata = ScanData(scandata.filepath,
+                                scandata.scaninfo,
+                                scandata.fields,
+                                scandata.dataseries,
+                                tuple(newfitdata_list))
+            self.replace_active_scandata(scandata)
+        self.current_scan_list_changed_since_last_update = True
+        self.update_state()
+        self.ignore_input = False
+        self.statusBar.showMessage("Ready")
+
+    def callback_delete_fit(self):
+        if self.ignore_input:
+            return
+        self.ignore_input = True
+        self.statusBar.showMessage("Deleting Fit(s)...")
+        fit_all = self.radio_fitall.isChecked()
+        if fit_all:
+            new_scan_list = []
+            for scandata in self.current_scan_list:
+                newfitdata = tuple(None for x in range(len(scandata.fields)))
+                scandata = ScanData(scandata.filepath,
+                                    scandata.scaninfo,
+                                    scandata.fields,
+                                    scandata.dataseries,
+                                    newfitdata)
+                new_scan_list.append(scandata)
+            self.current_scan_list = new_scan_list
+        else:
+            scandata = self.get_active_scandata()
+            newfitdata = tuple(None for x in range(len(scandata.fields)))
+            scandata = ScanData(scandata.filepath,
+                                scandata.scaninfo,
+                                scandata.fields,
+                                scandata.dataseries,
+                                newfitdata)
+            self.replace_active_scandata(scandata)
+        self.current_scan_list_changed_since_last_update = True
+        self.update_state()
+        self.ignore_input = False
+        self.statusBar.showMessage("Ready")
+
+    def update_datatype_box_target(self, scandata):
+        last_datatype = self.cmb_datatype.currentText()
+        self.cmb_datatype.clear()
+        for field in scandata.fields:
+            self.cmb_datatype.addItem(field)
+        if last_datatype in scandata.fields:
+            for ind, field in enumerate(scandata.fields):
+                if field == last_datatype:
+                    self.cmb_datatype.setCurrentIndex(ind)
+
+    def clear_all_scandata(self, suppress_update=False):
+        while self.current_scan_list:  # while scandata remain
+            self.list_scandata.takeItem(0)
+            self.current_scan_list.pop(0)
+        self.current_scan_list_changed_since_last_update = True
+        if not suppress_update:
+            self.update_state()
 
     def add_scandata_to_list(self, scandata_to_add):
-        self.current_scan_list.append(scandata_to_add)
         try:
             midtype_str = scandata_to_add.scaninfo['MiddleScanType']
         except KeyError:
@@ -107,19 +427,21 @@ class DataBrowserWindow(QtGui.QMainWindow):
         except KeyError:
             fasttype_str = "[Unknown]"
         try:
-            start_str = str(scandata_to_add.dataseries.xvals()[0])
+            start_str = str(scandata_to_add.dataseries[0].xvals()[0])
         except KeyError:
             start_str = "[Unknown]"
         try:
-            stop_str = str(scandata_to_add.dataseries.xvals()[-1])
+            stop_str = str(scandata_to_add.dataseries[0].xvals()[-1])
         except KeyError:
             stop_str = "[Unknown]"
         scandata_string = \
             "{midtype}: {midval}, {fasttype}: {start} to {stop}".format(
                 midtype=midtype_str, midval=midval_str,
                 fasttype=fasttype_str, start=start_str, stop=stop_str)
-        self.list_currentscan.addItem(scandata_string)
-        self.update_settings()
+        self.list_scandata.addItem(scandata_string)
+        self.current_scan_list.append(scandata_to_add)
+        self.temporary_fitdata_list.append(None)
+        self.current_scan_list_changed_since_last_update = True
 
     def get_active_scandata(self):
         if self.current_scan_list:  # if any scandata have been saved
@@ -128,49 +450,111 @@ class DataBrowserWindow(QtGui.QMainWindow):
                 return self.current_scan_list[rownum]
         return None
 
-    def exclude_scandata(self):
+    def get_active_temp_fitdata(self):
         if self.current_scan_list:  # if any scandata have been saved
             rownum = self.list_scandata.currentRow()
             if rownum >= 0:  # if a row has been selected at all
-                self.list_scandata.takeItem(rownum)
-                self.current_scan_list.pop(rownum)
-                self.update_settings()
+                return self.temporary_fitdata_list[rownum]
+        return None
+
+    def replace_active_scandata(self, newscandata):
+        if self.current_scan_list:  # if any scandata have been saved
+            rownum = self.list_scandata.currentRow()
+            if rownum >= 0:  # if a row has been selected at all
+                self.current_scan_list[rownum] = newscandata
+
+    def replace_active_temp_fitdata(self, newtempfitdata):
+        if self.current_scan_list:  # if any scandata have been saved
+            rownum = self.list_scandata.currentRow()
+            if rownum >= 0:  # if a row has been selected at all
+                self.temporary_fitdata_list[rownum] = newtempfitdata
+
+    def update_state(self, new_current_selection=False):
+        """
+        Updates the current listboxes/plots to reflect the current state.
+        """
+        plot_active = False
+        current_scandata = self.get_active_scandata()
+        # Handle current selection - DataType, 1D ScanInfo, and plotting
+        if current_scandata is None:
+            self.cmb_datatype.clear()
+            self.list_scaninfo.clear()
+        else:
+            if self.current_scan_list_changed_since_last_update or \
+                                                        new_current_selection:
+                self.update_datatype_box_target(current_scandata)
+            self.display_scaninfo(current_scandata.scaninfo)
+            if self.btn_plot1d.isChecked():
+                if self.current_scan_list_changed_since_last_update:
+                    self.plot_scandata(current_scandata)
+                plot_active = True
+        # 2D data plotting
+        if self.btn_plot2d.isChecked():
+            if self.current_scan_list_changed_since_last_update:
+                self.plot_all_scandata(self.current_scan_list)
+            plot_active = True
+        # 2D Fit Parameter plotting
+        if self.btn_plotfitparam.isChecked():
+            plot_active = True
+        # Always at end:
+        if not plot_active:
+            self.canvas.wipe()
+        self.current_scan_list_changed_since_last_update = False
 
     def display_scaninfo(self, scaninfo):
-        if scaninfo != self.last_scaninfo:
-            # INSERT DISPLAYING MOST DICT ENTRIES
-            self.last_scaninfo = scaninfo.copy()
+        if scaninfo is not None:
+            if scaninfo != self.last_scaninfo:
+                self.list_scaninfo.clear()
+                for key, val in scaninfo.items():
+                    infostr = "{}: {}".format(key, val)
+                    if len(infostr) > 50:
+                        infostr = infostr[:50] + "..."
+                    self.list_scaninfo.addItem(infostr)
+                self.last_scaninfo = scaninfo.copy()
 
-    def update_settings(self):
-        """
-        Updates the current listboxes/plots to reflect the data inputs,
-        and calls are_settings_valid() to ensure data inputs are valid.
-        Calls update_plot() if so.
-        """
-        if self.are_settings_valid():
-            if self.btn_plot1d.isChecked():
-                pass
-            if self.btn_plot2d.isChecked():
-                pass
-            if self.btn_plotfitparam.isChecked():
-                pass
-            self.update_plot()
-        else:
-            self.active_series = None
-            self.fig.clf()
-
-    def are_settings_valid(self):
-        """Returns False if any window settings are invalid."""
-        valid = True
-        # TODO: ACTUAL CHECK
-        return valid
-
-    def update_plot(self):
-        """Update plot to match current settings"""
-        scandata = self.get_active_scandata()
+    def plot_scandata(self, scandata):
+        """Plot a 1D scandata's primary dataset"""
         if scandata is not None:
-            self.fig.axes.plot(scandata.xvals(), scandata.yvals(), '.')
-            self.fig.draw()
+            ind = self.cmb_datatype.currentIndex()
+            self.statusBar.showMessage("Plotting...")
+            self.canvas.wipe()
+            dcgraphing.plot_scandata(scandata,
+                                     index=ind,
+                                     title=None,
+                                     datatype=scandata.fields[0],
+                                     axes=self.canvas.axes,
+                                     plot_options={'suppress_legend': True})
+            self.canvas.axes.set_aspect('auto')
+            self.canvas.figure.tight_layout()
+            self.canvas.draw()
+            self.statusBar.showMessage("Ready")
+
+    def plot_all_scandata(self, scandata_list):
+        """Plot a 2D scandata function"""
+        if scandata_list:
+            self.statusBar.showMessage("Plotting...")
+            self.canvas.wipe()
+            # determine data type to plot, and coord to sort data rows by:
+            current_scandata = self.get_active_scandata()
+            if current_scandata is not None:
+                plotfield = self.cmb_datatype.currentText()
+            else:
+                current_scandata = scandata_list[0]
+                plotfield = current_scandata.fields[0]
+            # TODO: delegate to plot_scandata_2d from dataclassgraphing
+            data2d = []
+            for scandata in scandata_list:
+                for ind, field in enumerate(scandata.fields):
+                    if field == plotfield:
+                        data2d.append(scandata.dataseries[ind].yvals(
+                                                            unfiltered=True))
+            imageplot = self.canvas.axes.imshow(data2d,
+                                                interpolation="nearest")
+            self.canvas.axes.set_aspect('auto')
+            self.canvas.figure.colorbar(imageplot)
+            self.canvas.figure.tight_layout()
+            self.canvas.draw()
+            self.statusBar.showMessage("Ready")
 
     @classmethod
     def launch_with_output(cls, app_saved_state=None):
@@ -186,10 +570,11 @@ class DataBrowserWindow(QtGui.QMainWindow):
 # %%
 class MPLCanvas(FigureCanvas):
     """Matplotlib figure that can be added as a widget."""
-    def __init__(self, parent=None, width=3, height=3, dpi=100):
+    def __init__(self, parent=None, width=4, height=4, dpi=100):
         fig = Figure(figsize=(width, height), dpi=dpi)
         super(MPLCanvas, self).__init__(fig)
         self.axes = fig.add_subplot(111)
+        self.figure = self.axes.get_figure()
         # We want the axes cleared every time plot() is called
         self.axes.hold(False)
         self.setParent(parent)
@@ -197,6 +582,15 @@ class MPLCanvas(FigureCanvas):
                                    QtGui.QSizePolicy.Expanding,
                                    QtGui.QSizePolicy.Expanding)
         FigureCanvas.updateGeometry(self)
+
+    def wipe(self):
+        if len(self.figure.axes) == 1:
+            self.axes.cla()
+        else:
+            self.figure.clf()
+            self.axes = self.figure.add_subplot(111)
+            self.axes.hold(False)
+        self.draw()
 
 
 # %%
@@ -222,5 +616,24 @@ class AppOutput(QtCore.QObject):
 # For debugging only, likely won't play nice with other gui windows
 if __name__ == '__main__':
     qapp = QApplicationStarter()
-    # qapp.exec_()  # moved to QApplicationStarter
-    window, windowoutput = DataBrowserWindow.launch_with_output()
+    scandata_list = list(dcparsing.fetch_dir_as_unfit_scandata_iterator(
+#       )
+#        directorypath="C:\\Data\\febdata\\Experiment - Channel 2"))
+#        directorypath="C:\\Data\\160306\\DelayScan_OnChannelCenter_200mT_Channel1_033XT-B11_819.0nm_30K_2Dscan_Voltage_DelayTime"))
+        directorypath="C:\\Data\\160306\\DelayScan_OnChannelCenter_200mT_Channel2_033XT-B11_819.0nm_30K_2Dscan_Voltage_DelayTime"))
+#        directorypath="C:\\Data\\160306\\DelayScan_OnChannelCenter_200mT_Channel2_033XT-B11_819.0nm_30K_2Dscan_Voltage_DelayTime_run2"))
+#        directorypath="C:\\Data\\160306\\DelayScan_OnChannelCenter_200mT_Channel3_033XT-B11_819.0nm_30K_2Dscan_Voltage_DelayTime"))
+#        directorypath="C:\Data\decdata\Channel 3 Run 1"))
+#        directorypath="C:\\Data\\decdata\\representative"))
+
+#    scandata_list = list(dcfitting.fit_scandata_iterable(
+#        scandata_list,
+#        dataseriesfitfunction=None,
+#        dataseriesfitfunction=dcfitting.fit_dataseries_with_one_decaying_cos,
+#        dataseriesfitfunction=dcfitting.fit_dataseries_with_two_decaying_cos,
+#        fit_drift=True, multiprocessing=True))
+
+    app_saved_state = {'current_scan_list': scandata_list}
+    window, windowoutput = \
+        DataBrowserWindow.launch_with_output(app_saved_state)
+    qapp.exec_()

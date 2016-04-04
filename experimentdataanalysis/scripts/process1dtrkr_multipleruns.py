@@ -2,13 +2,7 @@
 """
 Analyze experiments of form:
 1D scan: delay scan
-2D scan: mirror (or nothing):
-3D scan: voltage
-
-might change to:
-1D scan: mirror
-2D scan: delay scan:
-3D scan: voltage
+(lots of runs)
 """
 
 import matplotlib.pyplot as plt
@@ -21,22 +15,14 @@ import experimentdataanalysis.parsing.dataclassparsing as dcparsing
 if __name__ == "__main__":
 # %%
     scandata_list = list(dcparsing.fetch_dir_as_unfit_scandata_iterator(
-#        directorypath="C:\\Data\\febdata\\Experiment - Channel 2"))
-#        directorypath="C:\\Data\\febdata\\Experiment - Channel 3"))
-#        directorypath="C:\\Data\\decdata\\Channel 3 Run 1"))
-#        directorypath="C:\\Data\\160306\\DelayScan_OnChannelCenter_200mT_Channel1_033XT-B11_819.0nm_30K_2Dscan_Voltage_DelayTime"))
-        directorypath="C:\\Data\\160306\\DelayScan_OnChannelCenter_200mT_Channel2_033XT-B11_819.0nm_30K_2Dscan_Voltage_DelayTime"))
-#        directorypath="C:\\Data\\160306\\DelayScan_OnChannelCenter_200mT_Channel2_033XT-B11_819.0nm_30K_2Dscan_Voltage_DelayTime_run2"))
-#        directorypath="C:\\Data\\160306\\DelayScan_OnChannelCenter_200mT_Channel3_033XT-B11_819.0nm_30K_2Dscan_Voltage_DelayTime"))
-#        directorypath="C:\\Data\\decdata\\representative"))
+        directorypath="C:\\Data\\aprilfoolsxinlin"))
 #    scandata_list += list(dcparsing.fetch_dir_as_unfit_scandata_iterator(
 #        directorypath="C:\\Data\\160306\\DelayScan_OnChannelCenter_200mT_Channel3_033XT-B11_819.0nm_30K_2Dscan_Voltage_DelayTime"))
     scandata_list = list(dcfitting.fit_scandata_iterable(
         scandata_list,
 #        dataseriesfitfunction=None,
-        dataseriesfitfunction=dcfitting.fit_dataseries_with_one_decaying_cos,
-#        dataseriesfitfunction=dcfitting.fit_dataseries_with_two_decaying_cos,
-        fit_drift=True, multiprocessing=True))
+        dataseriesfitfunction=dcfitting.fit_dataseries_to_two_decays,
+        fit_drift=False, multiprocessing=False))
 
 # %%
 #    _ = dcgraphing.graph_scandata_iterable(

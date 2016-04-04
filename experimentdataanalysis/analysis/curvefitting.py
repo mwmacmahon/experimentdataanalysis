@@ -15,6 +15,24 @@ LASER_REPRATE = 13000
 
 
 # %%
+def two_decays(t, b, c, d, e):
+    """
+    note: does NOT handle "wrapping around" t values less than zero.
+    see wrap_negative_times()
+    """
+    def single_pulse_fcn(t2):
+        return b*np.exp(-t2/c) + d*np.exp(-t2/e)
+
+    last_t = t + LASER_REPRATE
+    last_t_2 = t + 2*LASER_REPRATE
+    thispulse = single_pulse_fcn(t)
+    lastpulse = single_pulse_fcn(last_t)
+    lastpulse2 = single_pulse_fcn(last_t_2)
+    return 0 + thispulse + lastpulse + lastpulse2
+#    return a + thispulse + lastpulse + lastpulse2
+
+
+# %%
 def two_decays_sinusoidal(t, a, b, c, d, e, f, g):
     """
     note: does NOT handle "wrapping around" t values less than zero.
@@ -102,6 +120,49 @@ def get_abs_max_value_data_pt(dataseries):
             time_at_valuemax = time
             valuemax = abs(value)
     return time_at_valuemax, valuemax
+
+
+# %%
+def fit_sorted_series_to_two_decays(dataseries):
+    Tshortguess = 100
+    Tlongguess = 1000
+    time_at_datamax, datamax = get_max_value_data_pt(dataseries)
+
+    initguess = [datamax*0.15, Tshortguess, datamax*0.1, Tlongguess]
+    try:
+        fitparams, fitstds = fit_nonlinear_fcn_dataseries_sorted(
+                                 dataseries, two_decays, initguess)
+    except TypeError as err:
+        print("Warning: TypeError during " +
+              "fit_sorted_series_to_two_decays:")
+        print(err)
+        return None
+    except RuntimeError as err:
+        print("Warning: RuntimeError during " +
+              "fit_sorted_series_to_two_decays:")
+        print(err)
+        return None
+    else:
+        times = dataseries.xvals(unsorted=True, unfiltered=True)
+        fittimes = wrap_negative_times(times)
+        fitvalues = []
+        for time in fittimes:
+            if time in wrap_negative_times(dataseries.xvals(unfiltered=False)):
+                fitvalues.append(two_decays(time, *fitparams))
+            else:
+                # print("excluding time {}".format(time))  # for bug testing
+                fitvalues.append(0)
+        fitdataseries = DataSeries(
+                            zip(times, fitvalues),
+                            excluded_intervals=dataseries.excluded_intervals())
+        fitparamstring = (
+            "Fit Properties\n" +
+            "Short Amplitude: {:.5g}\n".format(fitparams[0]) +
+            "Short Lifetime: {:.5g}\n".format(fitparams[1]) +
+            "Long Amplitude: {:.5g}\n".format(fitparams[2]) +
+            "Long Lifetime: {:.5g}\n".format(fitparams[3]) +
+            "     +-{:.5g}\n".format((fitstds[3])))
+        return FitData(fitparams, fitstds, fitparamstring, fitdataseries)
 
 
 # %%

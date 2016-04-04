@@ -75,18 +75,19 @@ def test_tryinvalidattribute_singlefile(loadcsvdir):
 def test_filenameparsing():
     filepath = ("C:\\pythonprojects\\experimentdataanalysis_project\\" +
                 "tests\\csvs_to_test\\" +
-                "Voltage_0_Experiment_Channel3_033XT-B11" +
-                "_819.0nm_30K_2Dscan_BExternal_DelayTime_run2\\" +
-                "Ind_1_DelayTime -400_to_6100 BExternal 0.2x.dat")
+                "Experiment_Channel3_033XT-B11" +
+                "_819.0nm_30K_2Dscan_Voltage_DelayTime_run2\\" +
+                "Ind_1_DelayTime -400_to_6100 Voltage 2.5x.dat")
     scaninfo = dcparsing.analyze_scan_filepath(filepath)
-    assert scaninfo["Voltage"] == 0
+    print(scaninfo)
+    assert scaninfo["Voltage"] == 2.5
     assert scaninfo["Channel 3"] == True
     assert scaninfo["Wavelength"] == 819.0
     assert scaninfo["SetTemperature"] == 30.0
     assert scaninfo["FastScanIndex"] == 1
     assert scaninfo["FastScanType"] == "DelayTime"
-    assert scaninfo["MiddleScanCoord"] == 0.2
-    assert scaninfo["MiddleScanType"] == "BExternal"
+    assert scaninfo["MiddleScanCoord"] == 2.5
+    assert scaninfo["MiddleScanType"] == "Voltage"
 
 
 # JUST HERE FOR SYNTAX REFERENCE

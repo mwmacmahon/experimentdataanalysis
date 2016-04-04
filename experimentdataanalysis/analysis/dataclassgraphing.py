@@ -18,7 +18,8 @@ def graph_fitted_csv(filepath=None,
                      attribute='lockin2x',
                      time_offset=False,
                      fit_drift=False,
-                     dataseriesfitfunction=None):
+                     dataseriesfitfunction=None,
+                     plot_options={}):
     """
     To use drift fitting, must send a function that accepts a fit_drift
     flag as 2nd argument after dataseries and returns a tuple
@@ -31,7 +32,7 @@ def graph_fitted_csv(filepath=None,
         scandata = dcfitting.get_time_offset_scandata(scandata)
     scandata = dcfitting.fit_scandata(scandata,
                                       dataseriesfitfunction, fit_drift)
-    scandata = graph_scandata(scandata)
+    scandata = graph_scandata(scandata, plot_options)
     return scandata
 
 
@@ -40,7 +41,8 @@ def graph_fitted_csv_directory(directorypath=None,
                                dataseriesfitfunction=None,
                                time_offset=False,
                                fit_drift=False,
-                               multiprocessing=False):
+                               multiprocessing=False,
+                               plot_options={}):
     """
     To use drift fitting, must send a function that accepts a fit_drift
     flag as 2nd argument after dataseries and returns a tuple
@@ -59,12 +61,12 @@ def graph_fitted_csv_directory(directorypath=None,
                             dataseriesfitfunction,
                             fit_drift)
     graph_scandata_iterable(scandata_iterable, dataseriesfitfunction,
-                            fit_drift, multiprocessing)
+                            fit_drift, multiprocessing, plot_options)
     return scandata_iterable
 
 
 # %%
-def graph_scandata(scandata, index=0):
+def graph_scandata(scandata, index=0, plot_options={}):
     """
     To use drift fitting, must send a function that accepts a fit_drift
     flag as 2nd argument after dataseries and returns a tuple
@@ -84,14 +86,14 @@ def graph_scandata(scandata, index=0):
     try:
         plt.clf()
         plot_title = ""
-        plot_scandata(scandata, index, plot_title, ax)
+        plot_scandata(scandata, index, plot_title, ax, plot_options)
         plt.savefig(file_name)
     except RuntimeError:
         print("Error generating {}, cancelling...".format(file_name))
     return scandata
 
 
-def graph_scandata_iterable(scandata_iterable, index=0):
+def graph_scandata_iterable(scandata_iterable, index=0, plot_options={}):
     fig, ax = plt.subplots()
     for scandata in scandata_iterable:
         if scandata.fitdata[index] is not None:
@@ -106,7 +108,7 @@ def graph_scandata_iterable(scandata_iterable, index=0):
         try:
             plt.clf()
             plot_title = ""
-            plot_scandata(scandata, index, plot_title, ax)
+            plot_scandata(scandata, index, plot_title, ax, plot_options)
             plt.savefig(file_name)
         except RuntimeError:
             print("Error generating {}".format(file_name))
@@ -116,30 +118,52 @@ def graph_scandata_iterable(scandata_iterable, index=0):
 
 
 # %%
-def plot_scandata(scandata, index=0, title="", axes=None):
+def plot_scandata(scandata, index=0, title=None, datatype=None,
+                  axes=None, plot_options={}):
+    try:
+        xlabel = scandata.scaninfo['FastScanType']
+    except KeyError:
+        xlabel = None
     plot_dataseries(scandata.dataseries[index], title=title,
-                    axes=axes, fitdata=scandata.fitdata[index])
+                    xlabel=xlabel, ylabel=datatype,
+                    axes=axes, fitdata=scandata.fitdata[index],
+                    plot_options=plot_options)
 
 
-def plot_dataseries(dataseries, title="", axes=None, fitdata=None):
+def plot_dataseries(dataseries, title=None, xlabel=None, ylabel=None,
+                    axes=None, fitdata=None, plot_options={}):
     if axes is None:
         fig, axes = plt.subplots()
-    plt.plot(dataseries.xvals(unfiltered=True),
-             dataseries.yvals(unfiltered=True), 'b.')
+    axes.plot(dataseries.xvals(unfiltered=True),
+              dataseries.yvals(unfiltered=True), 'b.')
+    if xlabel:
+        axes.set_xlabel(xlabel)
+    if ylabel:
+        axes.set_ylabel(ylabel)
+    if title:
+        axes.set_title(title)
     if fitdata is not None:
+        axes.hold(True)
         fitdataseries = fitdata.fitdataseries
-        plt.plot(fitdataseries.xvals(unfiltered=True),
-                 fitdataseries.yvals(unfiltered=True), 'r.')
-        # text box with parameters of fit
-        props = dict(boxstyle='round', facecolor='palegreen',
-                     alpha=0.5)
-        textstr = fitdata.fitparamstring
-        plt.text(0.95, 0.95, textstr, transform=axes.transAxes,
-                 fontsize=14, verticalalignment='top',
-                 horizontalalignment='right', multialignment='left',
-                 bbox=props)
-        plt.title(title)
-        plt.draw()
+        axes.plot(fitdataseries.xvals(unfiltered=True),
+                  fitdataseries.yvals(unfiltered=True), 'r-')
+        if not plot_options.get('suppress_legend'):
+            # text box with parameters of fit
+            props = dict(boxstyle='round', facecolor='palegreen',
+                         alpha=0.5)
+            textstr = fitdata.fitparamstring
+            axes.text(0.95, 0.95, textstr, transform=axes.transAxes,
+                      fontsize=14, verticalalignment='top',
+                      horizontalalignment='right', multialignment='left',
+                      bbox=props)
+
+
+def plot_additional_dataseries(dataseries, axes=None, plot_options={}):
+    if axes is None:
+        fig, axes = plt.subplots()
+    axes.hold(True)
+    axes.plot(dataseries.xvals(unfiltered=True),
+              dataseries.yvals(unfiltered=True), 'b-')
 
 
 # %%

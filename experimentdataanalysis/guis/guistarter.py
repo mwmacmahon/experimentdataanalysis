@@ -24,18 +24,21 @@ class QApplicationStarter:
     Ensures only one version of this object exists using the 'Borg'
     singleton technique. See http://www.aleax.it/Python/5ep.html
     """
-    _shared_state = {}
+    _shared_state = {"qapp": None}
 
     def __init__(self):
         self.__dict__ = self._shared_state
-        self.start_qapp()
-
-    def start_qapp(self):
-        if 'qapp' not in self.__dict__:
+        if self.qapp is None:
             self.qapp = QtGui.QApplication([])
 
     def __getattr__(self, name):
-        return getattr(self.qapp, name)
+        return getattr(self.qapp, name)  # never called on qapp, already exists
+
+    def __setattr__(self, name, value):
+        if name in ["__dict__", "qapp"]:
+            object.__setattr__(self, name, value)
+        else:
+            setattr(self.qapp, name, value)
 
 
 # %%

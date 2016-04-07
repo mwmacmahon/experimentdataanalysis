@@ -103,11 +103,8 @@ def analyze_scan_filepath(filepath):
     scaninfo['File Last Modified'] = time.ctime(os.path.getmtime(filepath))
     # SEARCH TERMS:
     # 1. If first string found, register second string as
-    #    tag containing True
-    this_element_keyword_list = [("Channel1", "Channel 1"),
-                                 ("Channel2", "Channel 2"),
-                                 ("Channel3", "Channel 3"),
-                                 ("Channel4", "Channel 4")]
+    #    tag containing third string/value
+    this_element_keyword_list = []
     # 2. Grab next element(s) if this one CONTAINS first string,
     #    tag next element(s) as second string(s)
     next_element_keyword_list = [("Voltage", "Voltage"),
@@ -116,7 +113,8 @@ def analyze_scan_filepath(filepath):
                                              "FastScanType"])]
     # 3. Grab this element if it CONTAINS first string,
     #    tag remainder as second string
-    inside_this_element_keyword_list = [("K", "SetTemperature"),
+    inside_this_element_keyword_list = [("Channel", "Channel"),
+                                        ("K", "SetTemperature"),
                                         ("nm", "Wavelength"),
                                         ("x.dat", "MiddleScanCoord")]
     for segment in filepath.split("\\"):
@@ -145,9 +143,9 @@ def analyze_scan_filepath(filepath):
                             next_element_tags = [tags]
                         else:
                             next_element_tags = tags
-            for matchstr, tag in this_element_keyword_list:
+            for matchstr, tag, value in this_element_keyword_list:
                 if element == matchstr:
-                    scaninfo[tag] = True
+                    scaninfo[tag] = value
             for matchstr, tag in inside_this_element_keyword_list:
                 if matchstr in element:
                     value = element.replace(matchstr, "")

@@ -81,7 +81,7 @@ def test_filenameparsing():
     scaninfo = dcparsing.analyze_scan_filepath(filepath)
     print(scaninfo)
     assert scaninfo["Voltage"] == 2.5
-    assert scaninfo["Channel 3"] == True
+    assert scaninfo["Channel"] == 3
     assert scaninfo["Wavelength"] == 819.0
     assert scaninfo["SetTemperature"] == 30.0
     assert scaninfo["FastScanIndex"] == 1

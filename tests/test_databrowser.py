@@ -2,7 +2,7 @@
 """
 Created on Thu Apr  7 21:15:43 2016
 
-REQUIRES PYTEST-QT
+REQUIRES PYTEST-QT (obtainable from pip)
 
 Designed to test the dataclassparsing module.
 

@@ -39,12 +39,8 @@ class DataBrowserWindow(QtGui.QMainWindow):
         self.figure_container.addWidget(self.canvas)
         # Set up combo boxes, load fit functions
         for cmbbox in [self.cmb_primarysort, self.cmb_secondarysort]:
-            cmbbox.addItem('Channel')
-            cmbbox.addItem('FastScanIndex')
             cmbbox.addItem('MiddleScanCoord')
-            cmbbox.addItem('SetTemperature')
             cmbbox.addItem('Voltage')
-            cmbbox.addItem('Wavelength')
         self.cmb_primarysort.setCurrentIndex(0)
         self.cmb_secondarysort.setCurrentIndex(1)
         self.fitfunc_list = dcfitting.get_dataseries_fit_list()
@@ -267,31 +263,20 @@ class DataBrowserWindow(QtGui.QMainWindow):
         def scandatasortfcn(scandata_tempfitdata_tuple):
             scandata, _ = scandata_tempfitdata_tuple
             try:
-                return (float(scandata.scaninfo[primarykey]),
-                        float(scandata.scaninfo[secondarykey]))
+                return (str(scandata.scaninfo[primarykey]),
+                        str(scandata.scaninfo[secondarykey]))
             except KeyError:
                 try:
-                    return (float(scandata.scaninfo[primarykey]),
-                            99999999)
+                    return (str(scandata.scaninfo[primarykey]), 'z' * 10)
                 except KeyError:
                     try:
-                        return (99999999,
-                                float(scandata.scaninfo[secondarykey]))
+                        return ('z' * 10, str(scandata.scaninfo[secondarykey]))
                     except KeyError:
-                        return (99999999, 99999999)
-                    except ValueError:
-                        print("Numerical sort keys only!")
-                        return (99999999, 99999999)
-                except ValueError:
-                    print("Numerical sort keys only!")
-                    return (99999999, 99999999)
-            except ValueError:
-                print("Numerical sort keys only!")
-                return (99999999, 99999999)
+                        print("No valid sort keys found in scandata tags!")
+                        return ('z' * 10, 'z' * 10)
             except AttributeError:
                 print("Scandata expected as list element.")
-                return (99999999, 99999999)
-
+                return ('z' * 10, 'z' * 10)
         newscanlist, newtempfitlist = zip(*sorted(
                                             zip(oldscanlist, oldtempfitlist),
                                             key=scandatasortfcn))

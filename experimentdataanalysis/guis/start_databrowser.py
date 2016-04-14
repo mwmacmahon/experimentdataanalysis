@@ -191,8 +191,8 @@ class DataBrowserWindow(QtGui.QMainWindow):
     def callback_update_selection(self):
         if self.ignore_input:
             return
-        # Force plot update if plotting 1D
-        if self.btn_plot1d.isChecked():
+        # Force plot update if plotting 1D or 2D
+        if self.btn_plot1d.isChecked() or self.btn_plot2d.isChecked():
             self.current_scan_list_changed_since_last_update = True
         self.update_state(new_current_selection=True)
 
@@ -539,30 +539,37 @@ class DataBrowserWindow(QtGui.QMainWindow):
             self.statusBar.showMessage("Ready")
 
     def plot_all_scandata(self, scandata_list):
-        """Plot a 2D scandata function"""
+        """Plot a 2D scandata list"""
         if scandata_list:
             self.statusBar.showMessage("Plotting...")
             self.canvas.wipe()
-            # determine data type to plot, and coord to sort data rows by:
-            current_scandata = self.get_active_scandata()
-            if current_scandata is not None:
-                plotfield = self.cmb_datatype.currentText()
-            else:
-                current_scandata = scandata_list[0]
-                plotfield = current_scandata.fields[0]
+            # determine data type to plot, and get 1st scandata to be plotted:
+            ref_scandata = self.get_active_scandata()
+            if ref_scandata is None:
+                ref_scandata = scandata_list[0]
+            plotfield = self.cmb_datatype.currentText()
+            if plotfield not in ref_scandata.fields:
+                plotfield = ref_scandata.fields[0]
+            # get first row of plot's length to ensure all rows match
+            ind = ref_scandata.fields.index(plotfield)
+            refdatayvals = ref_scandata.dataseries[ind].yvals(unfiltered=True)
+            plotdatalength = len(refdatayvals)
             # TODO: delegate to plot_scandata_2d from dataclassgraphing
             data2d = []
             for scandata in scandata_list:
                 for ind, field in enumerate(scandata.fields):
                     if field == plotfield:
-                        data2d.append(scandata.dataseries[ind].yvals(
-                                                            unfiltered=True))
-            imageplot = self.canvas.axes.imshow(data2d,
-                                                interpolation="nearest")
-            self.canvas.axes.set_aspect('auto')
-            self.canvas.figure.colorbar(imageplot)
-            self.canvas.figure.tight_layout()
-            self.canvas.draw()
+                        datayvals = scandata.dataseries[ind].yvals(
+                                                            unfiltered=True)
+                        if len(datayvals) == plotdatalength:
+                            data2d.append(datayvals)
+            if data2d:
+                imageplot = self.canvas.axes.imshow(data2d,
+                                                    interpolation="nearest")
+                self.canvas.axes.set_aspect('auto')
+                self.canvas.figure.colorbar(imageplot)
+                self.canvas.figure.tight_layout()
+                self.canvas.draw()
             self.statusBar.showMessage("Ready")
 
     @classmethod
@@ -574,6 +581,7 @@ class DataBrowserWindow(QtGui.QMainWindow):
         appoutput = AppOutput()
         apphandle = DataBrowserWindow(appoutput, app_saved_state)
         return apphandle, appoutput
+
 
 
 # %%

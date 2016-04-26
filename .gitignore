@@ -3,6 +3,7 @@
 *.cache
 *.pyc
 __pycache__
+*.vs
 
 #no ~ files from emacs either
 *~

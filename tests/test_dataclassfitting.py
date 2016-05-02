@@ -1,3 +1,4 @@
+#! python
 # -*- coding: utf-8 -*-
 """
 Designed to test the dataclassfitting module.
@@ -25,8 +26,8 @@ import experimentdataanalysis.analysis.dataclassfitting as dcfitting
 # %% TEST FIXTURES
 @pytest.fixture(scope="module")
 def loadscandatalist():
-    filepath = ("C:\\pythonprojects\\experimentdataanalysis_project\\" +
-                "tests\\representativetwocosdata")
+    test_dir_path = __file__[:__file__.rfind("\\")]
+    filepath = (test_dir_path + "\\representativetwocosdata")
     scandatalist = list(
                     dcparsing.fetch_dir_as_unfit_scandata_iterator(filepath))
     return scandatalist

@@ -1,3 +1,4 @@
+#! python
 # -*- coding: utf-8 -*-
 """
 Designed to test the DataSeries class.

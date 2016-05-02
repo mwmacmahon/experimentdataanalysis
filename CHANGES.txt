@@ -1,0 +1,3 @@
+Version number stored in __init__.py of main package
+
+[UPCOMING] v0.1.2 - new layout for easier use of scripts, albeit cruder - scripts dumped in root dir of repo to avoid working directory issues during imports. also added a visual studio project file, optional.

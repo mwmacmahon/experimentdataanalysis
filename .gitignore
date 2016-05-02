@@ -1,9 +1,14 @@
 # no spyder .cache files
 .spyderproject
 *.cache
+
+# no compliled/visualstudio files either
 *.pyc
 __pycache__
 *.vs
+*.egg-info
+build
+dist
 
 #no ~ files from emacs either
 *~

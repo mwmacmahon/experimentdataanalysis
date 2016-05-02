@@ -1,3 +1,4 @@
+#! python
 # -*- coding: utf-8 -*-
 """
 Designed to test the dataclassparsing module.
@@ -28,9 +29,13 @@ def check_scandata_veracity(scandata, scancoord_index):
 
 # %% TEST FIXTURES
 @pytest.fixture(scope="module")
+def test_dir_path():
+    return __file__[:__file__.rfind("\\")]
+
+@pytest.fixture(scope="module")
 def loadcsvdir():
-    filepath = ("C:\\pythonprojects\\experimentdataanalysis_project\\" +
-                "tests\\representativetwocosdata")
+    test_dir_path = __file__[:__file__.rfind("\\")]
+    filepath = (test_dir_path + "\\representativetwocosdata")
     csvdirdata = csvparser.parse_csv_directory(filepath, delimiter='\t')
     filepath_list, rawcsvdata_list = zip(*csvdirdata)
     return filepath_list, rawcsvdata_list
@@ -48,9 +53,8 @@ def loadcsvdir():
 
 
 # %% TESTS
-def test_extract_scandata_iter_from_filepath(loadcsvdir):
-    filepath = ("C:\\pythonprojects\\experimentdataanalysis_project\\" +
-                "tests\\representativetwocosdata")
+def test_extract_scandata_iter_from_filepath(test_dir_path):
+    filepath = (test_dir_path + "\\representativetwocosdata")
     scandatalist = dcparsing.fetch_dir_as_unfit_scandata_iterator(filepath)
     for scandata in scandatalist:
         check_scandata_veracity(scandata, scancoord_index=1)
@@ -72,9 +76,8 @@ def test_tryinvalidattribute_singlefile(loadcsvdir):
         check_scandata_veracity(scandata, scancoord_index=0)
 
 
-def test_filenameparsing():
-    filepath = ("C:\\pythonprojects\\experimentdataanalysis_project\\" +
-                "tests\\csvs_to_test\\" +
+def test_filenameparsing(test_dir_path):
+    filepath = (test_dir_path + "\\csvs_to_test\\" +
                 "Experiment_Channel3_033XT-B11" +
                 "_819.0nm_30K_2Dscan_Voltage_DelayTime_run2\\" +
                 "Ind_1_DelayTime -400_to_6100 Voltage 2.5x.dat")

@@ -11,7 +11,7 @@ from scipy.optimize import curve_fit
 from experimentdataanalysis.analysis.dataclasses \
     import FitData, DataSeries
 
-LASER_REPRATE = 13000
+LASER_REPRATE = 13100  # ns period
 
 
 # %%

@@ -3,9 +3,11 @@
 """
 Designed to test the dataclassgraphing module.
 
-Run by typing the following in python while in the project directory:
-import pytest
-pytest.main(args=['-s'])
+Run from command line (recommended!) by inputting one of the following:
+py.test                                                [this runs all tests]
+python setup.py test                                   [this runs all tests]
+py.test "tests/[this_test_name].py"                    [this test only]
+python setup.py test -a "tests/[this_test_name].py"    [this test only]
 
 Created on Fri Feb 26 06:44:32 2016
 

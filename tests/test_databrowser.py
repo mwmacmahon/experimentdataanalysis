@@ -7,9 +7,12 @@ REQUIRES PYTEST-QT (obtainable from pip)
 
 Designed to test the DataBrowser module.
 
-Run by typing the following in python while in the project directory:
-import pytest
-pytest.main(args=['-s'])
+Run from command line (recommended!) by inputting one of the following:
+py.test                                                [this runs all tests]
+python setup.py test                                   [this runs all tests]
+py.test "tests/[this_test_name].py"                    [this test only]
+python setup.py test -a "tests/[this_test_name].py"    [this test only]
+
 
 @author: Michael
 """

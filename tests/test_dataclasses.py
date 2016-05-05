@@ -3,9 +3,11 @@
 """
 Designed to test the DataSeries class.
 
-Run by typing the following in python while in the project directory:
-import pytest
-pytest.main(args=['-s'])
+Run from command line (recommended!) by inputting one of the following:
+py.test                                                [this runs all tests]
+python setup.py test                                   [this runs all tests]
+py.test "tests/[this_test_name].py"                    [this test only]
+python setup.py test -a "tests/[this_test_name].py"    [this test only]
 
 Created on Mon Jan  4 03:45:43 2016
 

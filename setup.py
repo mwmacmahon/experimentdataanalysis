@@ -5,13 +5,13 @@ from __future__ import print_function
 from setuptools import setup, find_packages
 from setuptools.command.test import test as TestCommand
 import io
-import codecs
 import os
 import sys
 
 import experimentdataanalysis
 
 here = os.path.abspath(os.path.dirname(__file__))
+
 
 def read(*filenames, **kwargs):
     encoding = kwargs.get('encoding', 'utf-8')
@@ -24,16 +24,23 @@ def read(*filenames, **kwargs):
 
 long_description = read('README.txt', 'CHANGES.txt')
 
+
 class PyTest(TestCommand):
-    def finalize_options(self):
-        TestCommand.finalize_options(self)
-        self.test_args = []
-        self.test_suite = True
+    user_options = [('pytest-args=', 'a', "Arguments to pass to py.test")]
+
+    def initialize_options(self):
+        TestCommand.initialize_options(self)
+        self.pytest_args = []
+
+#    def finalize_options(self):
+#        TestCommand.finalize_options(self)
+#        self.pytest_args = []
+#        self.test_suite = True
 
     def run_tests(self):
         import pytest
         if __name__ == "__main__":
-            errcode = pytest.main(self.test_args)
+            errcode = pytest.main(self.pytest_args)
             sys.exit(errcode)
 
 setup(

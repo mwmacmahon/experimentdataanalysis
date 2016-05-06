@@ -5,7 +5,6 @@ Created on Wed May  4 17:35:06 2016
 @author: vsih-lab
 """
 
-from functools import partial
 import inspect
 
 from experimentdataanalysis.analysis.generalutilities \
@@ -51,7 +50,17 @@ def dataseries_fit(dataseries, fitfunction,
 
     # should create a partial function with _only_ free parameters
     # convert initial_params, param_bounds to versions omitting fixed params
-    partialfcn = partial()
+    def partialfcn(x, *free_args):
+        print(len(free_args))
+        free_ind = 0
+        all_args = [x]
+        for ind in range(num_nonx_args):
+            if ind in free_param_indices:
+                all_args.append(free_args[free_ind])
+                free_ind += 1
+            else:
+                all_args.append(initial_params[ind])
+        return fitfunction(*all_args)
 
     # fit partial function with curve_fit
 

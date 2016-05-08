@@ -51,7 +51,8 @@ def dataseries_fit(dataseries, fitfunction,
     # should create a partial function with _only_ free parameters
     # convert initial_params, param_bounds to versions omitting fixed params
     def partialfcn(x, *free_args):
-        print(len(free_args))
+        if len(free_args) != len(free_param_indices):
+            raise TypeError("fit_function_to_dataseries: )
         free_ind = 0
         all_args = [x]
         for ind in range(num_nonx_args):

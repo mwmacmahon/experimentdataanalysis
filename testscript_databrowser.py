@@ -42,4 +42,4 @@ if __name__ == "__main__":
         databrowser.DataBrowserWindow.launch_with_output()
     qapp.exec_()
 
-    scandata_list = windowoutput.output[0]["current_scan_list"]
+#    scandata_list = windowoutput.output[0]["current_scan_list"]

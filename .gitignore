@@ -1,5 +1,6 @@
-# no spyder .cache files
+# no spyder .cache or other bookkeeping files
 .spyderproject
+.spyderworkspace
 *.cache
 
 # no compliled/visualstudio files either

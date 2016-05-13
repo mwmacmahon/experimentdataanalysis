@@ -13,7 +13,7 @@ from collections.abc import Sequence
 # returned from curvefitting.py functions
 FitData = namedtuple("FitData", ["fitparams", "fitparamstds",
                                  "fitparamstring", "fitdataseries"])
-# used to fit scandata in dataclassfitting.py functions
+# used to fit scandata in dataclassfitting.py functions [DEPRECATED]
 FitFunc = namedtuple("FitFunc", ["description", "fitfunction",
                                  "fitparamlist", "fitargumentlist"])
 

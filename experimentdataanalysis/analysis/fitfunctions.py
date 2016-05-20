@@ -14,10 +14,17 @@ LASER_REPRATE = 13100  # ps period
 
 
 # %% NEEDS SPHINX DOCUMENTATION
+def fitfcn_simple_line(t, slope, offset):
+    """
+    """
+    return slope*t + offset
+
+
+# %% NEEDS SPHINX DOCUMENTATION
 def fitfcn_simple_1d_gaussian(t, amplitude, t0, sigma, offset):
     """
     """
-    return amplitude*np.exp(-np.power((t - t0)/(2.*sigma), 2.)) + offset
+    return amplitude*np.exp(-0.5*np.power((t - t0)/(sigma), 2.)) + offset
 
 
 # %% NEEDS SPHINX DOCUMENTATION

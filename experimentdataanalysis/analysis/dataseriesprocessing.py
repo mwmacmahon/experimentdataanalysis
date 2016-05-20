@@ -122,13 +122,17 @@ def dataseries_fit(dataseries, fitfunction,
         weights = None
         use_weights = False
     with np.errstate(all='ignore'):
-        rawfitparams, rawcovariances = curve_fit(partialfcn, xvals, yvals,
+        try:
+            rawfitparams, rawcovariances = curve_fit(partialfcn, xvals, yvals,
                                                  p0=partial_initial_params,
                                                  sigma=weights,
                                                  absolute_sigma=use_weights,
                                                  bounds=partial_bounds,
                                                  max_nfev=max_fcn_evals)
-        rawfitstds = np.sqrt(np.diag(rawcovariances))
+            rawfitstds = np.sqrt(np.diag(rawcovariances))
+        except RuntimeError:
+            print("Warning: curve_fit failed to converge...")
+            return None
 
     # convert fit outputs to reintroduce fixed parameters
     fitparams = get_full_param_list(rawfitparams)

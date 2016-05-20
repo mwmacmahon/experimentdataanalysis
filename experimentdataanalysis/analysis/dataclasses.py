@@ -73,6 +73,7 @@ class DataSeries(Sequence):
         """
         # NOTE: unpack operation forces traversal of RHS. Important below...
         # TIMES AND VALUES
+        datatuples = list(datatuples)
         try:
             xvals, yvals = zip(*datatuples)
         except ValueError:

@@ -140,8 +140,11 @@ def dataseries_fit(dataseries, fitfunction,
                                 for xval in dataseries.xvals(raw=True)],
                                excluded_intervals=\
                                    dataseries.excluded_intervals())
+    meansquarederror = (1./len(dataseries))* \
+                        sum((y_fit - y_real)**2 for y_fit, y_real in
+                            zip(fitdataseries.yvals(), dataseries.yvals()))
     return FitData(fitparams, fitparamstds,
-                   "fitparamstring", fitdataseries)
+                   "fitparamstring", fitdataseries, meansquarederror)
 
 
 # %% NEEDS TEST, SPHINX DOCUMENTATION

@@ -63,3 +63,43 @@ def dataseries_iterable_fit(dataseries_iterable, fitfunction,
     #unpackage:
     fitdata_list = list(output_iter)
     return fitdata_list
+
+# %% NEEDS TEST, SPHINX DOCUMENTATION
+def scandata_iterable_sort(scandata_iterable, primary_key, secondary_key):
+    """
+    """
+    # Subfunction to use as sort key
+    def scandatasortfcn(scandata_2_tuple):
+        scandata, _ = scandata_2_tuple
+        try:
+            return (float(scandata.scaninfo[primary_key]),
+                    float(scandata.scaninfo[secondary_key]))
+        except KeyError:
+            try:
+                return (float(scandata.scaninfo[primary_key]),
+                        99999999)
+            except KeyError:
+                try:
+                    return (99999999,
+                            float(scandata.scaninfo[secondary_key]))
+                except KeyError:
+                    return (99999999, 99999999)
+                except ValueError:
+                    print("scandata_iterable_sort: Numerical sort keys only!")
+                    return (99999999, 99999999)
+            except ValueError:
+                print("scandata_iterable_sort: Numerical sort keys only!")
+                return (99999999, 99999999)
+        except ValueError:
+            print("scandata_iterable_sort: Numerical sort keys only!")
+            return (99999999, 99999999)
+        except AttributeError:
+            print("scandata_iterable_sort: ScanData expected as list element.")
+            return (99999999, 99999999)
+
+    scandata_list = list(scandata_iterable)
+    index_ordering = range(len(scandata_list))
+    scandata_list, index_ordering = zip(*sorted(
+                                        zip(scandata_list, index_ordering),
+                                        key=scandatasortfcn))
+    return scandata_list, index_ordering

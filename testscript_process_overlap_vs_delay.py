@@ -2,6 +2,7 @@
 """
 """
 
+from itertools import repeat
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -13,7 +14,7 @@ import experimentdataanalysis.analysis.dataseriesprocessing as dsprocessing
 from experimentdataanalysis.analysis.fitfunctions \
     import fitfcn_simple_1d_gaussian, fitfcn_single_exp_decay, \
         fitfcn_two_exp_decay, fitfcn_exp_times_sqrt_decay, \
-        fitfcn_simple_line
+        fitfcn_simple_line, fitfcn_1d_gaussian_with_linear_offset
 from experimentdataanalysis.analysis.multidataseriesprocessing \
     import dataseries_iterable_fit, scandata_iterable_fit, \
         scandata_iterable_sort
@@ -34,8 +35,8 @@ if __name__ == "__main__":
 
 # %%
     scandata_list = list(dcparsing.fetch_dir_as_unfit_scandata_iterator(
-#        directorypath="C:\\Data\\early_may_good_data"))
         directorypath="C:\\Data\\early_may_good_data"))
+#        directorypath="C:\\Data\\early_may_good_data\\160507"))
 #        directorypath="C:\\Data\\160505\\Channel 3\\Voltage_4_Experiment_Channel3_1mT_to4V_033XT-B11_819.5nm_30K_2Dscan_DelayTime_MirrorZ"))
 #        directorypath="C:\\Data\\160506\\Voltage_4_OverlapVsDelay_Channel3_1mT_033XT-B11_819.5nm_30K_2Dscan_DelayTime_MirrorZ"))
 #        directorypath="C:\\Data\\160506\\Voltage_8_OverlapVsDelay_Channel3_1mT_033XT-B11_819.5nm_30K_2Dscan_DelayTime_MirrorZ"))
@@ -109,17 +110,27 @@ if break_up_subdirs_w_repeats:
 
 # %%
 for subdirdata in subdir_list:
+    # Estimate a baseline "error" for experiment, crudely for now
+    uncertainty_level = 0.01
+    scan_uncertainties_list = \
+        [DataSeries(zip(scandata.dataseries[0].xvals(raw=True),
+                        repeat(uncertainty_level)), excluded_intervals = \
+                    scandata.dataseries[0].excluded_intervals())
+         for scandata in subdirdata.scandata_list]
+
     # fit gaussians to data
     # params = amplitude, t0, sigma, offset
     key_field_ind = 0
-    fastscan_fitfunction = fitfcn_simple_1d_gaussian
-    free_params = [True, True, True, True]
-    initial_params = [0.001, 0, 20, 0]
-    param_bounds = [(0, 0.1), (-200, 200), (5, 200), (-0.01, 0.01)]
+    fastscan_fitfunction = fitfcn_1d_gaussian_with_linear_offset
+    free_params = [True, True, True, True, True]
+    initial_params = [0.001, 0, 20, 0, 0]
+    param_bounds = [(0, 0.1), (-200, 200),
+                    (5, 200), (-0.01, 0.01), (-0.01, 0.01)]
     fit_scandata_list = scandata_iterable_fit(
                             subdirdata.scandata_list, key_field_ind,
                             fastscan_fitfunction,
                             free_params, initial_params, param_bounds,
+                            scan_uncertainties_list, max_fcn_evals=20000,
                             multiprocessing=False)
 
     # create dataseries of fit parameters & their uncertainties vs some xval:
@@ -151,16 +162,16 @@ for ind, subdirdata in enumerate(subdir_list):
     # calculate fit result from fit parameters,
     # define function to fit _that_ to
 
-    # fit result: gaussian center location
-    result_fitfunction = fitfcn_simple_line
-    # params = slope, offset
-    free_params = [True, True]
-    initial_params = [1, 1]
-    param_bounds = [(-1000, 1000), (-1000, 1000)]
-    fit_result_dataseries = subdirdata.fit_param_dataseries_list[1]
-    fit_result_uncertainty_dataseries = \
-                subdirdata.fit_param_uncertainty_dataseries_list[1]
-    uncertainty_threshold = 100
+#    # fit result: gaussian center location
+#    result_fitfunction = fitfcn_simple_line
+#    # params = slope, offset
+#    free_params = [True, True]
+#    initial_params = [1, 1]
+#    param_bounds = [(-1000, 1000), (-1000, 1000)]
+#    fit_result_dataseries = subdirdata.fit_param_dataseries_list[1]
+#    fit_result_uncertainty_dataseries = \
+#                subdirdata.fit_param_uncertainty_dataseries_list[1]
+#    uncertainty_threshold = 100
 
 #    # fit result: gaussian width 
 #    result_fitfunction = fitfcn_simple_line
@@ -173,31 +184,37 @@ for ind, subdirdata in enumerate(subdir_list):
 #                subdirdata.fit_param_uncertainty_dataseries_list[2]
 #    uncertainty_threshold = 100
 
-#    # fit result: area under gaussian (amplitude * sqrt(width)) (w/o consts)
-#    result_fitfunction = fitfcn_two_exp_decay
-#    # params = pulse1_amp, lifetime1, pulse2_amp, lifetime2, offset
-#    free_params = [True, True, True, True, False]
-#    initial_params = [0.05, 100, 0.05, 2000, 0]
-#    param_bounds = [(-1, 1), (10, 500), (-1, 1), (10, 1e6), (1, -1)]
-#    amplitudes = subdirdata.fit_param_dataseries_list[0]
-#    amplitudes_sigma = subdirdata.fit_param_uncertainty_dataseries_list[0]
-#    widths = subdirdata.fit_param_dataseries_list[2]
-#    widths_sigma = subdirdata.fit_param_uncertainty_dataseries_list[2]
+    # fit result: area under gaussian (amplitude * sqrt(width)) (w/o consts)
+    result_fitfunction = fitfcn_single_exp_decay
+    # params = pulse1_amp, lifetime1, pulse2_amp, lifetime2, offset
+    free_params = [True, True, False]
+    initial_params = [0.05, 100, 0]
+    param_bounds = [(-1, 1), (10, 1e9), (1, -1)]
+    amplitudes = subdirdata.fit_param_dataseries_list[0]
+    amplitudes_sigma = subdirdata.fit_param_uncertainty_dataseries_list[0]
+    widths = subdirdata.fit_param_dataseries_list[2]
+    widths_sigma = subdirdata.fit_param_uncertainty_dataseries_list[2]
+    fit_result_dataseries = DataSeries(
+        [(x, a*w)
+         for (x, a), (_, w) in zip(amplitudes.datatuples(raw=True),
+                                   widths.datatuples(raw=True))],
+        excluded_intervals=amplitudes.excluded_intervals())
+    # note: uncertainty calc. assumes width, amplitude independent...
+    fit_result_uncertainty_dataseries = DataSeries(
+        [(x, np.sqrt((a*w_sig)**2 + (w*a_sig)**2))
+         for (x, a), (_, w), (_, a_sig), (_, w_sig) in \
+                                 zip(amplitudes.datatuples(raw=True),
+                                     widths.datatuples(raw=True),
+                                     amplitudes_sigma.datatuples(raw=True),
+                                     widths_sigma.datatuples(raw=True))],
+        excluded_intervals=amplitudes.excluded_intervals())
+    uncertainty_threshold = 0.1
+
+#    # TEST: add excluded interval that covers all delay times outside +-500ps
 #    fit_result_dataseries = DataSeries(
-#        [(x, a*w)
-#         for (x, a), (_, w) in zip(amplitudes.datatuples(raw=True),
-#                                   widths.datatuples(raw=True))],
-#        excluded_intervals=amplitudes.excluded_intervals())
-#    # note: uncertainty calc. assumes width, amplitude independent...
+#        fit_result_dataseries, excluded_intervals=[(500, 10000)])
 #    fit_result_uncertainty_dataseries = DataSeries(
-#        [(x, np.sqrt((a*w_sig)**2 + (w*a_sig)**2))
-#         for (x, a), (_, w), (_, a_sig), (_, w_sig) in \
-#                                 zip(amplitudes.datatuples(raw=True),
-#                                     widths.datatuples(raw=True),
-#                                     amplitudes_sigma.datatuples(raw=True),
-#                                     widths_sigma.datatuples(raw=True))],
-#        excluded_intervals=amplitudes.excluded_intervals())
-#    uncertainty_threshold = 0.1
+#        fit_result_uncertainty_dataseries, excluded_intervals=[(500, 10000)])
 
     # purge poor quality fits
     badindices = []
@@ -221,10 +238,12 @@ for ind, subdirdata in enumerate(subdir_list):
     if len(goodindices) > 0:  # ignore subdirs w/ no data / bad scan params
         fit_result_dataseries = DataSeries(
             [list(fit_result_dataseries.datatuples(raw=True))[i]
-             for i in goodindices])
+             for i in goodindices],
+            excluded_intervals=fit_result_dataseries.excluded_intervals())
         fit_result_uncertainty_dataseries = DataSeries(
             [list(fit_result_uncertainty_dataseries.datatuples(raw=True))[i]
-             for i in goodindices])
+             for i in goodindices], excluded_intervals=\
+                 fit_result_uncertainty_dataseries.excluded_intervals())
     
         # get rid of negative xvals (for xvals representing delay time):
         remove_negative_xvals_enabled = True
@@ -254,23 +273,46 @@ for ind, subdirdata in enumerate(subdir_list):
 # %%
 if True:
     # TEMP
-    fit_result_dataseries_list = fit_result_dataseries_list[:150]
-    fit_result_sigmas_list = fit_result_sigmas_list[:150]
+    fit_result_info_list_copy = fit_result_info_list[:]
+    fit_result_dataseries_list_copy = fit_result_dataseries_list[:]
+    fit_result_sigmas_list_copy = fit_result_sigmas_list[:]
+    fit_result_info_list = []
+    fit_result_dataseries_list = []
+    fit_result_sigmas_list = []
+    fit_result_fitdata_list = []
+    for info, dataseries, sigma_dataseries in zip(
+                                            fit_result_info_list_copy,
+                                            fit_result_dataseries_list_copy,
+                                            fit_result_sigmas_list_copy):
+        try:
+            fit_result_fitdata = dsprocessing.dataseries_fit(
+                                    dataseries, result_fitfunction,
+                                    free_params, initial_params, param_bounds,
+                                    sigma_dataseries, max_fcn_evals=20000)
+        except ValueError:
+            pass
+        except RuntimeError:
+            pass
+        else:
+            fit_result_info_list.append(info)
+            fit_result_dataseries_list.append(dataseries)
+            fit_result_sigmas_list.append(sigma_dataseries)
+            fit_result_fitdata_list.append(fit_result_fitdata)
 
-    # fit lifetimes to each parameter dataseries, altogether for efficiency
-    fit_result_fitdata_list = dataseries_iterable_fit(
-                                fit_result_dataseries_list,
-                                result_fitfunction,
-                                free_params, initial_params, param_bounds,
-                                fit_result_sigmas_list, max_fcn_evals=20000,
-                                multiprocessing=False)
+#    # fit lifetimes to each parameter dataseries, altogether for efficiency
+#    fit_result_fitdata_list = dataseries_iterable_fit(
+#                                fit_result_dataseries_list,
+#                                result_fitfunction,
+#                                free_params, initial_params, param_bounds,
+#                                fit_result_sigmas_list, max_fcn_evals=20000,
+#                                multiprocessing=False)
 
 # %%
 if True:
     # plot a parameter dataseries logarithmically:
     plot_enabled = True
     semilog_plot = True
-    plot_subdir_indices = [8]
+    plot_subdir_indices = [177, 178]
     for ind, (info, param_fit, param_series, param_std_series) in \
             enumerate(zip(fit_result_info_list, fit_result_fitdata_list,
                           fit_result_dataseries_list, fit_result_sigmas_list)):
@@ -299,7 +341,7 @@ if True:
 if True:
     # plot a parameter dataseries:
     plot_enabled = True
-    plot_subdir_indices = [8]
+    plot_subdir_indices = [177, 178]
     for ind, (info, param_fit, param_series, param_std_series) in \
             enumerate(zip(fit_result_info_list, fit_result_fitdata_list,
                           fit_result_dataseries_list, fit_result_sigmas_list)):
@@ -371,9 +413,9 @@ if True:
                                               fit_result_fitdata_list)
                  if fitdata is not None]
     voltages = [scaninfo["Voltage"] for scaninfo in scaninfos]
-    lifetimes = [fitdata.fitparams[3] for fitdata in fit_result_fitdata_list
+    lifetimes = [fitdata.fitparams[1] for fitdata in fit_result_fitdata_list
                  if fitdata is not None]
-    lifetime_sigmas = [fitdata.fitparamstds[3]
+    lifetime_sigmas = [fitdata.fitparamstds[1]
                        for fitdata in fit_result_fitdata_list
                        if fitdata is not None]
 
@@ -386,7 +428,7 @@ if True:
         bad_data = False
         if lifetime > 15000:
             bad_data = True
-        if lifetime_sigma > 1000:
+        if lifetime_sigma > 2000:
             bad_data = True
         # other "don't use this data" flags go here...
         if bad_data:
@@ -398,6 +440,8 @@ if True:
     lifetime_sigmas = [lifetime_sigmas[i] for i in goodindices]
 
     plt.errorbar(voltages, lifetimes, yerr=lifetime_sigmas, fmt='.')
+    axes = plt.gca()
+    axes.set_xlim([min(voltages)-2,max(voltages)+2])
     plt.title("Lifetime vs Electric Field")
     plt.xlabel("Electric field * 500um (V)")
     plt.ylabel("Crudely fitted lifetime")

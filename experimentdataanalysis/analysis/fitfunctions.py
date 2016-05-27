@@ -21,6 +21,15 @@ def fitfcn_simple_line(t, slope, offset):
 
 
 # %% NEEDS SPHINX DOCUMENTATION
+def fitfcn_1d_gaussian_with_linear_offset(t, amplitude, t0,
+                                          sigma, slope, offset):
+    """
+    """
+    return amplitude*np.exp(-0.5*np.power((t - t0)/(sigma), 2.)) + \
+                                                            slope*t + offset
+
+
+# %% NEEDS SPHINX DOCUMENTATION
 def fitfcn_simple_1d_gaussian(t, amplitude, t0, sigma, offset):
     """
     """

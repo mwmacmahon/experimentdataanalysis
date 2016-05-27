@@ -34,12 +34,12 @@ if __name__ == "__main__":
 #        dataseriesfitfunction=dcfitting.fit_dataseries_with_one_decaying_cos,
 #        dataseriesfitfunction=dcfitting.fit_dataseries_with_two_decaying_cos,
 #        fit_drift=True, multiprocessing=True))
-#
-#    app_saved_state = {'current_scan_list': scandata_list}
-#    window, windowoutput = \
-#        databrowser.DataBrowserWindow.launch_with_output(app_saved_state)
+
+    app_saved_state = {'current_scan_list': scandata_list}
     window, windowoutput = \
-        databrowser.DataBrowserWindow.launch_with_output()
+        databrowser.DataBrowserWindow.launch_with_output(app_saved_state)
+#    window, windowoutput = \
+#        databrowser.DataBrowserWindow.launch_with_output()
     qapp.exec_()
 
 #    scandata_list = windowoutput.output[0]["current_scan_list"]

@@ -16,6 +16,7 @@ from experimentdataanalysis.analysis.generalutilities \
 # %% NEEDS TEST, SPHINX DOCUMENTATION
 def scandata_iterable_fit(scandata_iterable, dataseries_index, fitfunction,
                           free_params, initial_params, param_bounds,
+                          weights_dataseries_iterable=None,
                           max_fcn_evals=20000, multiprocessing=False):
     """
     """

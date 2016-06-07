@@ -248,8 +248,9 @@ class DataSeries(Sequence):
                 outputstr += " [EXCLUDED]"
         return outputstr
 
-    def __add__(self, other):
-        excluded_intervals = []
+    def general_numeric_fcn(self, other, function, fcn_verb):
+        fcn_verb = str(fcn_verb)
+        excluded_intervals = list(self.excluded_intervals())
         map_to_unsorted = self.map_to_unsorted
         if isinstance(other, Iterable):
             try:
@@ -259,13 +260,14 @@ class DataSeries(Sequence):
             except AttributeError:  # not a DataSeries
                 otherlist = list(other)
                 if len(otherlist) is not len(self):
-                    raise TypeError('attemped to add list of non-matching' +
+                    raise TypeError('attemped to ' + fcn_verb + ' ' +
+                                    'list of non-matching' +
                                     ' length to DataSeries instance')
             else:  # is a DataSeries
                 othermap = other.map_to_unsorted
                 if self._xvals != otherxvals:
                     raise TypeError('DataSeries instances have different' +
-                                    ' xvalues, so they cannot be added')
+                                    ' xvalues, so failed to ' + fcn_verb)
                 if self.map_to_unsorted != othermap:
                     print('Warning: combining two DataSeries instances' +
                           ' with different sort orders, resulting sort' +
@@ -273,33 +275,48 @@ class DataSeries(Sequence):
                     if self.map_to_unsorted == tuple(range(len(self))):
                         map_to_unsorted = othermap
                 # Combine filter lists, excluding duplicates
-                excluded_intervals = list(self.excluded_intervals())
                 excluded_intervals.extend(
                     interval for interval in other_intervals
                     if interval not in self.excluded_intervals())
-            newyvals = [yval + otherlist[index]
-                        for index, yval in enumerate(self._yvals)]
-            # Only unsort after adding sorted so 1:1 correspondence between
-            # identical xvals. This might be odd when adding a naked list,
+            # Only unsort after processing sorted so 1:1 correspondence between
+            # identical xvals. This might be odd when processing a naked list,
             # but better practice is to covert that list to DataSeries first.
             # Don't filter yvals at all, as we are setting filters above.
+            newyvals = [function(yval, otherlist[index])
+                        for index, yval in enumerate(self._yvals)]
             newyvals = [newyvals[i] for i in map_to_unsorted]
-        else:
-            newyvals = [yval + other for yval in self.yvals(unsorted=True,
-                                                            unfiltered=True)]
+        else:  # is a scalar
+            newyvals = [function(yval, other) for yval in self.yvals(raw=True)]
         newxvals = [self._xvals[i] for i in map_to_unsorted]
         return self.__class__(zip(newxvals, newyvals),
                               excluded_intervals=excluded_intervals)
+
+    def __add__(self, other):
+        fcn_verb = "add"
+        def fcn(x, y):
+            return x + y
+        return self.general_numeric_fcn(other, fcn, fcn_verb)
 
     def __sub__(self, other):
         return self.__add__(-1*other)
 
     def __mul__(self, other):
-        if isinstance(other, Iterable):
-            raise TypeError('Can only multiply DataSeries by a scalar value')
-        newyvals = [yval * other for yval in self.yvals(raw=True)]
-        return self.__class__(zip(self.xvals(raw=True), newyvals),
-                              excluded_intervals=self.excluded_intervals())
+        fcn_verb = "multiply"
+        def fcn(x, y):
+            return x * y
+        return self.general_numeric_fcn(other, fcn, fcn_verb)
+
+    def __div__(self, other):
+        fcn_verb = "divide"
+        def fcn(x, y):
+            return x / y
+        return self.general_numeric_fcn(other, fcn, fcn_verb)
+
+    def __pow__(self, other):
+        fcn_verb = "raise"
+        def fcn(x, y):
+            return x**y
+        return self.general_numeric_fcn(other, fcn, fcn_verb)
 
     def __radd__(self, other):
         return self.__add__(other)
@@ -320,3 +337,13 @@ class DataSeries(Sequence):
         newyvals = [abs(yval) for yval in self.yvals(raw=True)]
         return self.__class__(zip(self.xvals(raw=True), newyvals),
                               excluded_intervals=self.excluded_intervals())
+
+    def __eq__(self, other):
+        try:
+            return all(
+                [list(self.excluded_intervals()) == \
+                                            list(other.excluded_intervals()),
+                 list(self.xvals(raw=True)) == list(other.xvals(raw=True)),
+                 list(self.yvals(raw=True)) == list(other.yvals(raw=True))])
+        except AttributeError:  # not a DataSeries
+            return False

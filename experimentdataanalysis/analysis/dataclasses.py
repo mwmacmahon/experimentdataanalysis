@@ -39,6 +39,17 @@ ScanData = namedtuple("ScanData", ["filepath", "scaninfo", "fields",
 #        return self.fitdata[0]
 
 
+# %% Helper fcns used by DataSeries equality operator:
+def approx_equal(x, y, tol):
+    return abs(x - y) <= 0.5*(abs(x) + abs(y))*tol
+
+
+def approx_equal_lists(x_list, y_list, tol):
+    x_list = list(x_list)
+    y_list = list(y_list)
+    return all([approx_equal(x, y, tol) for (x, y) in zip(x_list, y_list)])
+
+
 # %%
 class DataSeries(Sequence):
     """
@@ -339,11 +350,12 @@ class DataSeries(Sequence):
                               excluded_intervals=self.excluded_intervals())
 
     def __eq__(self, other):
+        tol = 1e-6  # tolerance for equality of floating point numbers
         try:
             return all(
-                [list(self.excluded_intervals()) == \
-                                            list(other.excluded_intervals()),
-                 list(self.xvals(raw=True)) == list(other.xvals(raw=True)),
-                 list(self.yvals(raw=True)) == list(other.yvals(raw=True))])
+                [approx_equal_lists(self.excluded_intervals(),
+                                    other.excluded_intervals(), tol),
+                 approx_equal_lists(self.xvals(), other.xvals(), tol),
+                 approx_equal_lists(self.yvals(), other.yvals(), tol)])
         except AttributeError:  # not a DataSeries
             return False

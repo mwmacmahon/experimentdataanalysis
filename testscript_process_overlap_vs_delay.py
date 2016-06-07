@@ -196,30 +196,10 @@ for ind, subdirdata in enumerate(subdir_list):
     widths_sigma = subdirdata.fit_param_uncertainty_dataseries_list[2]
 
 
-# TEST BLOCK: CAN I SIMPLIFY?
-#==============================================================================
-#     fit_result_dataseries = DataSeries(
-#         [(x, a*w)
-#          for (x, a), (_, w) in zip(amplitudes.datatuples(raw=True),
-#                                    widths.datatuples(raw=True))],
-#         excluded_intervals=amplitudes.excluded_intervals())
-#     # note: uncertainty calc. assumes width, amplitude independent...
-#     fit_result_uncertainty_dataseries = DataSeries(
-#         [(x, np.sqrt((a*w_sig)**2 + (w*a_sig)**2))
-#          for (x, a), (_, w), (_, a_sig), (_, w_sig) in \
-#                                  zip(amplitudes.datatuples(raw=True),
-#                                      widths.datatuples(raw=True),
-#                                      amplitudes_sigma.datatuples(raw=True),
-#                                      widths_sigma.datatuples(raw=True))],
-#         excluded_intervals=amplitudes.excluded_intervals())
-#==============================================================================
-# SIMPLIFY TO:
     # note: uncertainty calc. assumes width, amplitude independent...
     fit_result_dataseries = amplitudes*widths
     fit_result_uncertainty_dataseries = \
         ((amplitudes*widths_sigma)**2 + (widths*amplitudes_sigma)**2)**0.5
-# END TEST BLOCK
-
     uncertainty_threshold = 0.1
 
 #    # TEST: add excluded interval that covers all delay times outside +-500ps

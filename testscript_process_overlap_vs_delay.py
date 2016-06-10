@@ -19,6 +19,9 @@ from experimentdataanalysis.analysis.multidataseriesprocessing \
     import dataseries_iterable_fit, scandata_iterable_fit, \
         scandata_iterable_sort
 import experimentdataanalysis.parsing.dataclassparsing as dcparsing
+from experimentdataanalysis.analysis.ndimensionalscandataprocessing \
+    import ScanDataSetsAnalyzer, ScanDataSet, GaussianModel
+
 
 # %%
 class SubDirectoryData:
@@ -66,7 +69,7 @@ for scandata in scandata_list:
 for subdirdata in subdir_list:
     subdir_scandata_list = subdirdata.scandata_list
     primary_key = subdirdata.chronological_key
-    secondary_key = subdirdata.chronological_key
+    secondary_key = subdirdata.xval_key
     subdirdata.scandata_list, _ = scandata_iterable_sort(subdir_scandata_list,
                                                          primary_key,
                                                          secondary_key)
@@ -119,12 +122,12 @@ for subdirdata in subdir_list:
          for scandata in subdirdata.scandata_list]
 
     # fit gaussians to data
-    # params = amplitude, t0, sigma, offset
+    # params = amplitude, x0, sigma, slope, offset
     key_field_ind = 0
     fastscan_fitfunction = fitfcn_1d_gaussian_with_linear_offset
     free_params = [True, True, True, True, True]
     initial_params = [0.001, 0, 20, 0, 0]
-    param_bounds = [(0, 0.1), (-200, 200),
+    param_bounds = [(0, 1), (-200, 200),
                     (5, 200), (-0.01, 0.01), (-0.01, 0.01)]
     fit_scandata_list = scandata_iterable_fit(
                             subdirdata.scandata_list, key_field_ind,
@@ -162,51 +165,55 @@ for ind, subdirdata in enumerate(subdir_list):
     # calculate fit result from fit parameters,
     # define function to fit _that_ to
 
-#    # fit result: gaussian center location
-#    result_fitfunction = fitfcn_simple_line
-#    # params = slope, offset
-#    free_params = [True, True]
-#    initial_params = [1, 1]
-#    param_bounds = [(-1000, 1000), (-1000, 1000)]
-#    fit_result_dataseries = subdirdata.fit_param_dataseries_list[1]
-#    fit_result_uncertainty_dataseries = \
-#                subdirdata.fit_param_uncertainty_dataseries_list[1]
-#    uncertainty_threshold = 100
-
-#    # fit result: gaussian width 
-#    result_fitfunction = fitfcn_simple_line
-#    # params = slope, offset
-#    free_params = [True, True]
-#    initial_params = [0, 0]
-#    param_bounds = [(-1000, 1000), (-1000, 1000)]
-#    fit_result_dataseries = subdirdata.fit_param_dataseries_list[2]
-#    fit_result_uncertainty_dataseries = \
-#                subdirdata.fit_param_uncertainty_dataseries_list[2]
-#    uncertainty_threshold = 100
-
-    # fit result: area under gaussian (amplitude * sqrt(width)) (w/o consts)
-    result_fitfunction = fitfcn_single_exp_decay
-    # params = pulse1_amp, lifetime1, pulse2_amp, lifetime2, offset
-    free_params = [True, True, False]
-    initial_params = [0.05, 100, 0]
-    param_bounds = [(-1, 1), (10, 1e9), (1, -1)]
-    amplitudes = subdirdata.fit_param_dataseries_list[0]
-    amplitudes_sigma = subdirdata.fit_param_uncertainty_dataseries_list[0]
-    widths = subdirdata.fit_param_dataseries_list[2]
-    widths_sigma = subdirdata.fit_param_uncertainty_dataseries_list[2]
-
-
-    # note: uncertainty calc. assumes width, amplitude independent...
-    fit_result_dataseries = amplitudes*widths
+    # fit result: gaussian center location
+    result_fitfunction = fitfcn_simple_line
+    # params = slope, offset
+    free_params = [True, True]
+    initial_params = [1, 1]
+    param_bounds = [(-1000, 1000), (-1000, 1000)]
+    fit_result_dataseries = subdirdata.fit_param_dataseries_list[1]
     fit_result_uncertainty_dataseries = \
-        ((amplitudes*widths_sigma)**2 + (widths*amplitudes_sigma)**2)**0.5
-    uncertainty_threshold = 0.1
+                subdirdata.fit_param_uncertainty_dataseries_list[1]
+    uncertainty_threshold = 100
 
-#    # TEST: add excluded interval that covers all delay times outside +-500ps
-#    fit_result_dataseries = DataSeries(
-#        fit_result_dataseries, excluded_intervals=[(500, 10000)])
-#    fit_result_uncertainty_dataseries = DataSeries(
-#        fit_result_uncertainty_dataseries, excluded_intervals=[(500, 10000)])
+#==============================================================================
+#     # fit result: gaussian width 
+#     result_fitfunction = fitfcn_simple_line
+#     # params = slope, offset
+#     free_params = [True, True]
+#     initial_params = [0, 0]
+#     param_bounds = [(-1000, 1000), (-1000, 1000)]
+#     fit_result_dataseries = subdirdata.fit_param_dataseries_list[2]
+#     fit_result_uncertainty_dataseries = \
+#                 subdirdata.fit_param_uncertainty_dataseries_list[2]
+#     uncertainty_threshold = 100
+#==============================================================================
+
+#==============================================================================
+#     # fit result: area under gaussian (amplitude * sqrt(width)) (w/o consts)
+#     result_fitfunction = fitfcn_single_exp_decay
+#     # params = pulse1_amp, lifetime1, pulse2_amp, lifetime2, offset
+#     free_params = [True, True, True, True, False]
+#     initial_params = [0.05, 50, 0.05, 1000, 0]
+#     param_bounds = [(-1, 1), (10, 200), (-1, 1), (10, 1e9), (1, -1)]
+#     amplitudes = subdirdata.fit_param_dataseries_list[0]
+#     amplitudes_sigma = subdirdata.fit_param_uncertainty_dataseries_list[0]
+#     widths = subdirdata.fit_param_dataseries_list[2]
+#     widths_sigma = subdirdata.fit_param_uncertainty_dataseries_list[2]
+#     # note: uncertainty calc. assumes width, amplitude independent...
+#     fit_result_dataseries = amplitudes*widths
+#     fit_result_uncertainty_dataseries = \
+#         ((amplitudes*widths_sigma)**2 + (widths*amplitudes_sigma)**2)**0.5
+#     uncertainty_threshold = 0.1
+#==============================================================================
+
+#==============================================================================
+#     # TEST: add excluded interval that covers all delay times outside +-500ps
+#     fit_result_dataseries = DataSeries(
+#         fit_result_dataseries, excluded_intervals=[(500, 10000)])
+#     fit_result_uncertainty_dataseries = DataSeries(
+#         fit_result_uncertainty_dataseries, excluded_intervals=[(500, 10000)])
+#==============================================================================
 
     # purge poor quality fits
     badindices = []
@@ -250,12 +257,14 @@ for ind, subdirdata in enumerate(subdir_list):
                                         fit_result_uncertainty_dataseries,
                                         zero_delay_offset)
     
-    #    # shift xval zero position for fitting convenience:
-    #    shift_xvals_zero_enabled = True
-    #    fit_result_dataseries, [fit_result_uncertainty_dataseries] = \
-    #                            dsprocessing.get_x_offset_dataseries_TRKRstyle(
-    #                                    fit_result_dataseries,
-    #                                    [fit_result_uncertainty_dataseries])
+#==============================================================================
+#         # shift xval zero position for fitting convenience:
+#         shift_xvals_zero_enabled = True
+#         fit_result_dataseries, [fit_result_uncertainty_dataseries] = \
+#                                 dsprocessing.get_x_offset_dataseries_TRKRstyle(
+#                                         fit_result_dataseries,
+#                                         [fit_result_uncertainty_dataseries])
+#==============================================================================
     
         #add extracted dataseries / uncertainty dataseries to analysis list
         fit_result_info_list.append(subdirdata.scandata_list[0].scaninfo)
@@ -264,7 +273,7 @@ for ind, subdirdata in enumerate(subdir_list):
 
 # %%
 if True:
-    # TEMP
+    # TEMP: backup current data, then fit, discarding all failed fit datasets
     fit_result_info_list_copy = fit_result_info_list[:]
     fit_result_dataseries_list_copy = fit_result_dataseries_list[:]
     fit_result_sigmas_list_copy = fit_result_sigmas_list[:]
@@ -291,13 +300,15 @@ if True:
             fit_result_sigmas_list.append(sigma_dataseries)
             fit_result_fitdata_list.append(fit_result_fitdata)
 
-#    # fit lifetimes to each parameter dataseries, altogether for efficiency
-#    fit_result_fitdata_list = dataseries_iterable_fit(
-#                                fit_result_dataseries_list,
-#                                result_fitfunction,
-#                                free_params, initial_params, param_bounds,
-#                                fit_result_sigmas_list, max_fcn_evals=20000,
-#                                multiprocessing=False)
+#==============================================================================
+#     # fit lifetimes to each parameter dataseries, altogether for efficiency
+#     fit_result_fitdata_list = dataseries_iterable_fit(
+#                                 fit_result_dataseries_list,
+#                                 result_fitfunction,
+#                                 free_params, initial_params, param_bounds,
+#                                 fit_result_sigmas_list, max_fcn_evals=20000,
+#                                 multiprocessing=False)
+#==============================================================================
 
 # %%
 if True:
@@ -439,6 +450,53 @@ if True:
     plt.ylabel("Crudely fitted lifetime")
 
 
+# %%
+if True:
+    # check gaussian fits vs delay position; no 2nd round fitting required
+
 
 # %%
     # TODO: plot ln(signal) vs time delay and see if linear?
+
+
+
+# %% ALTERNATE SCRIPT
+if __name__ == "__main__":
+
+# %%
+from experimentdataanalysis.analysis.ndimensionalscandataprocessing \
+    import ScanDataSetsAnalyzer, ScanDataSet, GaussianModel
+
+import matplotlib.pyplot as plt
+
+# %% CRUNCH DATA
+    analyzer = ScanDataSetsAnalyzer(GaussianModel(uncertainty_level=0.01,
+                                                  max_fcn_evals=20000),
+                                    "C:\\Data\\early_may_good_data")
+    analyzer.break_up_repeating_scandatasets()
+    analyzer.fit_all_scandata_to_model(multiprocessing=False)
+    centers_list, centers_sigma_list, scandataset_list = \
+        analyzer.extract_model_attribute("gaussian_centers")
+
+
+# %% FILTER AND PLOT
+    x_list = []
+    y_list = []
+    yerr_list = []
+    use_flag = True
+    for centers, centers_sigma, scandataset \
+                    in zip(centers_list, centers_sigma_list, scandataset_list):
+        x_vals, y_vals = centers.datalists()
+        _, y_errs = centers_sigma.datalists()
+        use_flag = True
+        for x, y, yerr in zip(x_vals, y_vals, y_errs):
+            if yerr > 5:
+                use_flag = False
+            if scandataset.scandata_list[0].scaninfo['Voltage'] != 0:
+                use_flag = False
+            if use_flag:
+                x_list.append(x)
+                y_list.append(y)
+                yerr_list.append(yerr)
+        
+    plt.errorbar(x_list, y_list, yerr=yerr_list, fmt='.')

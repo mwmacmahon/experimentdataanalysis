@@ -18,17 +18,17 @@ LASER_REPRATE = 13100  # ps period
 
 
 # %% NEEDS TEST, SPHINX DOCUMENTATION
-def scandata_dataseries_fit(scandata, dataseries_index, fitfunction,
+def scandata_dataseries_fit(scandata, field_index, fitfunction,
                             free_params, initial_params, param_bounds,
                             weights_dataseries=None, max_fcn_evals=20000):
     """
     """
-    new_fitdata = dataseries_fit(scandata.dataseries[dataseries_index],
+    new_fitdata = dataseries_fit(scandata.dataseries[field_index],
                                  fitfunction, free_params,
                                  initial_params, param_bounds,
                                  weights_dataseries, max_fcn_evals)
     new_scandata_fitdatalist = list(scandata.fitdata)
-    new_scandata_fitdatalist[dataseries_index] = new_fitdata
+    new_scandata_fitdatalist[field_index] = new_fitdata
     return ScanData(scandata.filepath,
                     scandata.scaninfo.copy(),
                     scandata.fields,

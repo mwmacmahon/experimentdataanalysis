@@ -40,17 +40,19 @@ ScanData = namedtuple("ScanData", ["filepath", "scaninfo", "fields",
 
 
 # %% Helper fcns used by DataSeries equality operator:
+# NEEDS DESCRIPTION, TEST, SPHINX DOCUMENTATION
 def approx_equal(x, y, tol):
     return abs(x - y) <= 0.5*(abs(x) + abs(y))*tol
 
 
+# NEEDS DESCRIPTION, TEST, SPHINX DOCUMENTATION
 def approx_equal_lists(x_list, y_list, tol):
     x_list = list(x_list)
     y_list = list(y_list)
     return all([approx_equal(x, y, tol) for (x, y) in zip(x_list, y_list)])
 
 
-# %%
+# %% NEEDS TEST, SPHINX DOCUMENTATION
 class DataSeries(Sequence):
     """
     Defines an immutable data structure that contains two correlated

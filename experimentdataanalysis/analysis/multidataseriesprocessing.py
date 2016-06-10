@@ -14,7 +14,7 @@ from experimentdataanalysis.analysis.generalutilities \
 
 
 # %% NEEDS TEST, SPHINX DOCUMENTATION
-def scandata_iterable_fit(scandata_iterable, dataseries_index, fitfunction,
+def scandata_iterable_fit(scandata_iterable, field_index, fitfunction,
                           free_params, initial_params, param_bounds,
                           weights_dataseries_iterable=None,
                           max_fcn_evals=20000, multiprocessing=False):
@@ -22,7 +22,7 @@ def scandata_iterable_fit(scandata_iterable, dataseries_index, fitfunction,
     """
     scandata_list = list(scandata_iterable)
     new_fitdata_list = dataseries_iterable_fit(
-                                [scandata.dataseries[dataseries_index]
+                                [scandata.dataseries[field_index]
                                  for scandata in scandata_list],
                                 fitfunction, free_params,
                                 initial_params, param_bounds, None,
@@ -30,7 +30,7 @@ def scandata_iterable_fit(scandata_iterable, dataseries_index, fitfunction,
     new_scandata_list = []
     for ind, scandata in enumerate(scandata_list):
         new_scandata_fitdatalist = list(scandata.fitdata)
-        new_scandata_fitdatalist[dataseries_index] = new_fitdata_list[ind]
+        new_scandata_fitdatalist[field_index] = new_fitdata_list[ind]
         new_scandata_list.append(ScanData(scandata.filepath,
                                           scandata.scaninfo.copy(),
                                           scandata.fields,

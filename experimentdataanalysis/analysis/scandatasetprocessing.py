@@ -87,11 +87,15 @@ class ScanDataSet:
     said fits once they are performed. Note this is a mutable data structure,
     and ScanData themselves are mutable (they will, for example, gain a
     FitData attribute after fitting).
+    
+    add_filter / add_filters add filters that limit which scandatasets are
+    returned by get_
     """
     def __init__(self, setname, model):
         self.setname = setname
         self.model = model
         self.scandata_list = []
+        self.scandata_filter_fcn_list = []
         self.chronological_key = "FastScanIndex"
         self.xval_key = "MiddleScanCoord"
         self.model_param_dataseries_list = None
@@ -149,6 +153,60 @@ class ScanDataSet:
         self.model_param_uncertainty_dataseries_list = \
                                                 fitparamstds_dataseries_list
 
+    def add_scandata_filters(self, *scandata_filter_fcn_list):
+        for scandata_filter_fcn in scandata_filter_fcn_list:
+            self.add_scandata_filter(scandata_filter_fcn)
+
+    def add_scandata_filter(self, scandata_filter_fcn):
+        """
+        Adds a filter to an internally kept filter list. Filters are functions
+        that accept a scandata and return a boolean - whether scandata passes
+        filter or not. E.g. a simple filter might be:
+        
+        def only_fitted_scandata_filter(scandata):
+            return scandata.fitdata != None
+        
+        Note this is usually done AFTER fitting all scandata, so fit results
+        can be used in filtering.
+        """
+        # insert checks for valid filter fcns?
+        self.scandata_filter_fcn_list.append(scandata_filter_fcn)
+
+    def clear_scandata_filters(self):
+        self.scandata_filter_fcn_list = []
+
+    def get_filtered_scandata_indices(self):
+        """
+        Returns a list containing all indices in scandata_list whose
+        corresponding scandata meet the requirements off all filters
+        in self.scandata_filter_fcn_list
+        """
+        filtered_indices = []
+        for ind, scandata in enumerate(self.scandata_list):
+            ok_flag = True
+            for scandata_filter_fcn in self.scandata_filter_fcn_list:
+                ok_flag = ok_flag and scandata_filter_fcn(scandata)
+            if ok_flag:
+                filtered_indices.append(ind)
+        return filtered_indices
+
+    def get_scandata_list(self, filtered=True):
+        return [scandata
+                for ind, scandata in enumerate(self.scandata_list)
+                if ind in self.get_filtered_scandata_indices()]
+
+    def get_model_param_dataseries_list(self, filtered=True):
+        return [dataseries
+                for ind, dataseries in enumerate(
+                    self.model_param_dataseries_list)
+                if ind in self.get_filtered_scandata_indices()]
+
+    def get_model_param_uncertainty_dataseries_list(self, filtered=True):
+        return [dataseries
+                for ind, dataseries in enumerate(
+                    self.model_param_uncertainty_dataseries_list)
+                if ind in self.get_filtered_scandata_indices()]
+
 # %% NEEDS TESTS, SPHINX DOCUMENTATION
 class ScanDataSetsAnalyzer:
     """
@@ -163,6 +221,7 @@ class ScanDataSetsAnalyzer:
     def __init__(self, model, dirpath="", *, scandata_list=[]):
         self.set_model = model
         self.scandataset_list = []
+        self.scandataset_filter_fcn_list = []
         if scandata_list:
             self.load_scandata_list(list(scandata_list), self.set_model)
         elif dirpath:
@@ -199,7 +258,7 @@ class ScanDataSetsAnalyzer:
     def break_up_repeating_scandatasets(self):
         """
         break into smaller scandatasets based on repeated xval patterns
-        e.g. x=1,2,3,4,1,2,3,4 -> x=1,2,3,4 ; x=1,2,3,4
+        e.g. {x=1,2,3,4,1,2,3,4} -> {x=1,2,3,4} ; {x=1,2,3,4}
         """
         new_scandataset_list = []
         for scandataset in self.scandataset_list:
@@ -239,7 +298,48 @@ class ScanDataSetsAnalyzer:
             print("Error: lost {} scandata breaking up subdirectories"\
                   .format(num_old - num_new))
 
-    def extract_model_attribute(self, attribute_fcn_name):
+    def add_scandataset_filters(self, *scandataset_filter_fcn_list):
+        for scandataset_filter_fcn in scandataset_filter_fcn_list:
+            self.add_scandataset_filter(scandataset_filter_fcn)
+
+    def add_scandataset_filter(self, scandataset_filter_fcn):
+        """
+        Adds a filter to an internally kept filter list. Filters are functions
+        that accept a scandataset and return a boolean - whether scandataset
+        passes filter or not. E.g. a simple filter might be:
+        
+        def only_fitted_scandataset_filter(scandata):
+            return len(scandataset.get_filtered_scandata_indices) > 0
+        """
+        # insert checks for valid filter fcns?
+        self.scandataset_filter_fcn_list.append(scandataset_filter_fcn)
+
+    def clear_scandataset_filters(self):
+        self.scandataset_filter_fcn_list = []
+
+    def get_filtered_indices(self):
+        """
+        Returns a list containing all indices in scandata_list whose
+        corresponding scandata meet the requirements off all filters
+        in self.scandata_filter_fcn_list
+        """
+        filtered_indices = []
+        for ind, scandataset in enumerate(self.scandataset_list):
+            ok_flag = True
+            for scandataset_filter_fcn in self.scandataset_filter_fcn_list:
+                ok_flag = ok_flag and scandataset_filter_fcn(scandataset)
+            if ok_flag:
+                filtered_indices.append(ind)
+        return filtered_indices
+
+    def get_scandataset_list(self, filtered=True):
+        return [scandataset
+                for ind, scandataset in enumerate(self.scandataset_list)
+                if ind in self.get_filtered_indices()]
+
+    def extract_model_attribute(self, attribute_fcn_name,
+                                scandata_filtered=True,
+                                scandataset_filtered=True):
         """
         Pulls out the desired model attribute from each ScanDataSet,
         returning the following lists:
@@ -248,6 +348,9 @@ class ScanDataSetsAnalyzer:
            each ScanDataSet
         3. a list containing [references to] each ScanDataSet. Note these
            are mutable, and liable to changes from elsewhere!
+        
+        Note scandataset_filtered only works if fits have been performed
+        on each scandataset! If no fit performed, set will be filtered out.
         """
         dataseries_list = []
         dataseries_uncertainty_list = []
@@ -263,7 +366,9 @@ class ScanDataSetsAnalyzer:
             scandataset_list.append(scandataset)
         return dataseries_list, dataseries_uncertainty_list, scandataset_list
 
-    def fit_model_attribute(self, attribute_fcn_name):
+    def fit_model_attribute(self, attribute_fcn_name,
+                            scandata_filtered=True,
+                            scandataset_filtered=True):
         """
         [like extract_model_attribute, but returns a single dataseries
          corresponding to the fit of model attributes instead of the

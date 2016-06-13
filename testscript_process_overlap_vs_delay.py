@@ -19,7 +19,7 @@ from experimentdataanalysis.analysis.multidataseriesprocessing \
     import dataseries_iterable_fit, scandata_iterable_fit, \
         scandata_iterable_sort
 import experimentdataanalysis.parsing.dataclassparsing as dcparsing
-from experimentdataanalysis.analysis.ndimensionalscandataprocessing \
+from experimentdataanalysis.analysis.scandatasetprocessing \
     import ScanDataSetsAnalyzer, ScanDataSet, GaussianModel
 
 
@@ -36,17 +36,22 @@ if __name__ == "__main__":
         analyzer.extract_model_attribute("gaussian_centers")
 
 
+# %%
+
+
 # %% FILTER AND PLOT
     x_list = []
     y_list = []
     yerr_list = []
+    plt.figure()
+    plt.hold(True)
     use_flag = True
     for centers, centers_sigma, scandataset \
                     in zip(centers_list, centers_sigma_list, scandataset_list):
         x_vals, y_vals = centers.datalists()
         _, y_errs = centers_sigma.datalists()
-        use_flag = True
         for x, y, yerr in zip(x_vals, y_vals, y_errs):
+            use_flag = True
             if yerr > 5:
                 use_flag = False
             if scandataset.scandata_list[0].scaninfo['Voltage'] != 0:
@@ -55,5 +60,6 @@ if __name__ == "__main__":
                 x_list.append(x)
                 y_list.append(y)
                 yerr_list.append(yerr)
+                plt.errorbar(x_list, y_list, yerr=yerr_list, fmt='.')
         
-    plt.errorbar(x_list, y_list, yerr=yerr_list, fmt='.')
+#    plt.errorbar(x_list, y_list, yerr=yerr_list, fmt='.')

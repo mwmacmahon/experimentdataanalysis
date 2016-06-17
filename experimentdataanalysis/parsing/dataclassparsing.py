@@ -57,12 +57,19 @@ def fetch_csv_as_unfit_scandata(filepath=None,
 def parsed_csv_to_unfit_scandata(filepath, rawdata, attribute='lockin2x'):
     colnames, coldata = rawdata
     # Assemble ScanData
+    fields = list(colnames)
     scaninfo = analyze_scan_filepath(filepath)
-    fields = tuple(colnames)
-    dataseries = tuple(DataSeries(zip(coldata[0], column))
-                       for column in coldata)
-    fitdata = tuple(None for name in colnames)
-    scandata = ScanData(filepath, scaninfo, fields, dataseries, fitdata)
+    scaninfo_list = [scaninfo.copy() for field in fields]
+    dataseries_list = list(DataSeries(zip(coldata[0], column))
+                           for column in coldata)
+    error_dataseries_list = [None for field in fields]
+    fitdata_list = [None for field in fields]
+    scandata = ScanData(fields,
+                        scaninfo_list,
+                        dataseries_list,
+                        error_dataseries_list,
+                        fitdata_list
+                        )
     sorted_scandata = move_scandata_attribute_to_front(scandata, attribute)
     return sorted_scandata
 
@@ -81,12 +88,45 @@ def move_scandata_attribute_to_front(scandata, attribute):
     rawdata_indices = [attribute_index] + rawdata_indices
 
     # Assemble ScanData
-    filepath = scandata.filepath
-    scaninfo = analyze_scan_filepath(scandata.filepath)
-    fields = tuple(scandata.fields[ind] for ind in rawdata_indices)
-    dataseries = tuple(scandata.dataseries[ind] for ind in rawdata_indices)
-    fitdata = tuple(scandata.fitdata[ind] for ind in rawdata_indices)
-    newscandata = ScanData(filepath, scaninfo, fields, dataseries, fitdata)
+    fields = list(scandata.fields[ind]
+                  for ind in rawdata_indices)
+    scaninfo_list = list(scandata.scaninfo_list[ind].copy()
+                         for ind in rawdata_indices)
+    dataseries_list = list(scandata.dataseries_list[ind]
+                           for ind in rawdata_indices)
+    error_dataseries_list = list(scandata.error_dataseries_list[ind]
+                                 for ind in rawdata_indices)
+    fitdata_list = list(scandata.fitdata_list[ind]
+                        for ind in rawdata_indices)
+    newscandata = ScanData(fields,
+                           scaninfo_list,
+                           dataseries_list,
+                           error_dataseries_list,
+                           fitdata_list)
+    return newscandata
+
+
+# %%
+def set_scandata_error(scandata, field_index, uncertainty_value):
+    """
+    For a given field index, sets the scandata's error_dataseries_list
+    entry to a copy of the dataseries_list entry, but with all y-values
+    replaced by the given uncertainty_value
+    """
+    reference_series = scandata.dataseries_list[field_index]
+    xvals_list = list(reference_series.xvals(raw=True))
+    yvals_list = [uncertainty_value for x in xvals_list]
+    intervals = reference_series.excluded_intervals()
+    new_error_dataseries = DataSeries(zip(xvals_list, yvals_list),
+                                      excluded_intervals=intervals)
+
+    error_dataseries_list = list(scandata.error_dataseries_list)
+    error_dataseries_list[field_index] = new_error_dataseries
+    newscandata = ScanData(scandata.fields,
+                           scandata.scaninfo_list,
+                           scandata.dataseries_list,
+                           error_dataseries_list,
+                           scandata.fitdata_list)
     return newscandata
 
 

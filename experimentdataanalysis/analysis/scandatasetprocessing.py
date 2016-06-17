@@ -5,79 +5,13 @@ Created on Tue Jun  7 22:47:08 2016
 @author: Michael
 """
 
-from itertools import repeat
-import matplotlib.pyplot as plt
-import numpy as np
-
 from experimentdataanalysis.analysis.dataclasses \
-    import FitData, ScanData, DataSeries
-import experimentdataanalysis.analysis.dataclassfitting as dcfitting
-import experimentdataanalysis.analysis.dataclassgraphing as dcgraphing
-import experimentdataanalysis.analysis.dataseriesprocessing as dsprocessing
-from experimentdataanalysis.analysis.fitfunctions \
-    import fitfcn_simple_1d_gaussian, fitfcn_single_exp_decay, \
-        fitfcn_two_exp_decay, fitfcn_exp_times_sqrt_decay, \
-        fitfcn_simple_line, fitfcn_1d_gaussian_with_linear_offset
+    import ScanData, DataSeries
 from experimentdataanalysis.analysis.multidataseriesprocessing \
-    import dataseries_iterable_fit, scandata_iterable_fit, \
-        scandata_iterable_sort
+    import scandata_iterable_fit, scandata_iterable_sort
+from experimentdataanalysis.analysis.scandatamodels \
+    import ScanDataModel
 import experimentdataanalysis.parsing.dataclassparsing as dcparsing
-
-
-# %% NEEDS TESTS, SPHINX DOCUMENTATION
-class GaussianModel:
-    """
-    Stores the parameters and formulas needed to fit scandata to a
-    1D model and extract attributes. Should not store any data, although
-    it can be modified after creation (e.g. to increase max_fcn_evals
-    attribute or adjust the experimental uncertainty assumed).
-
-    Can be inherited from to change the fit model, may only need to change
-    __init__ method if first 3 fit parameters are left the same.
-    """
-    def __init__(self, **kwargs):
-        self.field_index = 0
-        self.fitfunction = fitfcn_1d_gaussian_with_linear_offset
-        # params = amplitude, x0, sigma, slope, offset
-        self.free_params = [True, True, True, True, True]
-        self.initial_params = [0.001, 0, 20, 0, 0]
-        self.param_bounds = [(0, 1), (-200, 200),
-                             (5, 200), (-0.01, 0.01), (-0.01, 0.01)]
-        self.uncertainty_level = 0.01
-        self.max_fcn_evals = 20000
-        # keyword args override defaults
-        for key, val in kwargs.items():
-            self.__dict__[key] = val
-
-    def gaussian_amplitudes(self, model_param_dataseries_list,
-                            model_param_uncertainty_dataseries_list):
-        amplitudes = model_param_dataseries_list[0]
-        amplitudes_sigma = model_param_uncertainty_dataseries_list[0]
-        return amplitudes, amplitudes_sigma
-
-    def gaussian_widths(self, model_param_dataseries_list,
-                        model_param_uncertainty_dataseries_list):
-        widths = model_param_dataseries_list[2]
-        widths_sigma = model_param_uncertainty_dataseries_list[2]
-        return widths, widths_sigma
-
-    def gaussian_centers(self, model_param_dataseries_list,
-                         model_param_uncertainty_dataseries_list):
-        centers = model_param_dataseries_list[1]
-        centers_sigma = model_param_uncertainty_dataseries_list[1]
-        return centers, centers_sigma
-
-    def gaussian_areas(self, model_param_dataseries_list,
-                       model_param_uncertainty_dataseries_list):
-        amplitudes = model_param_dataseries_list[0]
-        amplitudes_sigma = model_param_uncertainty_dataseries_list[0]
-        widths = model_param_dataseries_list[2]
-        widths_sigma = model_param_uncertainty_dataseries_list[2]
-        # note: uncertainty calc. assumes width, amplitude independent...
-        areas = amplitudes*widths
-        areas_sigma = \
-            ((amplitudes*widths_sigma)**2 + (widths*amplitudes_sigma)**2)**0.5
-        return areas, areas_sigma
 
 
 # %% NEEDS TESTS, SPHINX DOCUMENTATION
@@ -97,61 +31,105 @@ class ScanDataSet:
         self.scandata_list = []
         self.scandata_filter_fcn_list = []
         self.chronological_key = "FastScanIndex"
-        self.xval_key = "MiddleScanCoord"
+        self.xval_key = model.xval_key
         self.model_param_dataseries_list = None
         self.model_param_uncertainty_dataseries_list = None
+        if model is not None:
+            self.scandata_filter_fcn_list += model.get_model_filter_fcns()
 
     def sort_scandata_list(self):
         if len(self.scandata_list) > 1:
             # fix scandataset ordering errors arising from alphanumeric sorting
             primary_key = self.chronological_key
             secondary_key = self.xval_key
-            self.scandata_list, _ = \
+            scandata_list_tuple, _ = \
                 scandata_iterable_sort(self.scandata_list,
+                                       self.model.field_index,
                                        primary_key, secondary_key)
+            self.scandata_list = list(scandata_list_tuple)
 
     def fit_scandata_to_model(self):
-        self._fit_scandata_in_set(self.model.field_index,
-                                 self.model.fitfunction,
-                                 self.model.free_params,
-                                 self.model.initial_params,
-                                 self.model.param_bounds,
-                                 self.model.uncertainty_level,
-                                 self.model.max_fcn_evals)
+        # must filter out any pts with error = 0, will kill weighted fit
+        field_index = self.model.field_index
+        self.purge_zero_error_scandata(field_index)
+        fit_scandata_list = \
+            fit_scandata_list = \
+                scandata_iterable_fit(self.scandata_list,
+                                      field_index,
+                                      self.model.fitfunction,
+                                      self.model.free_params,
+                                      self.model.initial_params,
+                                      self.model.param_bounds,
+                                      self.model.max_fcn_evals,
+                                      multiprocessing=False)
+        self.parse_fit_scandata_list(self.model.field_index,
+                                     fit_scandata_list)
 
-    def _fit_scandata_in_set(self, field_index, scandata_fitfunction,
-                             free_params, initial_params, param_bounds,
-                             uncertainty_level=0.01, max_fcn_evals=20000):
-        scan_uncertainties_list = \
-            [DataSeries(zip(scandata.dataseries[0].xvals(raw=True),
-                            repeat(uncertainty_level)),
-                        excluded_intervals = \
-                            scandata.dataseries[0].excluded_intervals())
-             for scandata in self.scandata_list]
-        fit_scandata_list = scandata_iterable_fit(
-                                self.scandata_list,
-                                field_index, scandata_fitfunction,
-                                free_params, initial_params, param_bounds,
-                                scan_uncertainties_list,
-                                max_fcn_evals, multiprocessing=False)
+    def purge_zero_error_scandata(self, field_index):
+        def has_zero_error(scandata):
+            return 0 in scandata.error_dataseries_list[field_index].yvals()
 
+        fail_message = ("Warning: ScanData value found with 0 uncertainty " +
+                        "in  DataSeries, so ScanData was thrown out as " +
+                        "incompatible with weighted fit")
+        self.purge_scandata_list(field_index, has_zero_error, fail_message)
+
+    def purge_failed_fit_scandata(self, field_index):
+        def has_no_fitdata(scandata):
+            return scandata.fitdata_list[field_index] is None
+
+        fail_message = ("Warning: Fit failed in ScanDataSet, erasing " +
+                        "associated ScanData so all ScanData have " +
+                        "associated fits during further analysis.")
+        self.purge_scandata_list(field_index, has_no_fitdata, fail_message)
+
+    def purge_scandata_list(self, test_field_index,
+                            scandata_failed_test_fcn, fail_message):
+        filtered_scandata_list = []
+        for scandata in self.scandata_list:
+            if not scandata_failed_test_fcn(scandata):
+                filtered_scandata_list.append(scandata)
+            else:
+                print(fail_message)
+                if 'Filepath' in scandata.scaninfo_list[test_field_index]:
+                    print("Associated filepath:")
+                    print(scandata.scaninfo_list[test_field_index]['Filepath'])
+        self.scandata_list = filtered_scandata_list
+        self.model_param_dataseries_list = None  # now invalid!
+        self.model_param_uncertainty_dataseries_list = None
+
+    def parse_fit_scandata_list(self, field_index, fit_scandata_list):
+        # purge failed fits, as they will cause issues further down.
+        self.scandata_list = fit_scandata_list
+        self.purge_failed_fit_scandata(field_index)
+        # all remaining scandata should have FitData and be processable:
         # create dataseries of fit parameters & their uncertainties vs xval:
         xval_key = self.xval_key
-        xvals = [scandata.scaninfo[xval_key] for scandata in fit_scandata_list]
-        fitparams = list(zip(*(scandata.fitdata[field_index].fitparams
-                               for scandata in fit_scandata_list)))
+        xvals = [scandata.scaninfo_list[0][xval_key]
+                 for scandata in fit_scandata_list]
+        fitparams = []
+        fitparamstds = []
+        fitparams = list(zip(*(scandata.fitdata_list[field_index].fitparams
+                               for scandata in self.scandata_list)))
         fitparams_dataseries_list = [DataSeries(zip(xvals, fitparam))
                                      for fitparam in fitparams]
-        fitparamstds = list(zip(*(scandata.fitdata[field_index].fitparamstds
-                                  for scandata in fit_scandata_list)))
+        fitparamstds = list(zip(*(
+            scandata.fitdata_list[field_index].fitparamstds
+            for scandata in self.scandata_list
+                                  )))
         fitparamstds_dataseries_list = [DataSeries(zip(xvals, fitparamstd))
                                         for fitparamstd in fitparamstds]
 
         # save these results to scandataset:
-        self.scandata_list = fit_scandata_list
         self.model_param_dataseries_list = fitparams_dataseries_list
         self.model_param_uncertainty_dataseries_list = \
                                                 fitparamstds_dataseries_list
+
+    def apply_transform_to_scandata(self, transform_fcn):
+        new_scandata_list = []
+        for scandata in self.scandata_list:
+            new_scandata_list.append(transform_fcn(scandata))
+        self.scandata_list = new_scandata_list
 
     def add_scandata_filters(self, *scandata_filter_fcn_list):
         for scandata_filter_fcn in scandata_filter_fcn_list:
@@ -164,7 +142,7 @@ class ScanDataSet:
         filter or not. E.g. a simple filter might be:
         
         def only_fitted_scandata_filter(scandata):
-            return scandata.fitdata != None
+            return all(fitdata != None for fitdata in scandata.fitdata_list)
         
         Note this is usually done AFTER fitting all scandata, so fit results
         can be used in filtering.
@@ -174,6 +152,8 @@ class ScanDataSet:
 
     def clear_scandata_filters(self):
         self.scandata_filter_fcn_list = []
+        if self.model is not None:
+            self.scandata_filter_fcn_list += self.model.get_model_filter_fcns()
 
     def get_filtered_scandata_indices(self):
         """
@@ -196,16 +176,46 @@ class ScanDataSet:
                 if ind in self.get_filtered_scandata_indices()]
 
     def get_model_param_dataseries_list(self, filtered=True):
-        return [dataseries
-                for ind, dataseries in enumerate(
-                    self.model_param_dataseries_list)
-                if ind in self.get_filtered_scandata_indices()]
+        if filtered:
+            return [series.copy_subset(self.get_filtered_scandata_indices())
+                    for series in self.model_param_dataseries_list]
+        else:
+            return self.model_param_dataseries_list
 
     def get_model_param_uncertainty_dataseries_list(self, filtered=True):
-        return [dataseries
-                for ind, dataseries in enumerate(
-                    self.model_param_uncertainty_dataseries_list)
-                if ind in self.get_filtered_scandata_indices()]
+        if filtered:
+            return [series.copy_subset(self.get_filtered_scandata_indices())
+                    for series in self.model_param_uncertainty_dataseries_list]
+        else:
+            return self.model_param_uncertainty_dataseries_list
+
+    def extract_scandata(self, filtered=True):
+        params = self.get_model_param_dataseries_list(filtered)
+        param_sigmas = \
+            self.get_model_param_uncertainty_dataseries_list(filtered)
+        fields, field_dataseries_list, field_uncertainty_dataseries_list = \
+            self.model.all_model_fields(params, param_sigmas)
+        if len(self.get_scandata_list(filtered)) > 0:
+            scandata_to_use = self.get_scandata_list(filtered)[0]
+        else:  # even if no scandata survive filters, still grab a scaninfo
+            scandata_to_use = self.scandata_list[0]
+        scaninfo_list = [scandata_to_use.scaninfo_list[0].copy()
+                         for field in fields]
+        # update scaninfo to reflect new coord types:
+        updated_scaninfo_list = []
+        for scaninfo in scaninfo_list:
+            new_scaninfo = scaninfo.copy()  # rule #1: don't modify in place!
+            new_scaninfo['FastScanType'] = scaninfo['MiddleScanType']
+            new_scaninfo['MiddleScanType'] = "[N/A, fit-derived ScanData]"
+            new_scaninfo['MiddleScanCoord'] = 0
+#            new_scaninfo['MiddleScanType'] = self.model.xval_key
+#            new_scaninfo['MiddleScanCoord'] = scaninfo[self.model.xval_key]
+            updated_scaninfo_list.append(new_scaninfo)
+        return ScanData(fields,
+                        updated_scaninfo_list,
+                        field_dataseries_list,
+                        field_uncertainty_dataseries_list,
+                        [None for field in fields])
 
 # %% NEEDS TESTS, SPHINX DOCUMENTATION
 class ScanDataSetsAnalyzer:
@@ -218,23 +228,45 @@ class ScanDataSetsAnalyzer:
     related ScanDataSet will only contain the free csv/tsv files directly
     within that directory, not those belonging to its subdirectories.
     """
-    def __init__(self, model, dirpath="", *, scandata_list=[]):
+    def __init__(self, model, dirpath="", *, scandata_list=[],
+                 uncertainty_value=None, sort_key="Filepath"):
         self.set_model = model
         self.scandataset_list = []
-        self.scandataset_filter_fcn_list = []
         if scandata_list:
-            self.load_scandata_list(list(scandata_list), self.set_model)
+            scandata_list = list(scandata_list)
         elif dirpath:
             scandata_list = \
                 list(dcparsing.fetch_dir_as_unfit_scandata_iterator(
                      directorypath=dirpath))
-            self.load_scandata_list(scandata_list, self.set_model)
+        else:
+            raise TypeError("No data source provided to ScanDataSetsAnalyzer")
+        if uncertainty_value:
+            scandata_list = [dcparsing.set_scandata_error(scandata,
+                                                          model.field_index,
+                                                          uncertainty_value)
+                             for scandata in scandata_list]
+        self.load_scandata_list(scandata_list, model, sort_key)
 
-    def load_scandata_list(self, scandata_list, model):
-        current_scandataset = ScanDataSet("[default]", None)
+    def load_scandata_list(self, scandata_list, model, sort_key="Filepath"):
+        try:  # if numerical values for this sort key, pre-sort scandata list
+            float(scandata_list[0].scaninfo_list[0][sort_key])
+        except ValueError:
+            pass
+        else:
+            scandata_list, _ = scandata_iterable_sort(scandata_list, 0,
+                                                      sort_key, sort_key)
+        scandata_list = list(scandata_list)
+        current_scandataset = ScanDataSet("[default]", ScanDataModel())
         last_setname = ""
         for scandata in scandata_list:
-            setname = scandata.filepath.split("\\")[-2]
+            try:  # use sort key's value to group ScanData into ScanDataSets
+                setname = scandata.scaninfo_list[0][sort_key]
+                if sort_key == "Filepath":  # special case
+                    setname = setname.split("\\")[-2]
+            except KeyError:
+                print("Warning: ScanDataSet sort key not found in " +
+                      "ScanData! Sets may not be properly grouped")
+                setname = "key_error_set"
             if setname != last_setname:
                 current_scandataset.sort_scandata_list()
                 current_scandataset = ScanDataSet(setname, model)
@@ -248,12 +280,39 @@ class ScanDataSetsAnalyzer:
             for scandataset in self.scandataset_list:
                 scandataset.fit_scandata_to_model()
         else:
-            # speed up by sending unprocessed scandatasets and returning
-            # processed scandatasets - not super efficient, so may have to
-            # instead cobble together a giant list of scandata, process
-            # together, then redistribute to scandatasets...a huge ordeal
-            raise NotImplementedError("Error: multiprocessing not " +
-                                      "implemented for ScanDataSets yet.")
+            model = self.scandataset_list[0].model
+            field_index = model.field_index
+            model_list = [scandataset.model
+                          for scandataset in self.scandataset_list]
+            if any(ref_model != model for ref_model in model_list):
+                raise TypeError("Error: multiprocessing in a " +
+                                "ScanDataSetAnalyzer requires " +
+                                "all ScanDataSets to share an " +
+                                "identical model")
+            # cobble together a giant list of scandata, process
+            # together, then redistribute to scandatasets...
+            # must filter out any pts with error = 0, will kill weighted fit
+            merged_scandata_list = []
+            for scandataset in self.scandataset_list:
+                scandataset.purge_zero_error_scandata(field_index)
+                merged_scandata_list += list(scandataset.scandata_list)
+            merged_fit_scandata_list = \
+                scandata_iterable_fit(merged_scandata_list,
+                                      model.field_index,
+                                      model.fitfunction,
+                                      model.free_params,
+                                      model.initial_params,
+                                      model.param_bounds,
+                                      model.max_fcn_evals,
+                                      multiprocessing=True)
+            start_ind = 0
+            for scandataset in self.scandataset_list:
+                end_ind = start_ind + len(scandataset.scandata_list)
+                fit_scandata_list = \
+                    merged_fit_scandata_list[start_ind:end_ind]
+                scandataset.parse_fit_scandata_list(field_index,
+                                                    fit_scandata_list)
+                start_ind = end_ind
 
     def break_up_repeating_scandatasets(self):
         """
@@ -263,7 +322,7 @@ class ScanDataSetsAnalyzer:
         new_scandataset_list = []
         for scandataset in self.scandataset_list:
             # now, group by x-values
-            xvals = [scandata.scaninfo[scandataset.xval_key]
+            xvals = [scandata.scaninfo_list[0][scandataset.xval_key]
                      for scandata in scandataset.scandata_list]
             repeat_counts = [xvals[:ind].count(xvals[ind])
                              for ind in range(len(xvals))]
@@ -298,81 +357,69 @@ class ScanDataSetsAnalyzer:
             print("Error: lost {} scandata breaking up subdirectories"\
                   .format(num_old - num_new))
 
-    def add_scandataset_filters(self, *scandataset_filter_fcn_list):
-        for scandataset_filter_fcn in scandataset_filter_fcn_list:
-            self.add_scandataset_filter(scandataset_filter_fcn)
-
-    def add_scandataset_filter(self, scandataset_filter_fcn):
-        """
-        Adds a filter to an internally kept filter list. Filters are functions
-        that accept a scandataset and return a boolean - whether scandataset
-        passes filter or not. E.g. a simple filter might be:
-        
-        def only_fitted_scandataset_filter(scandata):
-            return len(scandataset.get_filtered_scandata_indices) > 0
-        """
-        # insert checks for valid filter fcns?
-        self.scandataset_filter_fcn_list.append(scandataset_filter_fcn)
-
-    def clear_scandataset_filters(self):
-        self.scandataset_filter_fcn_list = []
-
-    def get_filtered_indices(self):
-        """
-        Returns a list containing all indices in scandata_list whose
-        corresponding scandata meet the requirements off all filters
-        in self.scandata_filter_fcn_list
-        """
-        filtered_indices = []
-        for ind, scandataset in enumerate(self.scandataset_list):
-            ok_flag = True
-            for scandataset_filter_fcn in self.scandataset_filter_fcn_list:
-                ok_flag = ok_flag and scandataset_filter_fcn(scandataset)
-            if ok_flag:
-                filtered_indices.append(ind)
-        return filtered_indices
-
-    def get_scandataset_list(self, filtered=True):
-        return [scandataset
-                for ind, scandataset in enumerate(self.scandataset_list)
-                if ind in self.get_filtered_indices()]
-
-    def extract_model_attribute(self, attribute_fcn_name,
-                                scandata_filtered=True,
-                                scandataset_filtered=True):
-        """
-        Pulls out the desired model attribute from each ScanDataSet,
-        returning the following lists:
-        1. a list containing the attribute dataseries from each ScanDataSet
-        2. a list containing the corresponding uncertainty dataseries from
-           each ScanDataSet
-        3. a list containing [references to] each ScanDataSet. Note these
-           are mutable, and liable to changes from elsewhere!
-        
-        Note scandataset_filtered only works if fits have been performed
-        on each scandataset! If no fit performed, set will be filtered out.
-        """
-        dataseries_list = []
-        dataseries_uncertainty_list = []
-        scandataset_list = []
+    def apply_transform_to_all_scandata(self, transform_fcn):
         for scandataset in self.scandataset_list:
-            attribute_fcn = \
-                scandataset.model.__getattribute__(attribute_fcn_name)
-            dataseries, uncertainty_dataseries = attribute_fcn(
-                scandataset.model_param_dataseries_list,
-                scandataset.model_param_uncertainty_dataseries_list)
-            dataseries_list.append(dataseries)
-            dataseries_uncertainty_list.append(uncertainty_dataseries)
-            scandataset_list.append(scandataset)
-        return dataseries_list, dataseries_uncertainty_list, scandataset_list
+            scandataset.apply_transform_to_scandata(transform_fcn)
 
-    def fit_model_attribute(self, attribute_fcn_name,
-                            scandata_filtered=True,
-                            scandataset_filtered=True):
-        """
-        [like extract_model_attribute, but returns a single dataseries
-         corresponding to the fit of model attributes instead of the
-         attributes themselves. to get those, just use
-         extract_model_attribute]
-        """
-        raise NotImplementedError("fit_model_attribute not implemented yet")
+    def clear_filters_from_each_scandataset(self):
+        for scandataset in self.scandataset_list:
+            scandataset.clear_scandata_filters()
+
+    def add_filter_to_each_scandataset(self, filter_fcn):
+        for scandataset in self.scandataset_list:
+            scandataset.add_scandata_filter(filter_fcn)
+
+    def collapse_to_scandata_list(self, filtered=True):
+        return sum((scandataset.get_scandata_list(filtered=True)
+                    for scandataset in self.scandataset_list),
+                   [])
+
+    def collapse_to_model_fit_scandata_list(self, filtered=True,
+                                            ignore_empty_scandatasets=True):
+        scandata_list = [scandataset.extract_scandata(filtered)
+                         for scandataset in self.scandataset_list]
+        if ignore_empty_scandatasets:
+            return [scandata for scandata in scandata_list
+                    if len(scandata.dataseries_list[0]) > 0]
+        else:
+            return scandata_list
+
+#==============================================================================
+#     def extract_model_attribute(self, attribute_fcn_name, filtered=True):
+#         """
+#         Pulls out the desired model attribute from each ScanDataSet,
+#         returning the following lists:
+#         1. a list containing the attribute dataseries from each ScanDataSet
+#         2. a list containing the corresponding uncertainty dataseries from
+#            each ScanDataSet
+#         3. a list containing [references to] each ScanDataSet. Note these
+#            are mutable, and liable to changes from elsewhere!
+#         """
+#         dataseries_list = []
+#         dataseries_uncertainty_list = []
+#         scandataset_list = []
+#         for scandataset in self.scandataset_list:
+#             attribute_fcn = \
+#                 scandataset.model.__getattribute__(attribute_fcn_name)
+#             dataseries, uncertainty_dataseries = attribute_fcn(
+#                 scandataset.model_param_dataseries_list,
+#                 scandataset.model_param_uncertainty_dataseries_list)
+#             dataseries_list.append(dataseries)
+#             dataseries_uncertainty_list.append(uncertainty_dataseries)
+#             scandataset_list.append(scandataset)
+#         return dataseries_list, dataseries_uncertainty_list, scandataset_list
+#==============================================================================
+
+#==============================================================================
+#     def fit_model_attribute(self, attribute_fcn_name,
+#                             scandata_filtered=True,
+#                             scandataset_filtered=True):
+#         """
+#         [like extract_model_attribute, but returns a single dataseries
+#          corresponding to the fit of model attributes instead of the
+#          attributes themselves. to get those, just use
+#          extract_model_attribute]
+#         """
+#         raise NotImplementedError("fit_model_attribute not implemented yet")
+# 
+#==============================================================================

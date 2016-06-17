@@ -16,26 +16,28 @@ from experimentdataanalysis.analysis.generalutilities \
 # %% NEEDS TEST, SPHINX DOCUMENTATION
 def scandata_iterable_fit(scandata_iterable, field_index, fitfunction,
                           free_params, initial_params, param_bounds,
-                          weights_dataseries_iterable=None,
                           max_fcn_evals=20000, multiprocessing=False):
     """
     """
     scandata_list = list(scandata_iterable)
     new_fitdata_list = dataseries_iterable_fit(
-                                [scandata.dataseries[field_index]
+                                [scandata.dataseries_list[field_index]
                                  for scandata in scandata_list],
                                 fitfunction, free_params,
-                                initial_params, param_bounds, None,
+                                initial_params, param_bounds,
+                                [scandata.error_dataseries_list[field_index]
+                                 for scandata in scandata_list],
                                 max_fcn_evals, multiprocessing)
     new_scandata_list = []
     for ind, scandata in enumerate(scandata_list):
-        new_scandata_fitdatalist = list(scandata.fitdata)
-        new_scandata_fitdatalist[field_index] = new_fitdata_list[ind]
-        new_scandata_list.append(ScanData(scandata.filepath,
-                                          scandata.scaninfo.copy(),
-                                          scandata.fields,
-                                          scandata.dataseries,
-                                          tuple(new_scandata_fitdatalist)))
+        new_scandata_fitdata_list = list(scandata.fitdata_list)
+        new_scandata_fitdata_list[field_index] = new_fitdata_list[ind]
+        new_scandata_list.append(ScanData(scandata.fields,
+                                          [scaninfo.copy() for scaninfo in \
+                                                      scandata.scaninfo_list],
+                                          scandata.dataseries_list,
+                                          scandata.error_dataseries_list,
+                                          new_scandata_fitdata_list))
                                   
     return new_scandata_list
 
@@ -66,23 +68,25 @@ def dataseries_iterable_fit(dataseries_iterable, fitfunction,
     return fitdata_list
 
 # %% NEEDS TEST, SPHINX DOCUMENTATION
-def scandata_iterable_sort(scandata_iterable, primary_key, secondary_key):
+def scandata_iterable_sort(scandata_iterable, field_index,
+                           primary_key, secondary_key):
     """
     """
     # Subfunction to use as sort key
     def scandatasortfcn(scandata_2_tuple):
         scandata, _ = scandata_2_tuple
+        scaninfo = scandata.scaninfo_list[field_index]
         try:
-            return (float(scandata.scaninfo[primary_key]),
-                    float(scandata.scaninfo[secondary_key]))
+            return (float(scaninfo[primary_key]),
+                    float(scaninfo[secondary_key]))
         except KeyError:
             try:
-                return (float(scandata.scaninfo[primary_key]),
+                return (float(scaninfo[primary_key]),
                         99999999)
             except KeyError:
                 try:
                     return (99999999,
-                            float(scandata.scaninfo[secondary_key]))
+                            float(scaninfo[secondary_key]))
                 except KeyError:
                     return (99999999, 99999999)
                 except ValueError:

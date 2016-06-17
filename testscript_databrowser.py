@@ -17,6 +17,10 @@ from experimentdataanalysis.guis.guistarter import QApplicationStarter
 
 # %%
 if __name__ == "__main__":
+
+# %%    
+    scandata_list = []
+# %%
     qapp = QApplicationStarter()
 #    scandata_list = list(dcparsing.fetch_dir_as_unfit_scandata_iterator(
 #       )
@@ -35,7 +39,6 @@ if __name__ == "__main__":
 #        dataseriesfitfunction=dcfitting.fit_dataseries_with_two_decaying_cos,
 #        fit_drift=True, multiprocessing=True))
 
-    scandata_list = []
     app_saved_state = {'current_scan_list': scandata_list}
     window, windowoutput = \
         databrowser.DataBrowserWindow.launch_with_output(app_saved_state)

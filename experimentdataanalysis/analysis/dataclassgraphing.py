@@ -66,7 +66,7 @@ def graph_fitted_csv_directory(directorypath=None,
 
 
 # %%
-def graph_scandata(scandata, index=0, plot_options={}):
+def graph_scandata(scandata, field_index=0, plot_options={}):
     """
     To use drift fitting, must send a function that accepts a fit_drift
     flag as 2nd argument after dataseries and returns a tuple
@@ -74,41 +74,43 @@ def graph_scandata(scandata, index=0, plot_options={}):
     when flag is set to True.
     """
     fig, ax = plt.subplots()
-    if scandata.fitdata[index] is not None:
+    if scandata.fitdata_list[field_index] is not None:
         prefix = "Fitted_"
     else:
         prefix = "Plot_"
-    suffix = "_" + scandata.fields[index]
-    file_name = collapse_filepath_one_dir_up(scandata.filepath,
+    suffix = "_" + scandata.fields[field_index]
+    filepath = scandata.scaninfo_list[field_index]['Filepath']
+    file_name = collapse_filepath_one_dir_up(filepath,
                                              filename_prefix=prefix,
                                              filename_suffix=suffix,
                                              newextension=".png")
     try:
         plt.clf()
         plot_title = ""
-        plot_scandata(scandata, index, plot_title, ax, plot_options)
+        plot_scandata(scandata, field_index, plot_title, ax, plot_options)
         plt.savefig(file_name)
     except RuntimeError:
         print("Error generating {}, cancelling...".format(file_name))
     return scandata
 
 
-def graph_scandata_iterable(scandata_iterable, index=0, plot_options={}):
+def graph_scandata_iterable(scandata_iterable, field_index=0, plot_options={}):
     fig, ax = plt.subplots()
     for scandata in scandata_iterable:
-        if scandata.fitdata[index] is not None:
+        if scandata.fitdata_list[field_index] is not None:
             prefix = "Fitted_"
         else:
             prefix = "Plot_"
-        suffix = "_" + scandata.fields[index]
-        file_name = collapse_filepath_one_dir_up(scandata.filepath,
+        suffix = "_" + scandata.fields[field_index]
+        filepath = scandata.scaninfo_list[field_index]['Filepath']
+        file_name = collapse_filepath_one_dir_up(filepath,
                                                  filename_prefix=prefix,
                                                  filename_suffix=suffix,
                                                  newextension=".png")
         try:
             plt.clf()
             plot_title = ""
-            plot_scandata(scandata, index, plot_title, ax, plot_options)
+            plot_scandata(scandata, field_index, plot_title, ax, plot_options)
             plt.savefig(file_name)
         except RuntimeError:
             print("Error generating {}".format(file_name))
@@ -118,17 +120,48 @@ def graph_scandata_iterable(scandata_iterable, index=0, plot_options={}):
 
 
 # %%
-def plot_scandata(scandata, index=0, title=None, datatype=None,
+def plot_scandata(scandata, field_index=0, title=None, datatype=None,
                   axes=None, plot_options={}):
     try:
-        xlabel = scandata.scaninfo['FastScanType']
+        xlabel = scandata.scaninfo_list[field_index]['FastScanType']
     except KeyError:
         xlabel = None
-    plot_dataseries(scandata.dataseries[index], title=title,
-                    xlabel=xlabel, ylabel=datatype,
-                    axes=axes, fitdata=scandata.fitdata[index],
-                    plot_options=plot_options)
+    plot_dataseries_plus_error(scandata.dataseries_list[field_index],
+                               scandata.error_dataseries_list[field_index],
+                               title=title, xlabel=xlabel,
+                               ylabel=scandata.fields[field_index], axes=axes,
+                               fitdata=scandata.fitdata_list[field_index],
+                               plot_options=plot_options)
 
+
+def plot_dataseries_plus_error(dataseries, error_dataseries,
+                               title=None, xlabel=None, ylabel=None,
+                               axes=None, fitdata=None, plot_options={}):
+    if axes is None:
+        fig, axes = plt.subplots()
+    axes.errorbar(dataseries.xvals(unfiltered=True),
+                  dataseries.yvals(unfiltered=True),
+                  error_dataseries.yvals(unfiltered=True), fmt='b.')
+    if xlabel:
+        axes.set_xlabel(xlabel)
+    if ylabel:
+        axes.set_ylabel(ylabel)
+    if title:
+        axes.set_title(title)
+    if fitdata is not None:
+        axes.hold(True)
+        fitdataseries = fitdata.fitdataseries
+        axes.plot(fitdataseries.xvals(unfiltered=True),
+                  fitdataseries.yvals(unfiltered=True), 'r-')
+        if not plot_options.get('suppress_legend'):
+            # text box with parameters of fit
+            props = dict(boxstyle='round', facecolor='palegreen',
+                         alpha=0.5)
+            textstr = fitdata.fitparamstring
+            axes.text(0.95, 0.95, textstr, transform=axes.transAxes,
+                      fontsize=14, verticalalignment='top',
+                      horizontalalignment='right', multialignment='left',
+                      bbox=props)
 
 def plot_dataseries(dataseries, title=None, xlabel=None, ylabel=None,
                     axes=None, fitdata=None, plot_options={}):

@@ -259,23 +259,25 @@ class DataBrowserWindow(QtGui.QMainWindow):
         self.statusBar.showMessage("Processing...")
         primarykey = self.cmb_primarysort.currentText()
         secondarykey = self.cmb_secondarysort.currentText()
+        field_index = 0  # since rearranges scandata anyway...
         oldscanlist = self.current_scan_list[:]
         oldtempfitlist = self.temporary_fitdata_list[:]
         self.clear_all_scandata(suppress_update=True)
 
         def scandatasortfcn(scandata_tempfitdata_tuple):
             scandata, _ = scandata_tempfitdata_tuple
+            scaninfo = scandata.scaninfo_list[field_index]
             try:
-                return (float(scandata.scaninfo[primarykey]),
-                        float(scandata.scaninfo[secondarykey]))
+                return (float(scaninfo[primarykey]),
+                        float(scaninfo[secondarykey]))
             except KeyError:
                 try:
-                    return (float(scandata.scaninfo[primarykey]),
+                    return (float(scaninfo[primarykey]),
                             99999999)
                 except KeyError:
                     try:
                         return (99999999,
-                                float(scandata.scaninfo[secondarykey]))
+                                float(scaninfo[secondarykey]))
                     except KeyError:
                         return (99999999, 99999999)
                     except ValueError:
@@ -312,9 +314,10 @@ class DataBrowserWindow(QtGui.QMainWindow):
         # TODO: REAL CODE
         if fit_all:
             self.temporary_fitdata_list = \
-                [scandata.fitdata for scandata in self.current_scan_list]
+                [scandata.fitdata_list[0]
+                 for scandata in self.current_scan_list]
         else:
-            newtempfitdata = self.get_active_scandata().fitdata
+            newtempfitdata = self.get_active_scandata().fitdata_list[0]
             self.replace_active_temp_fitdata(newtempfitdata)
         self.current_scan_list_changed_since_last_update = True
         self.update_state()
@@ -346,26 +349,27 @@ class DataBrowserWindow(QtGui.QMainWindow):
         if fit_all:
             new_scan_list = []
             for ind, scandata in enumerate(self.current_scan_list):
-                newfitdata_list = [fitdata for fitdata in scandata.fitdata]
+                newfitdata_list = [fitdata
+                                   for fitdata in scandata.fitdata_list]
                 newfitdata_list[0] = self.temporary_fitdata_list[ind]
                 self.temporary_fitdata_list[ind] = None
-                scandata = ScanData(scandata.filepath,
-                                    scandata.scaninfo,
-                                    scandata.fields,
-                                    scandata.dataseries,
-                                    tuple(newfitdata_list))
+                scandata = ScanData(scandata.fields_list,
+                                    scandata.scaninfo_list,
+                                    scandata.dataseries_list,
+                                    scandata.error_dataseries_list,
+                                    newfitdata_list)
                 new_scan_list.append(scandata)
             self.current_scan_list = new_scan_list
         else:
             scandata = self.get_active_scandata()
-            newfitdata_list = [fitdata for fitdata in scandata.fitdata]
+            newfitdata_list = [fitdata for fitdata in scandata.fitdata_list]
             newfitdata_list[0] = self.get_active_temp_fitdata()
             self.replace_active_temp_fitdata(None)
-            scandata = ScanData(scandata.filepath,
-                                scandata.scaninfo,
-                                scandata.fields,
-                                scandata.dataseries,
-                                tuple(newfitdata_list))
+            scandata = ScanData(scandata.fields_list,
+                                scandata.scaninfo_list,
+                                scandata.dataseries_list,
+                                scandata.error_dataseries_list,
+                                newfitdata_list)
             self.replace_active_scandata(scandata)
         self.current_scan_list_changed_since_last_update = True
         self.update_state()
@@ -381,22 +385,22 @@ class DataBrowserWindow(QtGui.QMainWindow):
         if fit_all:
             new_scan_list = []
             for scandata in self.current_scan_list:
-                newfitdata = tuple(None for x in range(len(scandata.fields)))
-                scandata = ScanData(scandata.filepath,
-                                    scandata.scaninfo,
-                                    scandata.fields,
-                                    scandata.dataseries,
-                                    newfitdata)
+                newfitdata_list = [None for x in range(len(scandata.fields))]
+                scandata = ScanData(scandata.fields_list,
+                                    scandata.scaninfo_list,
+                                    scandata.dataseries_list,
+                                    scandata.error_dataseries_list,
+                                    newfitdata_list)
                 new_scan_list.append(scandata)
             self.current_scan_list = new_scan_list
         else:
             scandata = self.get_active_scandata()
-            newfitdata = tuple(None for x in range(len(scandata.fields)))
-            scandata = ScanData(scandata.filepath,
-                                scandata.scaninfo,
-                                scandata.fields,
-                                scandata.dataseries,
-                                newfitdata)
+            newfitdata_list = [None for x in range(len(scandata.fields))]
+            scandata = ScanData(scandata.fields_list,
+                                scandata.scaninfo_list,
+                                scandata.dataseries_list,
+                                scandata.error_dataseries_list,
+                                newfitdata_list)
             self.replace_active_scandata(scandata)
         self.current_scan_list_changed_since_last_update = True
         self.update_state()
@@ -423,24 +427,25 @@ class DataBrowserWindow(QtGui.QMainWindow):
 
     def add_scandata_to_list(self, scandata_to_add):
         try:
-            midtype_str = scandata_to_add.scaninfo['MiddleScanType']
-        except KeyError:
+            midtype_str = scandata_to_add.scaninfo_list[0]['MiddleScanType']
+        except (KeyError, IndexError):
             midtype_str = "[Unknown]"
         try:
-            midval_str = str(scandata_to_add.scaninfo['MiddleScanCoord'])
-        except KeyError:
+            midval_str = \
+                str(scandata_to_add.scaninfo_list[0]['MiddleScanCoord'])
+        except (KeyError, IndexError):
             midval_str = "[Unknown]"
         try:
-            fasttype_str = scandata_to_add.scaninfo['FastScanType']
-        except KeyError:
+            fasttype_str = scandata_to_add.scaninfo_list[0]['FastScanType']
+        except (KeyError, IndexError):
             fasttype_str = "[Unknown]"
         try:
-            start_str = str(scandata_to_add.dataseries[0].xvals()[0])
-        except KeyError:
+            start_str = str(scandata_to_add.dataseries_list[0].xvals()[0])
+        except (KeyError, IndexError):
             start_str = "[Unknown]"
         try:
-            stop_str = str(scandata_to_add.dataseries[0].xvals()[-1])
-        except KeyError:
+            stop_str = str(scandata_to_add.dataseries_list[0].xvals()[-1])
+        except (KeyError, IndexError):
             stop_str = "[Unknown]"
         scandata_string = \
             "{midtype}: {midval}, {fasttype}: {start} to {stop}".format(
@@ -491,7 +496,7 @@ class DataBrowserWindow(QtGui.QMainWindow):
             if self.current_scan_list_changed_since_last_update or \
                                                         new_current_selection:
                 self.update_datatype_box_target(current_scandata)
-            self.display_scaninfo(current_scandata.scaninfo)
+            self.display_scaninfo(current_scandata.scaninfo_list[0])
             if self.btn_plot1d.isChecked():
                 if self.current_scan_list_changed_since_last_update:
                     self.plot_scandata(current_scandata)
@@ -527,7 +532,7 @@ class DataBrowserWindow(QtGui.QMainWindow):
             self.statusBar.showMessage("Plotting...")
             self.canvas.wipe()
             dcgraphing.plot_scandata(scandata,
-                                     index=ind,
+                                     field_index=ind,
                                      title=None,
                                      datatype=scandata.fields[0],
                                      axes=self.canvas.axes,
@@ -551,14 +556,15 @@ class DataBrowserWindow(QtGui.QMainWindow):
                 plotfield = ref_scandata.fields[0]
             # get first row of plot's length to ensure all rows match
             ind = ref_scandata.fields.index(plotfield)
-            refdatayvals = ref_scandata.dataseries[ind].yvals(unfiltered=True)
+            refdatayvals = \
+                ref_scandata.dataseries_list[ind].yvals(unfiltered=True)
             plotdatalength = len(refdatayvals)
             # TODO: delegate to plot_scandata_2d from dataclassgraphing
             data2d = []
             for scandata in scandata_list:
                 for ind, field in enumerate(scandata.fields):
                     if field == plotfield:
-                        datayvals = scandata.dataseries[ind].yvals(
+                        datayvals = scandata.dataseries_list[ind].yvals(
                                                             unfiltered=True)
                         if len(datayvals) == plotdatalength:
                             data2d.append(datayvals)

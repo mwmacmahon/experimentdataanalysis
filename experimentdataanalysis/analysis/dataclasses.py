@@ -24,20 +24,14 @@ FitFunc = namedtuple("FitFunc", ["description", "fitfunction",
 # "scaninfo" is a dict containing scan parameters, e.g. "Voltage: 5"
 # note "dataseries" and "fitdata" are PLURAL - a tuple of entries is
 # expected, and fields[i], dataseries[i], and fitdata[i] are correlated
-ScanData = namedtuple("ScanData", ["filepath", "scaninfo", "fields",
-                                   "dataseries", "fitdata"])
-## ALTERNATE: (just added a few convenience functions)
-#class ScanData(namedtuple("ScanData", ["filepath", "scaninfo", "fields",
-#                                       "dataseries", "fitdata"])):
-#    def primary_field(self):
-#        return self.fields[0]
-#
-#    def primary_dataseries(self):
-#        return self.dataseries[0]
-#
-#    def primary_fitdata(self):
-#        return self.fitdata[0]
-
+ScanData = namedtuple("ScanData", ["fields",
+                                   "scaninfo_list",
+                                   "dataseries_list",
+                                   "error_dataseries_list",
+                                   "fitdata_list"])
+# old:
+# ScanData = namedtuple("ScanData", ["filepath", "scaninfo", "fields",
+#                                    "dataseries", "fitdata"])
 
 # %% Helper fcns used by DataSeries equality operator:
 # NEEDS DESCRIPTION, TEST, SPHINX DOCUMENTATION
@@ -87,17 +81,24 @@ class DataSeries(Sequence):
         # NOTE: unpack operation forces traversal of RHS. Important below...
         # TIMES AND VALUES
         datatuples = list(datatuples)
-        try:
-            xvals, yvals = zip(*datatuples)
-        except ValueError:
-            raise ValueError("all data elements must be in form (xval, yval)")
-        sortedxvallist = sorted(enumerate(xvals),
-                                key=lambda tuple: tuple[1])
-        self.map_to_sorted, self._xvals = zip(*sortedxvallist)  # unzip
-        unsortedxvallist = sorted(enumerate(self.map_to_sorted),
-                                  key=lambda tuple: tuple[1])
-        self.map_to_unsorted, _ = zip(*unsortedxvallist)  # unzip
-        self._yvals = tuple(yvals[index] for index in self.map_to_sorted)
+        if len(datatuples) == 0:
+            self._xvals = []
+            self._yvals = []
+            self.map_to_sorted = []
+            self.map_to_unsorted = []
+        else:
+            try:
+                xvals, yvals = zip(*datatuples)
+            except ValueError:
+                raise ValueError("all data elements used to initialize " +
+                                 "DataSeries must be in form (xval, yval)")
+            sortedxvallist = sorted(enumerate(xvals),
+                                    key=lambda tuple: tuple[1])
+            self.map_to_sorted, self._xvals = zip(*sortedxvallist)  # unzip
+            unsortedxvallist = sorted(enumerate(self.map_to_sorted),
+                                      key=lambda tuple: tuple[1])
+            self.map_to_unsorted, _ = zip(*unsortedxvallist)  # unzip
+            self._yvals = tuple(yvals[index] for index in self.map_to_sorted)
 
         # EXCLUDED INTERVALS
         if excluded_intervals is not None:
@@ -186,7 +187,7 @@ class DataSeries(Sequence):
                                                 unsorted=unsorted))
             xvals = list(xvals)
             yvals = list(yvals)
-        except ValueError:  # happens if all yvals are filtered out
+        except ValueError:  # happens if all empty or yvals are filtered out
             xvals = []
             yvals = []
         return xvals, yvals
@@ -220,6 +221,15 @@ class DataSeries(Sequence):
         """
         return self.__class__(zip(self.xvals(raw=True),
                               self.yvals(raw=True)),
+                              excluded_intervals=self.excluded_intervals())
+
+    def copy_subset(self, index_list):
+        if any(ind > len(self) for ind in index_list):
+            print("Warning: DataSeries.copy_subset(...) index_list " +
+                  "parameter contains out of bounds indices, ignoring.")
+        return self.__class__([xypair
+                               for ind, xypair in enumerate(self(raw=True))
+                               if ind in index_list],
                               excluded_intervals=self.excluded_intervals())
 
     def __call__(self, *args, **kwargs):

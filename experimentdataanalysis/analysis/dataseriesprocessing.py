@@ -20,20 +20,21 @@ LASER_REPRATE = 13100  # ps period
 # %% NEEDS TEST, SPHINX DOCUMENTATION
 def scandata_dataseries_fit(scandata, field_index, fitfunction,
                             free_params, initial_params, param_bounds,
-                            weights_dataseries=None, max_fcn_evals=20000):
+                            max_fcn_evals=20000):
     """
     """
-    new_fitdata = dataseries_fit(scandata.dataseries[field_index],
+    new_fitdata = dataseries_fit(scandata.dataseries_list[field_index],
                                  fitfunction, free_params,
                                  initial_params, param_bounds,
-                                 weights_dataseries, max_fcn_evals)
-    new_scandata_fitdatalist = list(scandata.fitdata)
-    new_scandata_fitdatalist[field_index] = new_fitdata
-    return ScanData(scandata.filepath,
-                    scandata.scaninfo.copy(),
-                    scandata.fields,
-                    scandata.dataseries,
-                    tuple(new_scandata_fitdatalist))
+                                 scandata.error_dataseries_list[field_index],
+                                 max_fcn_evals)
+    new_scandata_fitdata_list = list(scandata.fitdata_list)
+    new_scandata_fitdata_list[field_index] = new_fitdata
+    return ScanData(scandata.fields,
+                    [scaninfo.copy() for scaninfo in scandata.scaninfo_list],
+                    scandata.dataseries_list,
+                    scandata.error_dataseries_list,
+                    new_scandata_fitdata_list)
 
 
 # %% NEEDS TEST, SPHINX DOCUMENTATION
@@ -213,9 +214,26 @@ def check_fit_parameter_consistency(num_nonx_args, free_params,
 
 
 # %% TODO: NEEDS TEST, SPHINX DOCUMENTATION
+def get_positive_time_delay_scandata(scandata, zero_delay_offset=0):
+    new_dataseries_list = []
+    new_error_dataseries_list = []
+    for dataseries in scandata.dataseries_list:
+        new_dataseries = get_positive_time_delay_dataseries(dataseries,
+                                                            zero_delay_offset)
+        new_dataseries_list.append(new_dataseries)
+    for error_dataseries in scandata.error_dataseries_list:
+        new_error_dataseries = \
+            get_positive_time_delay_dataseries(error_dataseries,
+                                               zero_delay_offset)
+        new_error_dataseries_list.append(new_error_dataseries)
+    return ScanData(scandata.fields,
+                    [scaninfo.copy() for scaninfo in scandata.scaninfo_list],
+                    new_dataseries_list,
+                    new_error_dataseries_list,
+                    [None for field in scandata.fields])  # invalidates fits
+
+
 def get_positive_time_delay_dataseries(dataseries, zero_delay_offset=0):
-    """
-    """
     oldxvals = dataseries.xvals(raw=True)
     oldyvals = dataseries.yvals(raw=True)
     newxvals = oldxvals[:]

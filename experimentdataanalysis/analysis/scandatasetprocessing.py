@@ -206,10 +206,10 @@ class ScanDataSet:
         for scaninfo in scaninfo_list:
             new_scaninfo = scaninfo.copy()  # rule #1: don't modify in place!
             new_scaninfo['FastScanType'] = scaninfo['MiddleScanType']
-            new_scaninfo['MiddleScanType'] = "[N/A, fit-derived ScanData]"
-            new_scaninfo['MiddleScanCoord'] = 0
-#            new_scaninfo['MiddleScanType'] = self.model.xval_key
-#            new_scaninfo['MiddleScanCoord'] = scaninfo[self.model.xval_key]
+#            new_scaninfo['MiddleScanType'] = "[N/A, fit-derived ScanData]"
+#            new_scaninfo['MiddleScanCoord'] = 0
+            new_scaninfo['MiddleScanType'] = self.model.xval_key
+            new_scaninfo['MiddleScanCoord'] = scaninfo[self.model.xval_key]
             updated_scaninfo_list.append(new_scaninfo)
         return ScanData(fields,
                         updated_scaninfo_list,
@@ -248,6 +248,9 @@ class ScanDataSetsAnalyzer:
         self.load_scandata_list(scandata_list, model, sort_key)
 
     def load_scandata_list(self, scandata_list, model, sort_key="Filepath"):
+        if len(scandata_list) == 0:
+            raise TypeError("Empty scandata list provided to " +
+                            "ScanDataSetsAnalyzer.")
         try:  # if numerical values for this sort key, pre-sort scandata list
             float(scandata_list[0].scaninfo_list[0][sort_key])
         except ValueError:

@@ -145,6 +145,8 @@ class DataBrowserWindow(QtGui.QMainWindow):
             self.add_scandata_to_list(scandata)
         self.list_scandata.setCurrentRow(0)
         self.update_state()
+        self.callback_sort_scan_list()
+        self.update_state()
         self.statusBar.showMessage("Ready")
         self.ignore_input = False
 

@@ -126,49 +126,26 @@ def plot_scandata(scandata, field_index=0, title=None, datatype=None,
         xlabel = scandata.scaninfo_list[field_index]['FastScanType']
     except KeyError:
         xlabel = None
-    plot_dataseries_plus_error(scandata.dataseries_list[field_index],
-                               scandata.error_dataseries_list[field_index],
-                               title=title, xlabel=xlabel,
-                               ylabel=scandata.fields[field_index], axes=axes,
-                               fitdata=scandata.fitdata_list[field_index],
-                               plot_options=plot_options)
+    plot_dataseries(scandata.dataseries_list[field_index],
+                    scandata.error_dataseries_list[field_index],
+                    title=title, xlabel=xlabel,
+                    ylabel=scandata.fields[field_index], axes=axes,
+                    fitdata=scandata.fitdata_list[field_index],
+                    plot_options=plot_options)
 
 
-def plot_dataseries_plus_error(dataseries, error_dataseries,
-                               title=None, xlabel=None, ylabel=None,
-                               axes=None, fitdata=None, plot_options={}):
-    if axes is None:
-        fig, axes = plt.subplots()
-    axes.errorbar(dataseries.xvals(unfiltered=True),
-                  dataseries.yvals(unfiltered=True),
-                  error_dataseries.yvals(unfiltered=True), fmt='b.')
-    if xlabel:
-        axes.set_xlabel(xlabel)
-    if ylabel:
-        axes.set_ylabel(ylabel)
-    if title:
-        axes.set_title(title)
-    if fitdata is not None:
-        axes.hold(True)
-        fitdataseries = fitdata.fitdataseries
-        axes.plot(fitdataseries.xvals(unfiltered=True),
-                  fitdataseries.yvals(unfiltered=True), 'r-')
-        if not plot_options.get('suppress_legend'):
-            # text box with parameters of fit
-            props = dict(boxstyle='round', facecolor='palegreen',
-                         alpha=0.5)
-            textstr = fitdata.fitparamstring
-            axes.text(0.95, 0.95, textstr, transform=axes.transAxes,
-                      fontsize=14, verticalalignment='top',
-                      horizontalalignment='right', multialignment='left',
-                      bbox=props)
-
-def plot_dataseries(dataseries, title=None, xlabel=None, ylabel=None,
+def plot_dataseries(dataseries, error_dataseries=None,
+                    title=None, xlabel=None, ylabel=None,
                     axes=None, fitdata=None, plot_options={}):
     if axes is None:
         fig, axes = plt.subplots()
-    axes.plot(dataseries.xvals(unfiltered=True),
-              dataseries.yvals(unfiltered=True), 'b.')
+    if error_dataseries is not None:
+        axes.errorbar(dataseries.xvals(unfiltered=True),
+                      dataseries.yvals(unfiltered=True),
+                      error_dataseries.yvals(unfiltered=True), fmt='b.')
+    else:
+        axes.plot(dataseries.xvals(unfiltered=True),
+                  dataseries.yvals(unfiltered=True), 'b.')
     if xlabel:
         axes.set_xlabel(xlabel)
     if ylabel:
@@ -191,12 +168,18 @@ def plot_dataseries(dataseries, title=None, xlabel=None, ylabel=None,
                       bbox=props)
 
 
-def plot_additional_dataseries(dataseries, axes=None, plot_options={}):
+def plot_additional_dataseries(dataseries, error_dataseries=None,
+                               axes=None, plot_options={}):
     if axes is None:
         fig, axes = plt.subplots()
     axes.hold(True)
-    axes.plot(dataseries.xvals(unfiltered=True),
-              dataseries.yvals(unfiltered=True), 'b-')
+    if error_dataseries is not None:
+        axes.errorbar(dataseries.xvals(unfiltered=True),
+                      dataseries.yvals(unfiltered=True),
+                      error_dataseries.yvals(unfiltered=True), fmt='b.')
+    else:
+        axes.plot(dataseries.xvals(unfiltered=True),
+                  dataseries.yvals(unfiltered=True), 'b.')
 
 
 # %%

@@ -125,10 +125,11 @@ class ScanDataSet:
         self.model_param_uncertainty_dataseries_list = \
                                                 fitparamstds_dataseries_list
 
-    def apply_transform_to_scandata(self, transform_fcn):
+    def apply_transform_to_scandata(self, transform_fcn, *args, **kwargs):
         new_scandata_list = []
         for scandata in self.scandata_list:
-            new_scandata_list.append(transform_fcn(scandata))
+            new_scandata_list.append(transform_fcn(scandata,
+                                                   *args, **kwargs))
         self.scandata_list = new_scandata_list
 
     def add_scandata_filters(self, *scandata_filter_fcn_list):
@@ -171,23 +172,26 @@ class ScanDataSet:
         return filtered_indices
 
     def get_scandata_list(self, filtered=True):
-        return [scandata
-                for ind, scandata in enumerate(self.scandata_list)
-                if ind in self.get_filtered_scandata_indices()]
+        if filtered:
+            return [scandata
+                    for ind, scandata in enumerate(self.scandata_list)
+                    if ind in self.get_filtered_scandata_indices()]
+        else:
+            return self.scandata_list.copy()
 
     def get_model_param_dataseries_list(self, filtered=True):
         if filtered:
             return [series.copy_subset(self.get_filtered_scandata_indices())
                     for series in self.model_param_dataseries_list]
         else:
-            return self.model_param_dataseries_list
+            return self.model_param_dataseries_list.copy()
 
     def get_model_param_uncertainty_dataseries_list(self, filtered=True):
         if filtered:
             return [series.copy_subset(self.get_filtered_scandata_indices())
                     for series in self.model_param_uncertainty_dataseries_list]
         else:
-            return self.model_param_uncertainty_dataseries_list
+            return self.model_param_uncertainty_dataseries_list.copy()
 
     def extract_scandata(self, filtered=True):
         params = self.get_model_param_dataseries_list(filtered)
@@ -360,9 +364,10 @@ class ScanDataSetsAnalyzer:
             print("Error: lost {} scandata breaking up subdirectories"\
                   .format(num_old - num_new))
 
-    def apply_transform_to_all_scandata(self, transform_fcn):
+    def apply_transform_to_all_scandata(self, transform_fcn, *args, **kwargs):
         for scandataset in self.scandataset_list:
-            scandataset.apply_transform_to_scandata(transform_fcn)
+            scandataset.apply_transform_to_scandata(transform_fcn,
+                                                    *args, **kwargs)
 
     def clear_filters_from_each_scandataset(self):
         for scandataset in self.scandataset_list:
@@ -373,7 +378,7 @@ class ScanDataSetsAnalyzer:
             scandataset.add_scandata_filter(filter_fcn)
 
     def collapse_to_scandata_list(self, filtered=True):
-        return sum((scandataset.get_scandata_list(filtered=True)
+        return sum((scandataset.get_scandata_list(filtered)
                     for scandataset in self.scandataset_list),
                    [])
 

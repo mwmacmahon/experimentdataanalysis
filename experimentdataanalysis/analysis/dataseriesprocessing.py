@@ -129,6 +129,7 @@ def dataseries_fit(dataseries, fitfunction,
                                                  sigma=weights,
                                                  absolute_sigma=use_weights,
                                                  bounds=partial_bounds,
+                                                 method='trf',
                                                  max_nfev=max_fcn_evals)
             rawfitstds = np.sqrt(np.diag(rawcovariances))
         except RuntimeError:
@@ -218,14 +219,17 @@ def get_positive_time_delay_scandata(scandata, zero_delay_offset=0):
     new_dataseries_list = []
     new_error_dataseries_list = []
     for dataseries in scandata.dataseries_list:
-        new_dataseries = get_positive_time_delay_dataseries(dataseries,
-                                                            zero_delay_offset)
-        new_dataseries_list.append(new_dataseries)
+        if dataseries is not None:
+            new_dataseries = \
+                get_positive_time_delay_dataseries(dataseries,
+                                                   zero_delay_offset)
+            new_dataseries_list.append(new_dataseries)
     for error_dataseries in scandata.error_dataseries_list:
-        new_error_dataseries = \
-            get_positive_time_delay_dataseries(error_dataseries,
-                                               zero_delay_offset)
-        new_error_dataseries_list.append(new_error_dataseries)
+        if error_dataseries is not None:
+            new_error_dataseries = \
+                get_positive_time_delay_dataseries(error_dataseries,
+                                                   zero_delay_offset)
+            new_error_dataseries_list.append(new_error_dataseries)
     return ScanData(scandata.fields,
                     [scaninfo.copy() for scaninfo in scandata.scaninfo_list],
                     new_dataseries_list,

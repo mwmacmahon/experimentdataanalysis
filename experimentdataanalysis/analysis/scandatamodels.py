@@ -5,10 +5,9 @@ Created on Wed Jun 15 14:33:16 2016
 @author: Michael
 """
 
-from experimentdataanalysis.analysis.fitfunctions \
-    import fitfcn_simple_1d_gaussian, fitfcn_single_exp_decay, \
-        fitfcn_two_exp_decay, fitfcn_exp_times_sqrt_decay, \
-        fitfcn_simple_line, fitfcn_1d_gaussian_with_linear_offset
+import numpy as np
+
+import experimentdataanalysis.analysis.fitfunctions as fitfcns
 
 
 # %% NEEDS TESTS, SPHINX DOCUMENTATION
@@ -21,7 +20,7 @@ class ScanDataModel:
 
     Can be inherited from to change the fit model, may only need to change
     __init__ method if first 3 fit parameters are left the same.
-    
+
     All models should have fcns all_model_fields and get_model_filter_fcns
     """
     def __init__(self, **kwargs):
@@ -74,13 +73,66 @@ class ScanDataModel:
 
     def __eq__(self, other):
         return all([
-        self.model_type == other.model_type,
-        self.field_index == other.field_index,
-        self.free_params == other.free_params,
-        self.initial_params == other.initial_params,
-        self.param_bounds == other.param_bounds,
-        self.error_thresholds == other.error_thresholds,
-        self.max_fcn_evals == other.max_fcn_evals])
+            self.model_type == other.model_type,
+            self.field_index == other.field_index,
+            self.free_params == other.free_params,
+            self.initial_params == other.initial_params,
+            self.param_bounds == other.param_bounds,
+            self.error_thresholds == other.error_thresholds,
+            self.max_fcn_evals == other.max_fcn_evals])
+
+
+# %% NEEDS TESTS, SPHINX DOCUMENTATION
+class LinearFitModel(ScanDataModel):
+    """
+    Stores the parameters and formulas needed to fit scandata to a
+    1D model and extract attributes. Should not store any data, although
+    it can be modified after creation (e.g. to increase max_fcn_evals
+    attribute or adjust the experimental uncertainty assumed).
+
+    Can be inherited from to change the fit model, may only need to change
+    __init__ method if first 3 fit parameters are left the same.
+
+    All models should have fcns all_model_fields and get_model_filter_fcns
+    """
+    def __init__(self, **kwargs):
+        self.model_type = "fitfcn_simple_line"
+        self.xval_key = "Voltage"
+        self.field_index = 2
+        self.fitfunction = fitfcns.fitfcn_simple_line
+        # params = slope, offset
+        self.free_params = [True, True]
+        self.initial_params = [0, 0]
+        self.param_bounds = [(-np.inf, np.inf), (-np.inf, np.inf)]
+        self.error_thresholds = [None, None]
+        self.max_fcn_evals = 20000
+        # keyword args override defaults
+        for key, val in kwargs.items():
+            self.__dict__[key] = val
+
+    def all_model_fields(self, model_param_dataseries_list,
+                         model_param_uncertainty_dataseries_list):
+        params = model_param_dataseries_list
+        param_sigmas = model_param_uncertainty_dataseries_list
+        fields = ["slope",
+                  "offset"]
+        dataseries_list, uncertainty_dataseries_list = \
+            zip(*[self.slopes(params, param_sigmas),
+                  self.offsets(params, param_sigmas),
+                  ])
+        return fields, dataseries_list, uncertainty_dataseries_list
+
+    def slopes(self, model_param_dataseries_list,
+               model_param_uncertainty_dataseries_list):
+        slopes = model_param_dataseries_list[0]
+        slopes_sigma = model_param_uncertainty_dataseries_list[0]
+        return slopes, slopes_sigma
+
+    def offsets(self, model_param_dataseries_list,
+                model_param_uncertainty_dataseries_list):
+        offsets = model_param_dataseries_list[1]
+        offsets_sigma = model_param_uncertainty_dataseries_list[1]
+        return offsets, offsets_sigma
 
 
 # %% NEEDS TESTS, SPHINX DOCUMENTATION
@@ -93,14 +145,14 @@ class GaussianModel(ScanDataModel):
 
     Can be inherited from to change the fit model, may only need to change
     __init__ method if first 3 fit parameters are left the same.
-    
+
     All models should have fcns all_model_fields and get_model_filter_fcns
     """
     def __init__(self, **kwargs):
         self.model_type = "1d_gaussian_with_linear_offset"
-        self.xval_key = "MiddleScanCoord"  # should be 3rd coord, but unknown!
+        self.xval_key = "MiddleScanCoord"
         self.field_index = 0
-        self.fitfunction = fitfcn_1d_gaussian_with_linear_offset
+        self.fitfunction = fitfcns.fitfcn_1d_gaussian_with_linear_offset
         # params = amplitude, x0, sigma, slope, offset
         self.free_params = [True, True, True, True, True]
         self.initial_params = [0.02, 0, 20, 0, 0]
@@ -125,7 +177,7 @@ class GaussianModel(ScanDataModel):
                   self.gaussian_widths(params, param_sigmas),
                   self.gaussian_centers(params, param_sigmas),
                   self.gaussian_areas(params, param_sigmas),
-                 ])
+                  ])
         return fields, dataseries_list, uncertainty_dataseries_list
 
     def gaussian_amplitudes(self, model_param_dataseries_list,
@@ -169,14 +221,14 @@ class SpinLifetimeModel(ScanDataModel):
 
     Can be inherited from to change the fit model, may only need to change
     __init__ method if first 3 fit parameters are left the same.
-    
+
     All models should have fcns all_model_fields and get_model_filter_fcns
     """
     def __init__(self, **kwargs):
         self.model_type = "fitfcn_two_exp_decay"
-        self.xval_key = "MiddleScanCoord"
+        self.xval_key = "MiddleScanCoord"  # should be 3rd coord, but unknown!
         self.field_index = 3  # gaussian area
-        self.fitfunction = fitfcn_two_exp_decay
+        self.fitfunction = fitfcns.fitfcn_two_exp_decay
         # params = pulse_amp1, lifetime1, pulse_amp2, lifetime2, offset
         self.free_params = [True, True, True, True, False]
         self.initial_params = [0.05, 50, 0.05, 2000, 0]
@@ -201,7 +253,7 @@ class SpinLifetimeModel(ScanDataModel):
                   self.short_lifetimes(params, param_sigmas),
                   self.long_amplitudes(params, param_sigmas),
                   self.long_lifetimes(params, param_sigmas),
-                 ])
+                  ])
         return fields, dataseries_list, uncertainty_dataseries_list
 
     def short_amplitudes(self, model_param_dataseries_list,
@@ -228,8 +280,9 @@ class SpinLifetimeModel(ScanDataModel):
         params_sigma = model_param_uncertainty_dataseries_list[3]
         return params, params_sigma
 
+
 # %% NEEDS TESTS, SPHINX DOCUMENTATION
-class SimplerSpinLifetimeModel(ScanDataModel):
+class SinusoidalSpinLifetimeModel(ScanDataModel):
     """
     Stores the parameters and formulas needed to fit scandata to a
     1D model and extract attributes. Should not store any data, although
@@ -238,19 +291,22 @@ class SimplerSpinLifetimeModel(ScanDataModel):
 
     Can be inherited from to change the fit model, may only need to change
     __init__ method if first 3 fit parameters are left the same.
-    
+
     All models should have fcns all_model_fields and get_model_filter_fcns
     """
     def __init__(self, **kwargs):
-        self.model_type = "fitfcn_single_exp_decay"
-        self.xval_key = "MiddleScanCoord"
+        self.model_type = "fitfcn_two_exp_sin_decay"
+        self.xval_key = "Voltage"
         self.field_index = 0  # gaussian area
-        self.fitfunction = fitfcn_single_exp_decay
-        # params = pulse_amp, lifetime, offset
-        self.free_params = [True, True, False]
-        self.initial_params = [0.5, 2000, 0]
-        self.param_bounds = [(0, 1), (10, 1e6), (-0.01, 0.01)]
-        self.error_thresholds = [None, None, None]
+        self.fitfunction = fitfcns.fitfcn_two_exp_sin_decay
+        # params = pulse_amp1, lifetime1, pulse_amp2,
+        #          lifetime2, osc_period, phase, offset
+        self.free_params = [True, True, True, True, True, True, False]
+        self.initial_params = [0.05, 50, 0.05, 2000, 800, 0, 0]
+        self.param_bounds = [(0, 1), (1, 200),
+                             (0, 1), (10, 1e6),
+                             (600, 1000), (0, 2*np.pi), (-0.01, 0.01)]
+        self.error_thresholds = [None, None, None, None, None]
         self.max_fcn_evals = 20000
         # keyword args override defaults
         for key, val in kwargs.items():
@@ -260,22 +316,39 @@ class SimplerSpinLifetimeModel(ScanDataModel):
                          model_param_uncertainty_dataseries_list):
         params = model_param_dataseries_list
         param_sigmas = model_param_uncertainty_dataseries_list
-        fields = ["amplitudes",
-                  "lifetimes"]
+        # TODO: design a model field decorator fcn to make this automatic
+        fields = ["short_amplitudes",
+                  "short_lifetimes",
+                  "long_amplitudes",
+                  "long_lifetimes"]
         dataseries_list, uncertainty_dataseries_list = \
-            zip(*[self.amplitudes(params, param_sigmas),
-                  self.lifetimes(params, param_sigmas),
-                 ])
+            zip(*[self.short_amplitudes(params, param_sigmas),
+                  self.short_lifetimes(params, param_sigmas),
+                  self.long_amplitudes(params, param_sigmas),
+                  self.long_lifetimes(params, param_sigmas),
+                  ])
         return fields, dataseries_list, uncertainty_dataseries_list
 
-    def amplitudes(self, model_param_dataseries_list,
+    def short_amplitudes(self, model_param_dataseries_list,
                          model_param_uncertainty_dataseries_list):
         params = model_param_dataseries_list[0]
         params_sigma = model_param_uncertainty_dataseries_list[0]
         return params, params_sigma
 
-    def lifetimes(self, model_param_dataseries_list,
+    def short_lifetimes(self, model_param_dataseries_list,
                         model_param_uncertainty_dataseries_list):
         params = model_param_dataseries_list[1]
         params_sigma = model_param_uncertainty_dataseries_list[1]
+        return params, params_sigma
+
+    def long_amplitudes(self, model_param_dataseries_list,
+                        model_param_uncertainty_dataseries_list):
+        params = model_param_dataseries_list[2]
+        params_sigma = model_param_uncertainty_dataseries_list[2]
+        return params, params_sigma
+
+    def long_lifetimes(self, model_param_dataseries_list,
+                       model_param_uncertainty_dataseries_list):
+        params = model_param_dataseries_list[3]
+        params_sigma = model_param_uncertainty_dataseries_list[3]
         return params, params_sigma

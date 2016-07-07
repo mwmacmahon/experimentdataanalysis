@@ -256,12 +256,16 @@ class ScanDataSetsAnalyzer:
             raise TypeError("Empty scandata list provided to " +
                             "ScanDataSetsAnalyzer.")
         try:  # if numerical values for this sort key, pre-sort scandata list
-            float(scandata_list[0].scaninfo_list[0][sort_key])
+            for scandata in scandata_list:
+                float(scandata.scaninfo_list[0][sort_key])
         except ValueError:
-            pass
+            scandata_list, _ = scandata_iterable_sort(scandata_list, 0,
+                                                      sort_key, sort_key,
+                                                      numeric_sort=False)
         else:
             scandata_list, _ = scandata_iterable_sort(scandata_list, 0,
-                                                      sort_key, sort_key)
+                                                      sort_key, sort_key,
+                                                      numeric_sort=True)
         scandata_list = list(scandata_list)
         current_scandataset = ScanDataSet("[default]", ScanDataModel())
         last_setname = ""
@@ -280,7 +284,7 @@ class ScanDataSetsAnalyzer:
                 self.scandataset_list.append(current_scandataset)
                 last_setname = setname
             current_scandataset.scandata_list.append(scandata)
-        current_scandataset.sort_scandata_list()  # sort last scandataset
+        current_scandataset.sort_scandata_list()  # sort last scandataset        
 
     def fit_all_scandata_to_model(self, multiprocessing=False):
         if not multiprocessing:
@@ -325,6 +329,8 @@ class ScanDataSetsAnalyzer:
         """
         break into smaller scandatasets based on repeated xval patterns
         e.g. {x=1,2,3,4,1,2,3,4} -> {x=1,2,3,4} ; {x=1,2,3,4}
+        WARNING: may break up more complex patterns too much.
+        be careful of use.
         """
         new_scandataset_list = []
         for scandataset in self.scandataset_list:

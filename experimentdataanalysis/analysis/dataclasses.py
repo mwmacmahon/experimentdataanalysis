@@ -147,11 +147,13 @@ class DataSeries(Sequence):
         return yvals
 
     def datatuples(self, *, unfiltered=False, unsorted=False, raw=False):
+        #  TODO: fix it so that operation is lazy!
         """
         Return this instance's xvals and associated yvals, possibly
         filtered or in the original sorting used when this instance
         was created. Note this is a completely lazy operation,
         consisting of chained generator expressions.
+        CORRECTION: not actually lazy if filtered, due to generator problems.
         Format is an iterator (t1,v1), (t2,v2), ..., identical to the
         input format.
         """
@@ -164,10 +166,12 @@ class DataSeries(Sequence):
         else:
             tuples = zip(self._xvals, self._yvals)
         if not unfiltered and self._start_xvals is not None:
-            for start, end in zip(self._start_xvals,
-                                  self._end_xvals):
-                tuples = ((xval, yval) for xval, yval in tuples
-                          if xval < start or xval > end)
+            tuples = list(tuples)  # avoid chaining generators in for loop
+            for ind, (start, end) in enumerate(zip(self._start_xvals,
+                                                   self._end_xvals)):
+                tuples = [(xval, yval)
+                           for xval, yval in tuples
+                           if xval < start or xval > end]
         for tup in tuples:
             yield tup
 

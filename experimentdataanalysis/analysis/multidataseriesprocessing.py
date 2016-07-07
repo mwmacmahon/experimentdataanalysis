@@ -69,11 +69,33 @@ def dataseries_iterable_fit(dataseries_iterable, fitfunction,
 
 # %% NEEDS TEST, SPHINX DOCUMENTATION
 def scandata_iterable_sort(scandata_iterable, field_index,
-                           primary_key, secondary_key):
+                           primary_key, secondary_key, numeric_sort=True):
     """
+    right now, no mixed numeric/non-numeric keys, because effort
     """
     # Subfunction to use as sort key
-    def scandatasortfcn(scandata_2_tuple):
+    def scandatasortfcn_strings(scandata_2_tuple):
+        scandata, _ = scandata_2_tuple
+        scaninfo = scandata.scaninfo_list[field_index]
+        try:
+            return (str(scaninfo[primary_key]),
+                    str(scaninfo[secondary_key]))
+        except KeyError:
+            try:
+                return (str(scaninfo[primary_key]),
+                        "")
+            except KeyError:
+                try:
+                    return ("",
+                            str(scaninfo[secondary_key]))
+                except KeyError:
+                    return ("", "")
+        except AttributeError:
+            print("scandata_iterable_sort: ScanData expected as list element.")
+            return ("", "")
+
+    # Subfunction to use as sort key
+    def scandatasortfcn_numerical(scandata_2_tuple):
         scandata, _ = scandata_2_tuple
         scaninfo = scandata.scaninfo_list[field_index]
         try:
@@ -90,21 +112,29 @@ def scandata_iterable_sort(scandata_iterable, field_index,
                 except KeyError:
                     return (99999999, 99999999)
                 except ValueError:
-                    print("scandata_iterable_sort: Numerical sort keys only!")
+                    print("scandata_iterable_sort: numerical_sort flag on, " +
+                          "numerical sort keys only!")
                     return (99999999, 99999999)
             except ValueError:
-                print("scandata_iterable_sort: Numerical sort keys only!")
+                print("scandata_iterable_sort: numerical_sort flag on, " +
+                      "numerical sort keys only!")
                 return (99999999, 99999999)
         except ValueError:
-            print("scandata_iterable_sort: Numerical sort keys only!")
+            print("scandata_iterable_sort: numerical_sort flag on, " +
+                  "numerical sort keys only!")
             return (99999999, 99999999)
         except AttributeError:
             print("scandata_iterable_sort: ScanData expected as list element.")
             return (99999999, 99999999)
 
-    scandata_list = list(scandata_iterable)
+    scandata_list = list(scandata_iterable) 
     index_ordering = range(len(scandata_list))
+    if numeric_sort:
+        key_fcn = scandatasortfcn_numerical
+    else:
+        key_fcn = scandatasortfcn_strings
+
     scandata_list, index_ordering = zip(*sorted(
                                         zip(scandata_list, index_ordering),
-                                        key=scandatasortfcn))
+                                        key=key_fcn))
     return scandata_list, index_ordering

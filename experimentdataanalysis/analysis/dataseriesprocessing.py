@@ -117,6 +117,27 @@ def dataseries_fit(dataseries, fitfunction,
             weights = weights_dataseries.yvals(unsorted=False)
             use_weights = True
         else:
+#==============================================================================
+# TODO: test this and see if this works
+#             weights_can_be_created = True
+#             for xval in xvals:
+#                 if xval not in weights_xvals:
+#                     weights_can_be_created = False
+#             if weights_can_be_created:
+#                 raw_weights_tuples = \
+#                     weights_dataseries.datatuples(unsorted=False,
+#                                                   unfiltered=True)
+#                 filtered_weights_tuples = []
+#                 for xval in xvals:
+#                     for xytuple in raw_weights_tuples:
+#                         if xytuple[0] == xval:
+#                             filtered_weights_tuples.append(xytuple)
+#                 weights = DataSeries(filtered_weights_tuples)
+#                 use_weights = True
+#             else:
+#                 weights = None
+#                 use_weights = False
+#==============================================================================
             weights = None
             use_weights = False
     else:
@@ -224,12 +245,16 @@ def get_positive_time_delay_scandata(scandata, zero_delay_offset=0):
                 get_positive_time_delay_dataseries(dataseries,
                                                    zero_delay_offset)
             new_dataseries_list.append(new_dataseries)
+        else:
+            new_dataseries_list.append(dataseries)
     for error_dataseries in scandata.error_dataseries_list:
         if error_dataseries is not None:
             new_error_dataseries = \
                 get_positive_time_delay_dataseries(error_dataseries,
                                                    zero_delay_offset)
             new_error_dataseries_list.append(new_error_dataseries)
+        else:
+            new_error_dataseries_list.append(error_dataseries)
     return ScanData(scandata.fields,
                     [scaninfo.copy() for scaninfo in scandata.scaninfo_list],
                     new_dataseries_list,
@@ -246,6 +271,39 @@ def get_positive_time_delay_dataseries(dataseries, zero_delay_offset=0):
             newxvals[i] = x + LASER_REPRATE
     return DataSeries(zip(newxvals, oldyvals),
                       excluded_intervals=dataseries.excluded_intervals())
+
+
+# %% TODO: NEEDS TEST, SPHINX DOCUMENTATION
+def add_excluded_interval_scandata(scandata, start, stop, field_list=[0]):
+    new_dataseries_list = []
+    new_error_dataseries_list = []
+    for ind, dataseries in enumerate(scandata.dataseries_list):
+        if ind in field_list and dataseries is not None:
+            new_dataseries = \
+                get_excluded_interval_dataseries(dataseries, start, stop)
+            new_dataseries_list.append(new_dataseries)
+        else:
+            new_dataseries_list.append(dataseries)
+    for ind, error_dataseries in enumerate(scandata.error_dataseries_list):
+        if ind in field_list and error_dataseries is not None:
+            new_error_dataseries = \
+                get_excluded_interval_dataseries(error_dataseries, start, stop)
+            new_error_dataseries_list.append(new_error_dataseries)
+        else:
+            new_error_dataseries_list.append(error_dataseries)
+    return ScanData(scandata.fields,
+                    [scaninfo.copy() for scaninfo in scandata.scaninfo_list],
+                    new_dataseries_list,
+                    new_error_dataseries_list,
+                    [None for field in scandata.fields])  # invalidates fits
+
+
+def get_excluded_interval_dataseries(dataseries, start, stop):
+    datatuples = dataseries.datatuples(raw=True)
+    excluded_intervals_list = list(dataseries.excluded_intervals())
+    excluded_intervals_list.append(tuple([start, stop]))
+    return DataSeries(datatuples,
+                      excluded_intervals=excluded_intervals_list)
 
 
 # %% TODO: NEEDS TEST, SPHINX DOCUMENTATION

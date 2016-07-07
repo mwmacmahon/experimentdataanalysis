@@ -112,13 +112,13 @@ def fitfcn_two_exp_decay(t, pulse_amplitude, lifetime,
 # %% NEEDS SPHINX DOCUMENTATION
 def fitfcn_two_exp_sin_decay(t, pulse_amplitude, lifetime,
                              pulse_amplitude2, lifetime2,
-                             osc_period, phase, offset):
+                             osc_period, phase, slope, offset):
     """
     """
     def single_pulse_fcn(t_pulse):
         return (pulse_amplitude*np.exp(-t_pulse/lifetime) +
                 pulse_amplitude2*np.exp(-t_pulse/lifetime2)*np.cos(
-                                                t_pulse/osc_period + phase))
+                                        2*np.pi*t_pulse/osc_period + phase))
 
     last_t = t + LASER_REPRATE
     last_t_2 = t + 2*LASER_REPRATE
@@ -126,4 +126,4 @@ def fitfcn_two_exp_sin_decay(t, pulse_amplitude, lifetime,
     thispulse = single_pulse_fcn(t)
     lastpulse = single_pulse_fcn(last_t)
     lastpulse2 = single_pulse_fcn(last_t_2)
-    return offset + thispulse + lastpulse + lastpulse2
+    return offset + slope*t + thispulse + lastpulse + lastpulse2

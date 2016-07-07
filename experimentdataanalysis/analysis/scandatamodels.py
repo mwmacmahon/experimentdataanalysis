@@ -301,12 +301,15 @@ class SinusoidalSpinLifetimeModel(ScanDataModel):
         self.fitfunction = fitfcns.fitfcn_two_exp_sin_decay
         # params = pulse_amp1, lifetime1, pulse_amp2,
         #          lifetime2, osc_period, phase, offset
-        self.free_params = [True, True, True, True, True, True, False]
-        self.initial_params = [0.05, 50, 0.05, 2000, 800, 0, 0]
+        self.free_params = [True, True, True, True,
+                            True, True, True, True]
+        self.initial_params = [0.05, 50, 0.05, 2000, 800, 0, 0, 0]
         self.param_bounds = [(0, 1), (1, 200),
                              (0, 1), (10, 1e6),
-                             (600, 1000), (0, 2*np.pi), (-0.01, 0.01)]
-        self.error_thresholds = [None, None, None, None, None]
+                             (600, 1000), (0, 2*np.pi),
+                             (-1e-6, 1e-6), (-0.01, 0.01)]
+        self.error_thresholds = [None, None, None, None,
+                                 None, None, None, None]
         self.max_fcn_evals = 20000
         # keyword args override defaults
         for key, val in kwargs.items():

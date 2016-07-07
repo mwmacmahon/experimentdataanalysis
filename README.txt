@@ -50,3 +50,22 @@ plot display stuff - the live-fitting-in-the-fly is less important atm. anyway.
 
 7. perhaps get rid of the entire "scandata field ordering" system in favor of
     a name-based system. 
+
+
+
+
+
+
+
+
+tests to make:
+-operations on dataseries/scandata work correctly, in sequence. Such as:
+--making sure operations on scandata dataseries work properly, such as adding
+    excluded intervals and shifting times over. should be able to change
+    field indices affected correctly, and do many in sequence and have
+    correct result
+
+
+
+
+

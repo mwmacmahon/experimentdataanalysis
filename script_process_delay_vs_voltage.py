@@ -27,7 +27,7 @@ spin_lifetime_model = \
                         (810, 830), (0, 2*np.pi),
                         (-1e-6, 1e-6), (-0.01, 0.01)],
         error_thresholds=[None, None, 0.2, 2000, None, None, None, None],
-        xval_key="Voltage")
+        dim2_key="Voltage")
 
 
 # %% FILTER FUNCTIONS
@@ -99,7 +99,7 @@ def plot_scandata(scandata, field_index,
 #         (fields = measurement reading types)
 #         (for checkout of fits by eye)
 #     scandata_list = \
-#         analyzer.collapse_to_model_fit_scandata_list(filtered=True)
+#         analyzer.collapse_to_scandata_list(filtered=True)
 #     field_index = 0: usual lockin2x or w/e (w/ gaussian fit)
 #     field_index > 0: other measurements
 # 
@@ -108,7 +108,8 @@ def plot_scandata(scandata, field_index,
 #         (fields = calculated fit values)
 #         (for use of calculated fit values, e.g. lifetimes or gaussian widths)
 #     scandata_list = \
-#         analyzer.collapse_to_model_fit_scandata_list(filtered=True)
+#         analyzer.collapse_to_model_fit_scandata_list(new_scan_dimension,
+#                                                      filtered=True)
 #     field_index = 0: short decay - pulse amplitude
 #     field_index = 1: short decay - spin lifetime
 #     field_index = 2: long decay - pulse amplitude
@@ -123,7 +124,7 @@ if __name__ == "__main__":
                                     dirpath="C:\\Data\\160702\\delayscans_-6V_to_6V_noautocenter",
 #                                    dirpath="C:\\Data\\160702\\delayscans_-6V_to_6V",
                                     uncertainty_value=1e-4,
-                                    sort_key="Filepath"  # sort by consecutive runs
+                                    set_key="Voltage"  # group consecutive runs
                                     )
 #    analyzer.break_up_repeating_scandatasets()  # breaks up sets too much!
     analyzer.apply_transform_to_all_scandata(get_positive_time_delay_scandata,
@@ -139,27 +140,29 @@ if __name__ == "__main__":
         get_filter_fcn_no_super_long_lifetimes(threshold=5000))
     analyzer.add_filter_to_each_scandataset(
         get_filter_fcn_no_first_n_scans_in_series(num_ignored=1))
-    scandata_list = \
-        analyzer.collapse_to_model_fit_scandata_list(filtered=True)
+    collapsed_scandata_list = \
+        analyzer.collapse_to_model_fit_scandata_list(new_scan_type="[Unknown]",
+                                                     filtered=True)
     field_index = 3  # dataseries: x:voltage, y:single long lifetime fit value
     plt.figure()
     plt.hold(True)
-    for scandata in scandata_list:
+    for scandata in collapsed_scandata_list:
         plot_scandata(scandata, field_index, fmt="-bd")
 
     # LABEL GRAPH
     plt.xlabel("Applied Voltage (V)  |  Electric Field (V/500um)")
-    plt.ylabel("Spin polarization")  
+    plt.ylabel("Spin lifetime")  
 
+    
+    scandata_list = \
+        analyzer.collapse_to_scandata_list(filtered=True)
 
-# %%
-#if __name__ == "__main__":
 # %%  MULTICHANNEL ANALYSIS OF "C:\\Data\\160702\\delay_scans_-8V_to_8V"
     # LOAD DATA, ORGANIZE, AND FIT IN ANALYZER
     analyzer = ScanDataSetsAnalyzer(spin_lifetime_model,
                                     dirpath="C:\\Data\\160702\\delay_scans_-8V_to_8V",
                                     uncertainty_value=1e-4,
-                                    sort_key="MiddleScanCoord"  # sort by channel
+                                    set_key="MiddleScanCoord"  # group by channel
                                     )
 #    analyzer.break_up_repeating_scandatasets()  # breaks up sets too much!
     analyzer.apply_transform_to_all_scandata(get_positive_time_delay_scandata,
@@ -185,7 +188,8 @@ if __name__ == "__main__":
     analyzer.add_filter_to_each_scandataset(
         get_filter_fcn_only_one_channel(target_channel=1))
     scandata_list = \
-        analyzer.collapse_to_model_fit_scandata_list(filtered=True)
+        analyzer.collapse_to_model_fit_scandata_list(new_scan_type="[Unknown]",
+                                                     filtered=True)
     field_index = 3  # dataseries: x:voltage, y:single long lifetime fit value
     plt.figure()
     plt.hold(True)
@@ -197,7 +201,8 @@ if __name__ == "__main__":
     analyzer.add_filter_to_each_scandataset(
         get_filter_fcn_only_one_channel(target_channel=2))
     scandata_list = \
-        analyzer.collapse_to_model_fit_scandata_list(filtered=True)
+        analyzer.collapse_to_model_fit_scandata_list(new_scan_type="[Unknown]",
+                                                     filtered=True)
     for scandata in scandata_list:
         plot_scandata(scandata, field_index, label="Channel 2 (wired)", fmt=":bd")
 
@@ -206,7 +211,8 @@ if __name__ == "__main__":
     analyzer.add_filter_to_each_scandataset(
         get_filter_fcn_only_one_channel(target_channel=3))
     scandata_list = \
-        analyzer.collapse_to_model_fit_scandata_list(filtered=True)
+        analyzer.collapse_to_model_fit_scandata_list(new_scan_type="[Unknown]",
+                                                     filtered=True)
     for scandata in scandata_list:
         plot_scandata(scandata, field_index, label="Channel 3", fmt=":gd")
 
@@ -214,3 +220,5 @@ if __name__ == "__main__":
     plt.xlabel("Applied Voltage (V)  |  Electric Field (V/500um)")
     plt.ylabel("Spin polarization")
     plt.legend(loc='center right')
+
+    # SAVE SCANDATA

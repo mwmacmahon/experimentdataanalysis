@@ -31,7 +31,7 @@ class ScanDataSet:
         self.scandata_list = []
         self.scandata_filter_fcn_list = []
         self.chronological_key = "FastScanIndex"
-        self.xval_key = model.xval_key
+        self.dim2_key = model.dim2_key
         self.model_param_dataseries_list = None
         self.model_param_uncertainty_dataseries_list = None
         if model is not None:
@@ -41,7 +41,7 @@ class ScanDataSet:
         if len(self.scandata_list) > 1:
             # fix scandataset ordering errors arising from alphanumeric sorting
             primary_key = self.chronological_key
-            secondary_key = self.xval_key
+            secondary_key = self.dim2_key
             scandata_list_tuple, _ = \
                 scandata_iterable_sort(self.scandata_list,
                                        self.model.field_index,
@@ -104,8 +104,8 @@ class ScanDataSet:
         self.purge_failed_fit_scandata(field_index)
         # all remaining scandata should have FitData and be processable:
         # create dataseries of fit parameters & their uncertainties vs xval:
-        xval_key = self.xval_key
-        xvals = [scandata.scaninfo_list[0][xval_key]
+        dim2_key = self.dim2_key
+        xvals = [scandata.scaninfo_list[0][dim2_key]
                  for scandata in fit_scandata_list]
         fitparams = []
         fitparamstds = []
@@ -193,7 +193,7 @@ class ScanDataSet:
         else:
             return self.model_param_uncertainty_dataseries_list.copy()
 
-    def extract_scandata(self, filtered=True):
+    def extract_scandata(self, new_scan_type, filtered=True):
         params = self.get_model_param_dataseries_list(filtered)
         param_sigmas = \
             self.get_model_param_uncertainty_dataseries_list(filtered)
@@ -210,10 +210,11 @@ class ScanDataSet:
         for scaninfo in scaninfo_list:
             new_scaninfo = scaninfo.copy()  # rule #1: don't modify in place!
             new_scaninfo['FastScanType'] = scaninfo['MiddleScanType']
-#            new_scaninfo['MiddleScanType'] = "[N/A, fit-derived ScanData]"
-#            new_scaninfo['MiddleScanCoord'] = 0
-            new_scaninfo['MiddleScanType'] = self.model.xval_key
-            new_scaninfo['MiddleScanCoord'] = scaninfo[self.model.xval_key]
+            new_scaninfo['MiddleScanType'] = new_scan_type
+            try:
+                new_scaninfo['MiddleScanCoord'] = scaninfo[new_scan_type]
+            except KeyError:
+                new_scaninfo['MiddleScanCoord'] = "[Unknown]"
             updated_scaninfo_list.append(new_scaninfo)
         return ScanData(fields,
                         updated_scaninfo_list,
@@ -233,7 +234,7 @@ class ScanDataSetsAnalyzer:
     within that directory, not those belonging to its subdirectories.
     """
     def __init__(self, model, dirpath="", *, scandata_list=[],
-                 uncertainty_value=None, sort_key="Filepath"):
+                 uncertainty_value=None, set_key="Filepath"):
         self.set_model = model
         self.scandataset_list = []
         if scandata_list:
@@ -249,35 +250,43 @@ class ScanDataSetsAnalyzer:
                                                           model.field_index,
                                                           uncertainty_value)
                              for scandata in scandata_list]
-        self.load_scandata_list(scandata_list, model, sort_key)
+        self.load_scandata_list(scandata_list, model, set_key)
 
-    def load_scandata_list(self, scandata_list, model, sort_key="Filepath"):
+    def load_scandata_list(self, scandata_list, model, set_key="Filepath"):
         if len(scandata_list) == 0:
             raise TypeError("Empty scandata list provided to " +
                             "ScanDataSetsAnalyzer.")
         try:  # if numerical values for this sort key, pre-sort scandata list
             for scandata in scandata_list:
-                float(scandata.scaninfo_list[0][sort_key])
+                float(scandata.scaninfo_list[0][set_key])
+        except KeyError:
+            if set_key is None:
+                pass  # all scandata put into one set, ignore sorting
+            else:
+                raise KeyError("Invalid set_key for ScanDataSetsAnalyzer")
         except ValueError:
             scandata_list, _ = scandata_iterable_sort(scandata_list, 0,
-                                                      sort_key, sort_key,
+                                                      set_key, set_key,
                                                       numeric_sort=False)
         else:
             scandata_list, _ = scandata_iterable_sort(scandata_list, 0,
-                                                      sort_key, sort_key,
+                                                      set_key, set_key,
                                                       numeric_sort=True)
         scandata_list = list(scandata_list)
         current_scandataset = ScanDataSet("[default]", ScanDataModel())
         last_setname = ""
         for scandata in scandata_list:
             try:  # use sort key's value to group ScanData into ScanDataSets
-                setname = scandata.scaninfo_list[0][sort_key]
-                if sort_key == "Filepath":  # special case
+                setname = scandata.scaninfo_list[0][set_key]
+                if set_key == "Filepath":  # special case
                     setname = setname.split("\\")[-2]
             except KeyError:
-                print("Warning: ScanDataSet sort key not found in " +
-                      "ScanData! Sets may not be properly grouped")
-                setname = "key_error_set"
+                if set_key == None:
+                    setname = "All ScanData"                    
+                else:
+                    print("Warning: ScanDataSet sort key not found in " +
+                          "ScanData! Sets may not be properly grouped")
+                    setname = "key_error_set"
             if setname != last_setname:
                 current_scandataset.sort_scandata_list()
                 current_scandataset = ScanDataSet(setname, model)
@@ -335,7 +344,7 @@ class ScanDataSetsAnalyzer:
         new_scandataset_list = []
         for scandataset in self.scandataset_list:
             # now, group by x-values
-            xvals = [scandata.scaninfo_list[0][scandataset.xval_key]
+            xvals = [scandata.scaninfo_list[0][scandataset.dim2_key]
                      for scandata in scandataset.scandata_list]
             repeat_counts = [xvals[:ind].count(xvals[ind])
                              for ind in range(len(xvals))]
@@ -356,7 +365,7 @@ class ScanDataSetsAnalyzer:
                     new_scandataset.scandata_list = \
                         [scandataset.scandata_list[ind]
                          for ind in new_subdir_indices]
-                    new_scandataset.xval_key = scandataset.xval_key
+                    new_scandataset.dim2_key = scandataset.dim2_key
                     new_scandataset_list.append(new_scandataset)
             else:
                 new_scandataset_list.append(scandataset)
@@ -388,9 +397,11 @@ class ScanDataSetsAnalyzer:
                     for scandataset in self.scandataset_list),
                    [])
 
-    def collapse_to_model_fit_scandata_list(self, filtered=True,
+    def collapse_to_model_fit_scandata_list(self, new_scan_type,
+                                            filtered=True,
                                             ignore_empty_scandatasets=True):
-        scandata_list = [scandataset.extract_scandata(filtered)
+        scandata_list = [scandataset.extract_scandata(new_scan_type,
+                                                      filtered)
                          for scandataset in self.scandataset_list]
         if ignore_empty_scandatasets:
             return [scandata for scandata in scandata_list

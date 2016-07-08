@@ -25,7 +25,7 @@ class ScanDataModel:
     """
     def __init__(self, **kwargs):
         self.model_type = "specific_model_name"
-        self.xval_key = "MiddleScanCoord"  # coord spanning each ScanData_SET_
+        self.dim2_key = "MiddleScanCoord"  # coord spanning each ScanData_SET_
         self.field_index = 0
         self.fitfunction = None
         # params = DUMMY
@@ -97,7 +97,7 @@ class LinearFitModel(ScanDataModel):
     """
     def __init__(self, **kwargs):
         self.model_type = "fitfcn_simple_line"
-        self.xval_key = "Voltage"
+        self.dim2_key = "Voltage"
         self.field_index = 2
         self.fitfunction = fitfcns.fitfcn_simple_line
         # params = slope, offset
@@ -150,7 +150,7 @@ class GaussianModel(ScanDataModel):
     """
     def __init__(self, **kwargs):
         self.model_type = "1d_gaussian_with_linear_offset"
-        self.xval_key = "MiddleScanCoord"
+        self.dim2_key = "MiddleScanCoord"
         self.field_index = 0
         self.fitfunction = fitfcns.fitfcn_1d_gaussian_with_linear_offset
         # params = amplitude, x0, sigma, slope, offset
@@ -226,7 +226,7 @@ class SpinLifetimeModel(ScanDataModel):
     """
     def __init__(self, **kwargs):
         self.model_type = "fitfcn_two_exp_decay"
-        self.xval_key = "MiddleScanCoord"  # should be 3rd coord, but unknown!
+        self.dim2_key = "MiddleScanCoord"  # should be 3rd coord, but unknown!
         self.field_index = 3  # gaussian area
         self.fitfunction = fitfcns.fitfcn_two_exp_decay
         # params = pulse_amp1, lifetime1, pulse_amp2, lifetime2, offset
@@ -296,7 +296,7 @@ class SinusoidalSpinLifetimeModel(ScanDataModel):
     """
     def __init__(self, **kwargs):
         self.model_type = "fitfcn_two_exp_sin_decay"
-        self.xval_key = "Voltage"
+        self.dim2_key = "Voltage"
         self.field_index = 0  # gaussian area
         self.fitfunction = fitfcns.fitfcn_two_exp_sin_decay
         # params = pulse_amp1, lifetime1, pulse_amp2,

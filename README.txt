@@ -1,5 +1,25 @@
 TODO (no particular order): 
 
+0. ***update databrowser to:*** (most important)
+    A. not do any of this "primary field" bs
+    B. disable and hide all fitting stuff for now
+    C. make sure saving images works
+    D. make sure saving scandata/scandatasets works
+    E. implement viewing vs fit parameter
+
+0.1. fix sort: should be able to handle numeric OR non-numeric arguments for both priorities
+
+0.2.swap out directory choosing from simply looking for CSVs to a system that handles any input
+    will have to swap out most dcparsing calls for new ones to a source-agnostic function
+    which will go for JSON/pickle > csvs/tsvs, but can have specific reading type explicitly
+    given as a parameter (e.g. read this weird file format)
+
+0.3. switch from pickle to JSON for saving files
+
+0.4. better documentation/naming schemes for sorting/coordinates in scandatasets/scandatasetanalyzer/scandatamodels
+
+
+
 1.
 add unsorted & unfiltered checkboxes under plot (NOT related to fit; those can be filtered too except for fit param graph).
 for 2D, comes back to how to display multiple types: I think standard is to only show those conforming to selected dataseries

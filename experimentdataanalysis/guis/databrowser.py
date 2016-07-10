@@ -5,6 +5,8 @@ Created on Tue Mar  1 19:27:08 2016
 @author: Michael
 """
 
+import os, pkg_resources
+
 from matplotlib.backends.backend_qt4agg \
     import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
@@ -32,7 +34,10 @@ class DataBrowserWindow(QtGui.QMainWindow):
         app_saved_state object emitted from a previous instance.
         """
         super(DataBrowserWindow, self).__init__()
-        uic.loadUi('experimentdataanalysis\\guis\\ui_databrowser.ui', self)
+        resource_package = __name__
+        gui_filepath = pkg_resources.resource_filename(resource_package,
+                                                       "ui_databrowser.ui")
+        uic.loadUi(gui_filepath, self)
         self.ignore_input = True
         self.canvas = MPLCanvas(dpi=75)
         self.figure_container.addWidget(self.canvas)

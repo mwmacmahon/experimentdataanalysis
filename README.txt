@@ -1,3 +1,48 @@
+INSTALLATION AND DOCUMENTATION:
+-Should consider running from a virtual environment created from the
+    requirements.txt file. 
+-To create an environment in anaconda from requirements.txt that satisfies
+    said requirements, can type from command line in project directory:
+    "conda create --name [your_environment_name] --file requirements.txt"
+    and switch to it with "activate [your_environment_name]"
+-Can run spyder within said environment as well, as spyder is part of
+    said package list - "switch to environment on command line, then run
+    spyder" may be simplest method.
+-Command line "python setup.py develop" - create in current python environment
+    a fake package that links to the current work folder. Uninstall with
+    "python setup.py develop --uninstall"
+-Command line "python setup.py test" - run tests of everything in the tests
+    folder using pytest.
+-Command line "python setup.py install" - actually create a real install
+    with a snapshot of the current work folder copied into ./lib/sitepackages
+    not recommended, confuses installed version with work-in-progress version
+-Note install_requires line of the setuptools script is borked, preventing
+    an easy auto-install of required packages. Needs fixing, sorry.
+-Command line "make html" to rebuild documentation. When it exists.
+-Version info stored in top level __init__.py file as __version__
+
+
+VERSION CONTROL:
+-Standalone scripts for personal use don't necessarily need to be version
+    controlled at all, but any changes to the "experimentdataanalysis"
+    modules (bugfixes, added models, etc.) should be version controlled
+    both so we can benefit from each other's work and so we don't fragment
+    our code base.
+-Git can get complicated, so make sure you remember to checkout a new
+    branch _before_ making code changes! Working off the main branch is
+    not a good idea and you don't want to have to migrate your changes
+    to a separate branch later on, though anything is possible in Git
+    with enough internet research.
+-Git repository structure to follow the pattern at the following URL
+    (it's pretty standard):
+    http://nvie.com/posts/a-successful-git-branching-model/
+-"Main" branch is reserved for stable versions you would trust telling
+    someone to use who has no idea how the code works. If this were
+    experiment running code, this is what you run
+-Custom work should go on a new "feature" branch, from which some or all
+    changes can be merged into the working "develop" branch which 
+
+
 TODO (no particular order): 
 
 0. ***update databrowser to:*** (most important)

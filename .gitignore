@@ -2,12 +2,15 @@
 .spyderproject
 .spyderworkspace
 *.cache
+*.egg-info
+_build
+_static
+_templates
 
 # no compliled/visualstudio files either
 *.pyc
 __pycache__
 *.vs
-*.egg-info
 build
 dist
 

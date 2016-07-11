@@ -20,7 +20,7 @@ import pytest
 from experimentdataanalysis.analysis.multidataseriesprocessing \
     import scandata_iterable_fit
 import experimentdataanalysis.analysis.fitfunctions as fitfcns
-import experimentdataanalysis.parsing.dataclassparsing as dcparsing
+import experimentdataanalysis.parsing.dataseriesparsing as dsparsing
 
 
 # %% NON FIXTURE HELPER FUNCTIONS
@@ -32,7 +32,7 @@ def loadscandatalist():
     test_dir_path = __file__[:__file__.rfind("\\")]
     filepath = (test_dir_path + "\\representative3ddata")
     scandatalist = list(
-                    dcparsing.fetch_dir_as_unfit_scandata_iterator(filepath))
+                    dsparsing.fetch_dir_as_unfit_scandata_iterator(filepath))
     return scandatalist
 
 

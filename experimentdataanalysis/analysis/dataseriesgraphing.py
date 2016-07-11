@@ -2,77 +2,20 @@
 """
 Created on Wed Feb 24 00:27:59 2016
 
-NOTE: this library is not currently updated and is on the chopping block
-unless it gets actually updated to be in line with the rest of
-experimentdataanalysis.
+NOTE: this library is not currently used by anything, and may not follow
+the current practices of the rest of the library.
 
-It's still here because some of the code for saving and/or plotting using
-matplotlib may be useful in your own scripts.
+It's mostly here for useful code in saving and plotting data,
+or in case anyone wants to overhaul it and put it back into use.
 
 @author: Michael
 """
 
 import matplotlib.pyplot as plt
 
-from experimentdataanalysis.analysis.dataclasses \
-    import FitData, ScanData, DataSeries
-import experimentdataanalysis.parsing.dataclassparsing as dcparsing
-
 
 # %%
-def graph_fitted_csv(filepath=None,
-                     attribute='lockin2x',
-                     time_offset=False,
-                     fit_drift=False,
-                     dataseriesfitfunction=None,
-                     plot_options={}):
-    """
-    To use drift fitting, must send a function that accepts a fit_drift
-    flag as 2nd argument after dataseries and returns a tuple
-    (drift-corrected DataSeries, FitData) instead of just FitData
-    when flag is set to True.
-    """
-    scandata = dcparsing.fetch_csv_as_unfit_scandata(
-                            filepath, attribute)
-    if time_offset:
-        scandata = dcfitting.get_time_offset_scandata(scandata)
-    scandata = dcfitting.fit_scandata(scandata,
-                                      dataseriesfitfunction, fit_drift)
-    scandata = graph_scandata(scandata, plot_options)
-    return scandata
-
-
-def graph_fitted_csv_directory(directorypath=None,
-                               attribute='lockin2x',
-                               dataseriesfitfunction=None,
-                               time_offset=False,
-                               fit_drift=False,
-                               multiprocessing=False,
-                               plot_options={}):
-    """
-    To use drift fitting, must send a function that accepts a fit_drift
-    flag as 2nd argument after dataseries and returns a tuple
-    (drift-corrected DataSeries, FitData) instead of just FitData
-    when flag is set to True.
-    """
-    scandata_iterator = dcparsing.fetch_dir_as_unfit_scandata_iterator(
-                            directorypath, attribute)
-    if time_offset:
-        scandata_iterable = [dcfitting.get_time_offset_scandata(scandata)
-                             for scandata in scandata_iterator]
-    else:
-        scandata_iterable = list(scandata_iterator)
-    scandata_iterable = dcfitting.fit_scandata_iterable(
-                            scandata_iterable,
-                            dataseriesfitfunction,
-                            fit_drift)
-    graph_scandata_iterable(scandata_iterable, dataseriesfitfunction,
-                            fit_drift, multiprocessing, plot_options)
-    return scandata_iterable
-
-
-# %%
-def graph_scandata(scandata, field_index=0, plot_options={}):
+def plot_and_save_scandata(scandata, field_index=0, plot_options={}):
     """
     To use drift fitting, must send a function that accepts a fit_drift
     flag as 2nd argument after dataseries and returns a tuple
@@ -100,7 +43,8 @@ def graph_scandata(scandata, field_index=0, plot_options={}):
     return scandata
 
 
-def graph_scandata_iterable(scandata_iterable, field_index=0, plot_options={}):
+def plot_and_save_scandata_iterable(scandata_iterable,
+                                    field_index=0, plot_options={}):
     fig, ax = plt.subplots()
     for scandata in scandata_iterable:
         if scandata.fitdata_list[field_index] is not None:

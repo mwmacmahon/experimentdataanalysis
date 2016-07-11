@@ -21,8 +21,8 @@ VIRTUAL ENVIRONMENTS:
     "conda create --name [your_environment_name] --file requirements.txt"
     and switch to it with "activate [your_environment_name]"
 -Can run spyder within said environment as well, as spyder is part of
-    said package list - "switch to environment on command line, then run
-    spyder" may be simplest method. Can create shortcuts as well, look at
+    said package list - "switch to environment on command line, then enter
+    'spyder'" may be simplest method. Can create shortcuts as well, look at
     default Anaconda start menu shortcuts for examples.
 
 PACKAGE INSTALLATION:
@@ -70,6 +70,7 @@ VERSION CONTROL:
     develop/main branches affect other branches downstream!
 
 DOCUMENTATION:
+-Erm, none yet. Except this readme and function docstrings.
 -Working on implementing auto-generated documentation from the "docstrings"
     at the beginning of each python function/class/etc, using Sphinx.
 -Command line "make html" in project dir to rebuild documentation.
@@ -79,7 +80,7 @@ DOCUMENTATION:
     Both Sphinx and setup.py can read this variable; only git does not
     automatically tag version numbers (or even push version tags automatically)
 
-IMPLEMENTATION NOTES - ITERATORS AND ITERABLES:
+IMPLEMENTATION NOTES ON ITERATORS AND ITERABLES:
 -Most functions are set to accept iterables instead of say, lists. This means
     you can send it a list, a tuple, or even an iterator.
 -Returning iterators is good practice if you can lazily process it. However,
@@ -96,6 +97,12 @@ IMPLEMENTATION NOTES - ITERATORS AND ITERABLES:
     If code uses "list(fcn_returning_iterator_or_list)" everywhere it doesn't
     matter anyway, and processes like filtering tend to ruin the speedup.
     For our purposes the speed gains are unlikely to be worth the confusion.
+-EXCEPTION: Parsing modules should evaluate lazily, and return iterators
+    instead of lists. This is because one may want to process large amounts
+    of data (e.g. a hard drive's worth), and by putting all the data in a list
+    we force Python to read and store all the data at once!
+    Note databrowser.py and scandatasetprocessing.py keep all data loaded at
+    once, but future programs and modules by no means need to.
 -RECOMMENDATION: whenever accepting a list/iterator/whatever from a function,
     use something like "returned_list = list(returned_list)" or similar
     to ensure iterators, iterables, tuples, etc. all transformed into a list.
@@ -108,12 +115,20 @@ IMPLEMENTATION NOTES - ITERATORS AND ITERABLES:
 
 
 
-TODO (no particular order): 
-    -switch out dcgraphing/dcfitting/curvefitting everywhere
-    -redo tests with new structure, two-sign fitting...
-    -generalize file importing so it doesn't default to CSVs, perhaps
-        let users flag a data type or have a gateway function that detects
-        filetype and delegates to proper parsing function
+
+
+
+
+
+
+
+
+
+
+
+
+
+TODO SCRATCH NOTES(no particular order or organization): 
     -add JSON scandata saving!
 
 0. ***update databrowser to:*** (most important)
@@ -132,9 +147,6 @@ TODO (no particular order):
 
 0.3. switch from pickle to JSON for saving files
 
-0.4. better documentation/naming schemes for sorting/coordinates in scandatasets/scandatasetanalyzer/scandatamodels
-
-
 
 1.
 add unsorted & unfiltered checkboxes under plot (NOT related to fit; those can
@@ -144,7 +156,7 @@ add unsorted & unfiltered checkboxes under plot (NOT related to fit; those can
     filters of selected dataseries are used.
 
 2.
-add proper axes labels to databrowser
+add proper axes labels to databrowser 2D view. without crashing.
 
 3.
 fix data label parsing for 1D scan files (done?)
@@ -186,10 +198,6 @@ plot display stuff - the live-fitting-in-the-fly is less important atm. anyway.
 
 6. smarter file importation. perhaps use numpy's csv importation system?
 
-7. perhaps get rid of the entire "scandata field ordering" system in favor of
-    a name-based system. 
-
-
 
 
 
@@ -201,7 +209,7 @@ tests to make:
 --making sure operations on scandata dataseries work properly, such as adding
     excluded intervals and shifting times over. should be able to change
     field indices affected correctly, and do many in sequence and have
-    correct result
+    correct result. Empty scandata/dataseries should not crash anything.
 
 
 

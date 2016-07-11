@@ -11,7 +11,7 @@ from experimentdataanalysis.analysis.multidataseriesprocessing \
     import scandata_iterable_fit, scandata_iterable_sort
 from experimentdataanalysis.analysis.scandatamodels \
     import ScanDataModel
-import experimentdataanalysis.parsing.dataclassparsing as dcparsing
+import experimentdataanalysis.parsing.dataseriesparsing as dsparsing
 
 
 # %% NEEDS TESTS, SPHINX DOCUMENTATION
@@ -240,12 +240,12 @@ class ScanDataSetsAnalyzer:
             scandata_list = list(scandata_list)
         elif dirpath:
             scandata_list = \
-                list(dcparsing.fetch_dir_as_unfit_scandata_iterator(
+                list(dsparsing.fetch_dir_as_unfit_scandata_iterator(
                      directorypath=dirpath))
         else:
             raise TypeError("No data source provided to ScanDataSetsAnalyzer")
         if uncertainty_value:
-            scandata_list = [dcparsing.set_scandata_error(scandata,
+            scandata_list = [dsparsing.set_scandata_error(scandata,
                                                           model.field_index,
                                                           uncertainty_value)
                              for scandata in scandata_list]

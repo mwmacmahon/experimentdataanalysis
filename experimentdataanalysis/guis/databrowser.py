@@ -5,7 +5,7 @@ Created on Tue Mar  1 19:27:08 2016
 @author: Michael
 """
 
-import os, pkg_resources
+import pkg_resources
 
 from matplotlib.backends.backend_qt4agg \
     import FigureCanvasQTAgg as FigureCanvas
@@ -15,8 +15,8 @@ from PyQt4 import QtCore, QtGui, uic
 
 from experimentdataanalysis.analysis.dataclasses \
     import FitData, FitFunc, ScanData, DataSeries
-import experimentdataanalysis.analysis.dataclassgraphing as dcgraphing
-import experimentdataanalysis.parsing.dataclassparsing as dcparsing
+import experimentdataanalysis.analysis.dataseriesgraphing as dsgraphing
+import experimentdataanalysis.parsing.dataseriesparsing as dsparsing
 from experimentdataanalysis.guis.guistarter import QApplicationStarter
 
 
@@ -42,6 +42,7 @@ class DataBrowserWindow(QtGui.QMainWindow):
         self.figure_container.addWidget(self.canvas)
         # Set up combo boxes, load fit functions
         for cmbbox in [self.cmb_primarysort, self.cmb_secondarysort]:
+            # Feel free to add more!
             cmbbox.addItem('Channel')
             cmbbox.addItem('FastScanIndex')
             cmbbox.addItem('MiddleScanCoord')
@@ -63,8 +64,6 @@ class DataBrowserWindow(QtGui.QMainWindow):
                                         self.callback_update_selection)
         self.btn_sortdata.pressed.connect(
                                         self.callback_sort_scan_list)
-        self.btn_setprimary.pressed.connect(
-                                        self.callback_set_primary_datatype)
         self.btn_plot1d.toggled.connect(
                                         self.callback_update_plots)
         self.btn_plot2d.toggled.connect(
@@ -136,7 +135,7 @@ class DataBrowserWindow(QtGui.QMainWindow):
         self.statusBar.showMessage("Loading...")
         try:
             scandata_list = \
-                list(dcparsing.fetch_dir_as_unfit_scandata_iterator())
+                list(dsparsing.fetch_dir_as_unfit_scandata_iterator())
         # TODO: catch exceptions!
         except:
             self.ignore_input = False
@@ -157,7 +156,7 @@ class DataBrowserWindow(QtGui.QMainWindow):
         self.ignore_input = True
         self.statusBar.showMessage("Loading...")
         try:
-            scandata = dcparsing.fetch_csv_as_unfit_scandata()
+            scandata = dsparsing.fetch_csv_as_unfit_scandata()
         # TODO: catch exceptions!
         except:
             self.ignore_input = False
@@ -213,49 +212,8 @@ class DataBrowserWindow(QtGui.QMainWindow):
         self.current_scan_list_changed_since_last_update = True
         self.update_state()
 
-    def callback_set_primary_datatype(self):
-        if self.ignore_input:
-            return
-        self.ignore_input = True
-        if self.get_active_scandata() is not None:
-            self.statusBar.showMessage("Processing...")
-            newfield = self.cmb_datatype.currentText()
-            old_scandata_list = self.current_scan_list[:]  # DEEP COPY
-            new_scandata_list = []
-            for scandata in old_scandata_list:
-                if newfield in scandata.fields:
-                    new_scandata_list.append(scandata)
-            if old_scandata_list != new_scandata_list:
-                yndialog = QtGui.QMessageBox()
-                yndialog.setText("Warning - the following scans lack this " +
-                                 "field and will be removed:")
-                yndialog.setInformativeText(
-                    "\n".join(self.list_scandata.item(ind).text()
-                              for ind, scandata in enumerate(old_scandata_list)
-                              if scandata not in new_scandata_list))
-                yndialog.setStandardButtons(
-                    QtGui.QMessageBox.Cancel | QtGui.QMessageBox.Ok)
-                yndialog.setDefaultButton(QtGui.QMessageBox.Cancel)
-                ynresult = yndialog.exec_()
-                if ynresult != QtGui.QMessageBox.Ok:
-                    self.ignore_input = False
-                    self.statusBar.showMessage("Ready")
-                    return
-            # assume at this point all-clear to delete old data list
-            self.clear_all_scandata(suppress_update=True)
-            for scandata in new_scandata_list:
-                newscandata = dcparsing.move_scandata_attribute_to_front(
-                    scandata, newfield)
-                self.add_scandata_to_list(newscandata)
-            self.list_scandata.setCurrentRow(0)
-            self.temporary_fitdata_list = [None for x in new_scandata_list]
-            self.current_scan_list_changed_since_last_update = True
-            self.update_state()
-            self.ignore_input = False
-            self.statusBar.showMessage("Ready")
-
     def callback_sort_scan_list(self):
-        # TODO: delegate to another file, e.g. dataclassparsing
+        # TODO: delegate to another file, e.g. dataseriesparsing
         if self.ignore_input:
             return
         self.ignore_input = True
@@ -529,18 +487,34 @@ class DataBrowserWindow(QtGui.QMainWindow):
                 self.last_scaninfo = scaninfo.copy()
 
     def plot_scandata(self, scandata):
-        """Plot a 1D scandata's primary dataset"""
+        """Plot a 1D scandata's currently chosen dataset"""
         if scandata is not None:
-            ind = self.cmb_datatype.currentIndex()
             self.statusBar.showMessage("Plotting...")
             self.canvas.wipe()
-            dcgraphing.plot_scandata(scandata,
-                                     field_index=ind,
-                                     title=None,
-                                     datatype=scandata.fields[0],
-                                     axes=self.canvas.axes,
-                                     plot_options={'suppress_legend': True})
-            self.canvas.axes.set_aspect('auto')
+            field_index = self.cmb_datatype.currentIndex()
+            axes = self.canvas.axes
+            dataseries = scandata.dataseries_list[field_index]
+            error_dataseries = scandata.error_dataseries_list[field_index]
+            fitdata=scandata.fitdata_list[field_index]
+            if error_dataseries is not None:
+                axes.errorbar(dataseries.xvals(unfiltered=True),
+                              dataseries.yvals(unfiltered=True),
+                              error_dataseries.yvals(unfiltered=True), fmt='b.')
+            else:
+                axes.plot(dataseries.xvals(unfiltered=True),
+                          dataseries.yvals(unfiltered=True), 'b.')
+            try:
+                xlabel = scandata.scaninfo_list[field_index]['FastScanType']
+                axes.set_xlabel(xlabel)
+            except KeyError:
+                pass
+            axes.set_ylabel(scandata.fields[field_index])
+            if fitdata is not None:
+                axes.hold(True)
+                fitdataseries = fitdata.fitdataseries
+                axes.plot(fitdataseries.xvals(unfiltered=True),
+                          fitdataseries.yvals(unfiltered=True), 'r-')
+            axes.set_aspect('auto')
             self.canvas.figure.tight_layout()
             self.canvas.draw()
             self.statusBar.showMessage("Ready")
@@ -562,7 +536,6 @@ class DataBrowserWindow(QtGui.QMainWindow):
             refdatayvals = \
                 ref_scandata.dataseries_list[ind].yvals(unfiltered=True)
             plotdatalength = len(refdatayvals)
-            # TODO: delegate to plot_scandata_2d from dataclassgraphing
             data2d = []
             for scandata in scandata_list:
                 for ind, field in enumerate(scandata.fields):
@@ -573,7 +546,24 @@ class DataBrowserWindow(QtGui.QMainWindow):
                             data2d.append(datayvals)
             if data2d:
                 imageplot = self.canvas.axes.imshow(data2d,
-                                                    interpolation="nearest")
+                                                    interpolation="none",
+#                                                    extent=[min_x, max_x,  # TODO: axis ticks
+#                                                            max_y, min_y], 
+                                                    )
+#==============================================================================
+#                 # it seems labels on colorplots make the canvas very ornery
+#                 try:
+#                     xlabel = scandata.scaninfo_list[ind]['FastScanType']
+#                     self.canvas.axes.set_xlabel(xlabel)
+#                 except KeyError:
+#                     pass
+#                 try:
+#                     ylabel = scandata.scaninfo_list[ind]['MiddleScanType']
+#                     self.canvas.axes.set_ylabel(ylabel)
+#                 except KeyError:
+#                     pass
+#                 self.canvas.axes.title(plotfield)
+#==============================================================================
                 self.canvas.axes.set_aspect('auto')
                 self.canvas.figure.colorbar(imageplot)
                 self.canvas.figure.tight_layout()

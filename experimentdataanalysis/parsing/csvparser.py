@@ -72,6 +72,9 @@ def parse_csv_directory(directorypath, delimiter='\t'):
     Returns an iterator whose elements are tuples corresponding to each
     csv file in directory and subdirectories. Subdirectories' contents are
     guaranteed to be returned back-to-back.
+    
+    Operates lazily; only reads files when iterated.
+    
     Returned tuple contains the following:
     1st element: filepath (including filename)
     2nd element: result of parse_csv(filepath))

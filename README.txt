@@ -83,6 +83,8 @@ VERSION CONTROL:
     experiment running code, this is what you run
 -Custom work should go on a new "feature" branch, from which some or all
     changes can be merged into the working "develop" branch which 
+-"Release" branches should use "python setup.py develop" to update version
+    after changing top-level "__init__.py". Don't forget CHANGES.txt either.
 -Etiquette to be determined, but probably don't merge your branch into
     develop/main without talking to others. Can push your branches online
     without merging and affecting others' code, and changes to shared

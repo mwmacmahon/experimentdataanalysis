@@ -8,13 +8,17 @@ INSTALLATION:
     and online, and lets the rest of us see any proposed changes to be merged
     in.
 
-    First, create your new branch from command line (in project folder) with:
+    First, switch to the active development branch:
+        git checkout develop
+
+    Second, create your new branch from command line (in project folder) with:
         git checkout -b "[yourname]_[branchname]" develop
 
-    Second, set up your branch to allow you to host it online via:
+    Third, set up your branch to allow you to host it online via:
         git push --set-upstream origin "[yourname]_[branchname]"
 
-    e.g. "git checkout -b michael_incremental_updates develop"
+    e.g. "git checkout develop"
+         "git checkout -b michael_incremental_updates develop"
          "git push --set-upstream origin michael_incremental_updates"
 
 -Can swap between branches via "git checkout". "git fetch" and "git status"

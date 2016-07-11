@@ -1,13 +1,30 @@
 INSTALLATION:
 -Recommended python package manager is Anaconda for its simplicity.
     Python 3.5 is recommended; multiprocessing requires it!
--After setting up git, use "git clone" to pull a copy of directory onto
-    your computer, automatically set up to track shared online version,
-    updating whenever "git pull origin" is called. Can swap between
-    branches via "git checkout", and set up your own branch with
-    "git checkout -b [your_branch_name]". "git fetch" and "git status"
-    can be used liberally to keep track of changes both local and remote
-    and stay up to date.
+-After setting up Git, use "git clone" to pull a copy of directory onto
+    your computer, automatically set up to track shared online version.
+-Should immediately switch to a new custom branch with your name and upload
+    it. This keeps your changes local to your "branch" both on your computer
+    and online, and lets the rest of us see any proposed changes to be merged
+    in.
+
+    First, create your new branch from command line (in project folder) with:
+        git checkout -b "[yourname]_[branchname]" develop
+
+    Second, set up your branch to allow you to host it online via:
+        git push --set-upstream origin "[yourname]_[branchname]"
+
+    e.g. "git checkout -b michael_incremental_updates develop"
+         "git push --set-upstream origin michael_incremental_updates"
+
+-Can swap between branches via "git checkout". "git fetch" and "git status"
+     can be used liberally to keep track of changes both local and remote
+    and stay up to date. "git push origin" allows you to push your branch
+    online to be shared, and "git pull origin" updates your local copy to
+    stay current with the online version as long as there are no conflicts.
+-Please read the section on version control below!
+    
+
 
 VIRTUAL ENVIRONMENTS:
 -If changing code, consider running from a virtual environment - an
@@ -42,11 +59,13 @@ PACKAGE INSTALLATION:
     an easy auto-install of required packages. Needs fixing, sorry.
 
 VERSION CONTROL:
--Standalone scripts for personal use don't necessarily need to be version
+-Standalone scripts for personal use don't necessarily NEED to be version
     controlled at all, but any changes to the "experimentdataanalysis"
-    modules (bugfixes, added models, etc.) should be version controlled
+    modules (bugfixes, added models, etc.) need to be version controlled
     both so we can benefit from each other's work and so we don't fragment
     our code base.
+-Really, though, it can only help to keep everything under version control,
+    especially for syncing between computers and sharing with others.
 -Lots of git tutorials out there, I recommend learning the basics:
     "git clone", "git push/pull", "git checkout", "git commit -m 'message'",
     "git status", "git fetch/merge", "git add/rm"...it's a lot to take in,

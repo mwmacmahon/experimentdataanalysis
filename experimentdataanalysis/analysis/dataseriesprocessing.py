@@ -2,6 +2,9 @@
 """
 Created on Wed May  4 17:35:06 2016
 
+The module that handles actual data fitting. Makes heavy use of the
+FitData construct from dataclasses.py
+
 @author: vsih-lab
 """
 

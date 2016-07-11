@@ -133,6 +133,7 @@ class DataSeries(Sequence):
             unfiltered = True
             unsorted = True
         xvals, _ = self.datalists(unfiltered=unfiltered, unsorted=unsorted)
+        xvals = list(xvals)
         return xvals
 
     def yvals(self, *, unfiltered=False, unsorted=False, raw=False):
@@ -144,6 +145,7 @@ class DataSeries(Sequence):
             unfiltered = True
             unsorted = True
         _, yvals = self.datalists(unfiltered=unfiltered, unsorted=unsorted)
+        yvals = list(yvals)
         return yvals
 
     def datatuples(self, *, unfiltered=False, unsorted=False, raw=False):
@@ -151,11 +153,7 @@ class DataSeries(Sequence):
         """
         Return this instance's xvals and associated yvals, possibly
         filtered or in the original sorting used when this instance
-        was created. Note this is a completely lazy operation,
-        consisting of chained generator expressions.
-        CORRECTION: not actually lazy if filtered, due to generator problems.
-        Format is an iterator (t1,v1), (t2,v2), ..., identical to the
-        input format.
+        was created. Returns a list of 2-tuples.
         """
         if raw:
             unfiltered = True
@@ -172,14 +170,13 @@ class DataSeries(Sequence):
                 tuples = [(xval, yval)
                            for xval, yval in tuples
                            if xval < start or xval > end]
-        for tup in tuples:
-            yield tup
+        return tuples
 
     def datalists(self, *, unfiltered=False, unsorted=False, raw=False):
         """
         Return this instance's xvals and associated yvals, possibly
         filtered or in the original sorting used when this instance
-        was created.
+        was created. xvals and yvals are lists.
         Format is (xvals, yvals), identical to (xvals(), yvals())
         Consider using "pyplot.plot(*dataseries.datalists())" for plots
         """
@@ -201,14 +198,13 @@ class DataSeries(Sequence):
         Return this instance's list of excluded xval intervals.
         Note this is a completely lazy operation, consisting of
         chained generator expressions.
-        Format is an iterator (start, stop), (start,stop), ...,
+        Format is an list [(start, stop), (start,stop), ...],
         identical to the excluded_intervals input format.
         """
         if self._start_xvals is None:
-            return
+            return []
         else:
-            for start, end in zip(self._start_xvals, self._end_xvals):
-                yield start, end
+            return list(zip(self._start_xvals, self._end_xvals))
 
     def is_excluded(self, xval):
         if self._start_xvals is not None:

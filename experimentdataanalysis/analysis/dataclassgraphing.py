@@ -2,12 +2,18 @@
 """
 Created on Wed Feb 24 00:27:59 2016
 
+NOTE: this library is not currently updated and is on the chopping block
+unless it gets actually updated to be in line with the rest of
+experimentdataanalysis.
+
+It's still here because some of the code for saving and/or plotting using
+matplotlib may be useful in your own scripts.
+
 @author: Michael
 """
 
 import matplotlib.pyplot as plt
 
-import experimentdataanalysis.analysis.dataclassfitting as dcfitting
 from experimentdataanalysis.analysis.dataclasses \
     import FitData, ScanData, DataSeries
 import experimentdataanalysis.parsing.dataclassparsing as dcparsing

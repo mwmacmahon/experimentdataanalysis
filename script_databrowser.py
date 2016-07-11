@@ -8,8 +8,6 @@ from PyQt4 import QtCore, QtGui, uic
 
 from experimentdataanalysis.analysis.dataclasses \
     import FitData, FitFunc, ScanData, DataSeries
-import experimentdataanalysis.analysis.dataclassfitting as dcfitting
-import experimentdataanalysis.analysis.dataclassgraphing as dcgraphing
 import experimentdataanalysis.parsing.dataclassparsing as dcparsing
 import experimentdataanalysis.guis.databrowser as databrowser
 from experimentdataanalysis.guis.guistarter import QApplicationStarter

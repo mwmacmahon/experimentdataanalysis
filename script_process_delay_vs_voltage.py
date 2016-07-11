@@ -133,7 +133,7 @@ if __name__ == "__main__":
                                              start=7000, stop=15000)
     analyzer.apply_transform_to_all_scandata(add_excluded_interval_scandata,
                                              start=-15, stop=100)
-    analyzer.fit_all_scandata_to_model(multiprocessing=False)
+    analyzer.fit_all_scandata_to_model(multiprocessing=True)
 
     # APPLY FILTERS, PLOT CHANNEL LIFETIME FIT DATA
     analyzer.add_filter_to_each_scandataset(
@@ -149,9 +149,10 @@ if __name__ == "__main__":
     for scandata in collapsed_scandata_list:
         plot_scandata(scandata, field_index, fmt="-bd")
 
-    # LABEL GRAPH
+    # LABEL AND DISPLAY GRAPH
     plt.xlabel("Applied Voltage (V)  |  Electric Field (V/500um)")
     plt.ylabel("Spin lifetime")  
+    plt.show()
 
     
     scandata_list = \
@@ -216,9 +217,10 @@ if __name__ == "__main__":
     for scandata in scandata_list:
         plot_scandata(scandata, field_index, label="Channel 3", fmt=":gd")
 
-    # LABEL GRAPH
+    # LABEL AND DISPLAY GRAPH
     plt.xlabel("Applied Voltage (V)  |  Electric Field (V/500um)")
     plt.ylabel("Spin polarization")
     plt.legend(loc='center right')
+    plt.show()
 
     # SAVE SCANDATA

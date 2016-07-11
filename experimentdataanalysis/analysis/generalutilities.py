@@ -39,18 +39,17 @@ def multiprocessable_map(processfunction, input_arglist_iterable,
                          multiprocessing=False):
     """
     multiprocessing = False:
-    identical to
-    for input_args in input_arglist_iterable:
-        yield processfunction(*input_args)
+        output_list = []
+        for input_args in input_arglist_iterable:
+            output_list.append(processfunction(*input_args))
+        return output_list    
     ---
     multiprocessing = True:
     Generic ProcessPoolExecutor loop. Supports any arbitrary
-    function, whether processes or threads or faster may depend
+    function, whether processes or threads are faster may depend
     on the function and computer used.
     WARNING: pickle fails unless the input/output object classes
         are defined via IMPORT statement. Cannot define in module!
-    WARNING: do not call even indirectly from interpreter, run
-        script with main() method!
     WARNING: numpy's curve_map is not threadsafe in a way that may
         cause issues. Use multiprocessing instead (faster anyway)
     WARNING: pickle has to send the code to be run, and it looks
@@ -67,8 +66,9 @@ def multiprocessable_map(processfunction, input_arglist_iterable,
         that took a given function and filled in parameters.
         Still confused about the rules...
 
-    Generator yielding each of the outputs of the processfunction
-    acting on each input value.
+    Returns a list containing each of the outputs of the processfunction
+    acting on each input value, but performed in parallel using Python's
+    ProcessPoolExecutor
 
     Positional arguments:
         processfunction -- takes input_args, returns anything picklable
@@ -86,8 +86,9 @@ def multiprocessable_map(processfunction, input_arglist_iterable,
         elapsed_processing_time = time.time() - start_processing_time
         print('{} seconds elapsed during multiprocessing'.format(
                                                     elapsed_processing_time))
-        for output in output_iter:
-            yield output
+        return list(output_iter)
     else:
+        output_list = []
         for input_args in input_arglist_iterable:
-            yield processfunction(*input_args)
+            output_list.append(processfunction(*input_args))
+        return output_list

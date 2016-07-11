@@ -2,6 +2,10 @@
 """
 Created on Wed May  4 17:35:06 2016
 
+Handles fitting lists or iterables of scandata/dataseries, including
+multiprocessing support. Calls dataseriesprocessing.py for actual crunching
+of data, even when farming it out to multiprocessing_map.
+
 @author: vsih-lab
 """
 
@@ -60,12 +64,9 @@ def dataseries_iterable_fit(dataseries_iterable, fitfunction,
                         param_bounds, weights_dataseries, max_fcn_evals]
                        for dataseries, weights_dataseries in
                        zip(dataseries_list, weights_dataseries_list)]
-    output_iter = multiprocessable_map(dataseries_fit,
+    output_list = multiprocessable_map(dataseries_fit,
                                        input_args_list, multiprocessing)
-
-    #unpackage:
-    fitdata_list = list(output_iter)
-    return fitdata_list
+    return output_list
 
 # %% NEEDS TEST, SPHINX DOCUMENTATION
 def scandata_iterable_sort(scandata_iterable, field_index,

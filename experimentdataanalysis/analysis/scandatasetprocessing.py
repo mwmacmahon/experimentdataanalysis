@@ -53,7 +53,6 @@ class ScanDataSet:
         field_index = self.model.field_index
         self.purge_zero_error_scandata(field_index)
         fit_scandata_list = \
-            fit_scandata_list = \
                 scandata_iterable_fit(self.scandata_list,
                                       field_index,
                                       self.model.fitfunction,

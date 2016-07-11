@@ -14,12 +14,13 @@ Created on Fri Feb 26 06:44:22 2016
 @author: Michael
 """
 
+import numpy as np
 import pytest
 
-from experimentdataanalysis.analysis.dataclasses \
-    import FitData, ScanData, DataSeries
+from experimentdataanalysis.analysis.multidataseriesprocessing \
+    import scandata_iterable_fit
+import experimentdataanalysis.analysis.fitfunctions as fitfcns
 import experimentdataanalysis.parsing.dataclassparsing as dcparsing
-import experimentdataanalysis.analysis.dataclassfitting as dcfitting
 
 
 # %% NON FIXTURE HELPER FUNCTIONS
@@ -29,7 +30,7 @@ import experimentdataanalysis.analysis.dataclassfitting as dcfitting
 @pytest.fixture(scope="module")
 def loadscandatalist():
     test_dir_path = __file__[:__file__.rfind("\\")]
-    filepath = (test_dir_path + "\\representativetwocosdata")
+    filepath = (test_dir_path + "\\representative3ddata")
     scandatalist = list(
                     dcparsing.fetch_dir_as_unfit_scandata_iterator(filepath))
     return scandatalist
@@ -47,88 +48,31 @@ def loadscandatalist():
 
 
 # %% TESTS
-def test_no_multiprocessing_fit_scandata_list_twocos(loadscandatalist):
-    fitfunc = dcfitting.fit_dataseries_with_two_decaying_cos
-    output = dcfitting.fit_scandata_iterable(loadscandatalist,
-                                             dataseriesfitfunction=fitfunc,
-                                             fit_drift=True,
-                                             multiprocessing=False)
-    assert abs(next(output).fitdata[0].fitparamstds[0]) < 100000
-    output = dcfitting.fit_scandata_iterable(loadscandatalist,
-                                             dataseriesfitfunction=fitfunc,
-                                             fit_drift=False,
-                                             multiprocessing=False)
-    assert abs(next(output).fitdata[0].fitparamstds[0]) < 100000
-
-
-def test_no_multiprocessing_fit_scandata_list_onecos(loadscandatalist):
-    fitfunc = dcfitting.fit_dataseries_with_one_decaying_cos
-    output = dcfitting.fit_scandata_iterable([loadscandatalist[1]],
-                                             dataseriesfitfunction=fitfunc,
-                                             fit_drift=True,
-                                             multiprocessing=False)
-    assert abs(next(output).fitdata[0].fitparamstds[0]) < 100000
-    output = dcfitting.fit_scandata_iterable([loadscandatalist[1]],
-                                             dataseriesfitfunction=fitfunc,
-                                             fit_drift=False,
-                                             multiprocessing=False)
-    assert abs(next(output).fitdata[0].fitparamstds[0]) < 100000
-
-
-def test_multiprocessing_fit_scandata_list_twocos(loadscandatalist):
-    fitfunc = dcfitting.fit_dataseries_with_two_decaying_cos
-    output = dcfitting.fit_scandata_iterable(loadscandatalist,
-                                             dataseriesfitfunction=fitfunc,
-                                             fit_drift=True,
-                                             multiprocessing=True)
-    assert abs(next(output).fitdata[0].fitparamstds[0]) < 100000
-    output = dcfitting.fit_scandata_iterable(loadscandatalist,
-                                             dataseriesfitfunction=fitfunc,
-                                             fit_drift=False,
-                                             multiprocessing=True)
-    assert abs(next(output).fitdata[0].fitparamstds[0]) < 100000
-
-
-def test_multiprocessing_fit_scandata_list_onecos(loadscandatalist):
-    fitfunc = dcfitting.fit_dataseries_with_one_decaying_cos
-    output = dcfitting.fit_scandata_iterable([loadscandatalist[1]],
-                                             dataseriesfitfunction=fitfunc,
-                                             fit_drift=True,
-                                             multiprocessing=True)
-    assert abs(next(output).fitdata[0].fitparamstds[0]) < 100000
-    output = dcfitting.fit_scandata_iterable([loadscandatalist[1]],
-                                             dataseriesfitfunction=fitfunc,
-                                             fit_drift=False,
-                                             multiprocessing=True)
-    assert abs(next(output).fitdata[0].fitparamstds[0]) < 100000
-
-
-def test_multiprocessing_fit_no_fitfunc(loadscandatalist):
-    fitfunc = None
-    output = dcfitting.fit_scandata_iterable(loadscandatalist,
-                                             dataseriesfitfunction=fitfunc,
-                                             fit_drift=True,
-                                             multiprocessing=True)
-    assert next(output).fitdata[0] is None
-    output = dcfitting.fit_scandata_iterable(loadscandatalist,
-                                             dataseriesfitfunction=fitfunc,
-                                             fit_drift=False,
-                                             multiprocessing=True)
-    assert next(output).fitdata[0] is None
-
-
-def test_no_multiprocessing_fit_no_fitfunc(loadscandatalist):
-    fitfunc = None
-    output = dcfitting.fit_scandata_iterable(loadscandatalist,
-                                             dataseriesfitfunction=fitfunc,
-                                             fit_drift=True,
-                                             multiprocessing=False)
-    assert next(output).fitdata[0] is None
-    output = dcfitting.fit_scandata_iterable(loadscandatalist,
-                                             dataseriesfitfunction=fitfunc,
-                                             fit_drift=False,
-                                             multiprocessing=False)
-    assert next(output).fitdata[0] is None
+def test_fit_scandata_list(loadscandatalist):
+    output_list = scandata_iterable_fit(
+                    loadscandatalist,
+                    field_index=0,
+                    fitfunction=fitfcns.fitfcn_two_exp_sin_decay,
+                    free_params = [True, True, True, True,
+                                   True, True, True, True],
+                    initial_params = [0.002, 50, 0.002, 1000, 810, 0, 0, 0],
+                    param_bounds = [(-1, 1), (1, 200), (-1, 1), (10, 1e6),
+                                    (810, 830), (0, 2*np.pi),
+                                    (-1e-6, 1e-6), (-0.01, 0.01)],
+                    multiprocessing=False)
+    assert abs(output_list[0].fitdata_list[0].fitparamstds[0]) < 100000
+    output_list = scandata_iterable_fit(
+                    loadscandatalist,
+                    field_index=0,
+                    fitfunction=fitfcns.fitfcn_two_exp_sin_decay,
+                    free_params = [True, True, True, True,
+                                   True, True, True, True],
+                    initial_params = [0.002, 50, 0.002, 1000, 810, 0, 0, 0],
+                    param_bounds = [(-1, 1), (1, 200), (-1, 1), (10, 1e6),
+                                    (810, 830), (0, 2*np.pi),
+                                    (-1e-6, 1e-6), (-0.01, 0.01)],
+                    multiprocessing=True)
+    assert abs(output_list[0].fitdata_list[0].fitparamstds[0]) < 100000
 
 
 # JUST HERE FOR SYNTAX REFERENCE

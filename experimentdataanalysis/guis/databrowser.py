@@ -15,7 +15,6 @@ from PyQt4 import QtCore, QtGui, uic
 
 from experimentdataanalysis.analysis.dataclasses \
     import FitData, FitFunc, ScanData, DataSeries
-import experimentdataanalysis.analysis.dataclassfitting as dcfitting
 import experimentdataanalysis.analysis.dataclassgraphing as dcgraphing
 import experimentdataanalysis.parsing.dataclassparsing as dcparsing
 from experimentdataanalysis.guis.guistarter import QApplicationStarter
@@ -51,9 +50,6 @@ class DataBrowserWindow(QtGui.QMainWindow):
             cmbbox.addItem('Wavelength')
         self.cmb_primarysort.setCurrentIndex(0)
         self.cmb_secondarysort.setCurrentIndex(1)
-        self.fitfunc_list = dcfitting.get_dataseries_fit_list()
-        for fitfunc in self.fitfunc_list:
-            self.cmb_fitfcn.addItem(fitfunc.description)
         # Set up application signals
         self.btn_loadfile.pressed.connect(
                                         self.callback_add_file)

@@ -22,9 +22,10 @@ import experimentdataanalysis.parsing.dataclassparsing as dcparsing
 
 # %% NON FIXTURE HELPER FUNCTIONS
 def check_scandata_veracity(scandata, scancoord_index):
-    filepathinfo = dcparsing.analyze_scan_filepath(scandata.filepath)
-    assert scandata.scaninfo['Voltage'] == filepathinfo['Voltage']
-    scancoord_dataseries = scandata.dataseries[scancoord_index]
+    filepath = scandata.scaninfo_list[0]['Filepath']
+    filepathinfo = dcparsing.analyze_scan_filepath(filepath)
+    assert scandata.scaninfo_list[0]['Voltage'] == filepathinfo['Voltage']
+    scancoord_dataseries = scandata.dataseries_list[scancoord_index]
     for xval, yval in scancoord_dataseries.datatuples():
         assert abs(xval - yval) == 0  # should default to scancoord
 
@@ -37,7 +38,7 @@ def test_dir_path():
 @pytest.fixture(scope="module")
 def loadcsvdir():
     test_dir_path = __file__[:__file__.rfind("\\")]
-    filepath = (test_dir_path + "\\representativetwocosdata")
+    filepath = (test_dir_path + "\\representative3ddata")
     csvdirdata = csvparser.parse_csv_directory(filepath, delimiter='\t')
     filepath_list, rawcsvdata_list = zip(*csvdirdata)
     return filepath_list, rawcsvdata_list
@@ -56,7 +57,7 @@ def loadcsvdir():
 
 # %% TESTS
 def test_extract_scandata_iter_from_filepath(test_dir_path):
-    filepath = (test_dir_path + "\\representativetwocosdata")
+    filepath = (test_dir_path + "\\representative3ddata")
     scandatalist = dcparsing.fetch_dir_as_unfit_scandata_iterator(filepath)
     for scandata in scandatalist:
         check_scandata_veracity(scandata, scancoord_index=1)

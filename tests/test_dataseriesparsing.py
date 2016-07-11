@@ -3,9 +3,11 @@
 """
 Designed to test the dataclassparsing module.
 
-Run by typing the following in python while in the project directory:
-import pytest
-pytest.main(args=['-s'])
+Run from command line (recommended!) by inputting one of the following:
+py.test                                                [this runs all tests]
+python setup.py test                                   [this runs all tests]
+py.test "tests/[this_test_name].py"                    [this test only]
+python setup.py test -a "tests/[this_test_name].py"    [this test only]
 
 Created on Thu Feb 25 14:21:43 2016
 
@@ -15,14 +17,15 @@ Created on Thu Feb 25 14:21:43 2016
 import pytest
 
 import experimentdataanalysis.parsing.csvparser as csvparser
-import experimentdataanalysis.parsing.dataclassparsing as dcparsing
+import experimentdataanalysis.parsing.dataseriesparsing as dsparsing
 
 
 # %% NON FIXTURE HELPER FUNCTIONS
 def check_scandata_veracity(scandata, scancoord_index):
-    filepathinfo = dcparsing.analyze_scan_filepath(scandata.filepath)
-    assert scandata.scaninfo['Voltage'] == filepathinfo['Voltage']
-    scancoord_dataseries = scandata.dataseries[scancoord_index]
+    filepath = scandata.scaninfo_list[0]['Filepath']
+    filepathinfo = dsparsing.analyze_scan_filepath(filepath)
+    assert scandata.scaninfo_list[0]['Voltage'] == filepathinfo['Voltage']
+    scancoord_dataseries = scandata.dataseries_list[scancoord_index]
     for xval, yval in scancoord_dataseries.datatuples():
         assert abs(xval - yval) == 0  # should default to scancoord
 
@@ -35,7 +38,7 @@ def test_dir_path():
 @pytest.fixture(scope="module")
 def loadcsvdir():
     test_dir_path = __file__[:__file__.rfind("\\")]
-    filepath = (test_dir_path + "\\representativetwocosdata")
+    filepath = (test_dir_path + "\\representative3ddata")
     csvdirdata = csvparser.parse_csv_directory(filepath, delimiter='\t')
     filepath_list, rawcsvdata_list = zip(*csvdirdata)
     return filepath_list, rawcsvdata_list
@@ -54,8 +57,8 @@ def loadcsvdir():
 
 # %% TESTS
 def test_extract_scandata_iter_from_filepath(test_dir_path):
-    filepath = (test_dir_path + "\\representativetwocosdata")
-    scandatalist = dcparsing.fetch_dir_as_unfit_scandata_iterator(filepath)
+    filepath = (test_dir_path + "\\representative3ddata")
+    scandatalist = dsparsing.fetch_dir_as_unfit_scandata_iterator(filepath)
     for scandata in scandatalist:
         check_scandata_veracity(scandata, scancoord_index=1)
 
@@ -63,7 +66,7 @@ def test_extract_scandata_iter_from_filepath(test_dir_path):
 def test_extract_scandata_from_filepath(loadcsvdir):
     filepath_list, rawcsvdata_list = loadcsvdir
     for filepath in filepath_list:
-        scandata = dcparsing.fetch_csv_as_unfit_scandata(
+        scandata = dsparsing.fetch_csv_as_unfit_scandata(
                                     filepath, 'scancoord')
         check_scandata_veracity(scandata, scancoord_index=0)
 
@@ -71,7 +74,7 @@ def test_extract_scandata_from_filepath(loadcsvdir):
 def test_tryinvalidattribute_singlefile(loadcsvdir):
     filepath_list, rawcsvdata_list = loadcsvdir
     for filepath in filepath_list:
-        scandata = dcparsing.fetch_csv_as_unfit_scandata(
+        scandata = dsparsing.fetch_csv_as_unfit_scandata(
                                     filepath, 'invalid')
         check_scandata_veracity(scandata, scancoord_index=0)
 
@@ -81,7 +84,7 @@ def test_filenameparsing(test_dir_path):
                 "Experiment_Channel3_033XT-B11" +
                 "_819.0nm_30K_2Dscan_Voltage_DelayTime_run2\\" +
                 "Ind_1_DelayTime -400_to_6100 Voltage 2.5x.dat")
-    scaninfo = dcparsing.analyze_scan_filepath(filepath)
+    scaninfo = dsparsing.analyze_scan_filepath(filepath)
     print(scaninfo)
     assert scaninfo["Voltage"] == 2.5
     assert scaninfo["Channel"] == 3

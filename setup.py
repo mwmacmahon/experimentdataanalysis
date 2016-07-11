@@ -5,13 +5,13 @@ from __future__ import print_function
 from setuptools import setup, find_packages
 from setuptools.command.test import test as TestCommand
 import io
-import codecs
 import os
 import sys
 
 import experimentdataanalysis
 
 here = os.path.abspath(os.path.dirname(__file__))
+
 
 def read(*filenames, **kwargs):
     encoding = kwargs.get('encoding', 'utf-8')
@@ -24,16 +24,23 @@ def read(*filenames, **kwargs):
 
 long_description = read('README.txt', 'CHANGES.txt')
 
+
 class PyTest(TestCommand):
-    def finalize_options(self):
-        TestCommand.finalize_options(self)
-        self.test_args = []
-        self.test_suite = True
+    user_options = [('pytest-args=', 'a', "Arguments to pass to py.test")]
+
+    def initialize_options(self):
+        TestCommand.initialize_options(self)
+        self.pytest_args = []
+
+#    def finalize_options(self):
+#        TestCommand.finalize_options(self)
+#        self.pytest_args = []
+#        self.test_suite = True
 
     def run_tests(self):
         import pytest
         if __name__ == "__main__":
-            errcode = pytest.main(self.test_args)
+            errcode = pytest.main(self.pytest_args)
             sys.exit(errcode)
 
 setup(
@@ -44,15 +51,16 @@ setup(
     url='http://github.com/mwmacmahon/experimentdataanalysis',
     author='Michael Macmahon',
     author_email='mwmacmahon@gmail.com',
-    tests_require=['pytest'],  # actually setuptools borks multiprocessing :(
-    cmdclass = {'test': PyTest},  # better off running as python -m py.test
+    tests_require=['pytest'],     # seemed to have fixed multiprocessing issues
+    cmdclass = {'test': PyTest},  # but can always run as python -m py.test
     packages=find_packages(),
     include_package_data=True,
 
+#   TODO: GIVES AN ERROR, FIX:
+#    install_requires=[i.strip() for i in open("requirements.txt").readlines()],
 
 #    license='',
 #    setup_requires=[],
-#    install_requires=[],
 #    platforms='any',
 #    test_suite='experimentdataanalysis.test.test_experimentdataanalysis',
 #    scripts = [],
@@ -60,7 +68,7 @@ setup(
 #        'testing': ['pytest'],
 #    }
 
-    #  ONLY FOR SCRIPTS INSIDE MODULES, NOT FOR SCRIPT-OUTSIDE-OF-MODULE 
+    #  # ONLY FOR SCRIPTS INSIDE MODULES, NOT FOR SCRIPT-OUTSIDE-OF-MODULE 
     #entry_points={
     #    'console_scripts': [
     #        'experimentdataanalysis_databrowser = testscript_databrowser:main',

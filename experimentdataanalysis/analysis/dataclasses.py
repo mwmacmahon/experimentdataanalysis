@@ -12,8 +12,9 @@ from collections.abc import Sequence
 # %%
 # returned from curvefitting.py functions
 FitData = namedtuple("FitData", ["fitparams", "fitparamstds",
-                                 "fitparamstring", "fitdataseries"])
-# used to fit scandata in dataclassfitting.py functions
+                                 "fitparamstring", "fitdataseries",
+                                 "meansquarederror"])
+# used to fit scandata in dataclassfitting.py functions [DEPRECATED]
 FitFunc = namedtuple("FitFunc", ["description", "fitfunction",
                                  "fitparamlist", "fitargumentlist"])
 
@@ -23,22 +24,29 @@ FitFunc = namedtuple("FitFunc", ["description", "fitfunction",
 # "scaninfo" is a dict containing scan parameters, e.g. "Voltage: 5"
 # note "dataseries" and "fitdata" are PLURAL - a tuple of entries is
 # expected, and fields[i], dataseries[i], and fitdata[i] are correlated
-ScanData = namedtuple("ScanData", ["filepath", "scaninfo", "fields",
-                                   "dataseries", "fitdata"])
-## ALTERNATE: (just added a few convenience functions)
-#class ScanData(namedtuple("ScanData", ["filepath", "scaninfo", "fields",
-#                                       "dataseries", "fitdata"])):
-#    def primary_field(self):
-#        return self.fields[0]
-#
-#    def primary_dataseries(self):
-#        return self.dataseries[0]
-#
-#    def primary_fitdata(self):
-#        return self.fitdata[0]
+ScanData = namedtuple("ScanData", ["fields",
+                                   "scaninfo_list",
+                                   "dataseries_list",
+                                   "error_dataseries_list",
+                                   "fitdata_list"])
+# old:
+# ScanData = namedtuple("ScanData", ["filepath", "scaninfo", "fields",
+#                                    "dataseries", "fitdata"])
+
+# %% Helper fcns used by DataSeries equality operator:
+# NEEDS DESCRIPTION, TEST, SPHINX DOCUMENTATION
+def approx_equal(x, y, tol):
+    return abs(x - y) <= 0.5*(abs(x) + abs(y))*tol
 
 
-# %%
+# NEEDS DESCRIPTION, TEST, SPHINX DOCUMENTATION
+def approx_equal_lists(x_list, y_list, tol):
+    x_list = list(x_list)
+    y_list = list(y_list)
+    return all([approx_equal(x, y, tol) for (x, y) in zip(x_list, y_list)])
+
+
+# %% NEEDS TEST, SPHINX DOCUMENTATION
 class DataSeries(Sequence):
     """
     Defines an immutable data structure that contains two correlated
@@ -72,17 +80,25 @@ class DataSeries(Sequence):
         """
         # NOTE: unpack operation forces traversal of RHS. Important below...
         # TIMES AND VALUES
-        try:
-            xvals, yvals = zip(*datatuples)
-        except ValueError:
-            raise ValueError("all data elements must be in form (xval, yval)")
-        sortedxvallist = sorted(enumerate(xvals),
-                                key=lambda tuple: tuple[1])
-        self.map_to_sorted, self._xvals = zip(*sortedxvallist)  # unzip
-        unsortedxvallist = sorted(enumerate(self.map_to_sorted),
-                                  key=lambda tuple: tuple[1])
-        self.map_to_unsorted, _ = zip(*unsortedxvallist)  # unzip
-        self._yvals = tuple(yvals[index] for index in self.map_to_sorted)
+        datatuples = list(datatuples)
+        if len(datatuples) == 0:
+            self._xvals = []
+            self._yvals = []
+            self.map_to_sorted = []
+            self.map_to_unsorted = []
+        else:
+            try:
+                xvals, yvals = zip(*datatuples)
+            except ValueError:
+                raise ValueError("all data elements used to initialize " +
+                                 "DataSeries must be in form (xval, yval)")
+            sortedxvallist = sorted(enumerate(xvals),
+                                    key=lambda tuple: tuple[1])
+            self.map_to_sorted, self._xvals = zip(*sortedxvallist)  # unzip
+            unsortedxvallist = sorted(enumerate(self.map_to_sorted),
+                                      key=lambda tuple: tuple[1])
+            self.map_to_unsorted, _ = zip(*unsortedxvallist)  # unzip
+            self._yvals = tuple(yvals[index] for index in self.map_to_sorted)
 
         # EXCLUDED INTERVALS
         if excluded_intervals is not None:
@@ -117,6 +133,7 @@ class DataSeries(Sequence):
             unfiltered = True
             unsorted = True
         xvals, _ = self.datalists(unfiltered=unfiltered, unsorted=unsorted)
+        xvals = list(xvals)
         return xvals
 
     def yvals(self, *, unfiltered=False, unsorted=False, raw=False):
@@ -128,16 +145,15 @@ class DataSeries(Sequence):
             unfiltered = True
             unsorted = True
         _, yvals = self.datalists(unfiltered=unfiltered, unsorted=unsorted)
+        yvals = list(yvals)
         return yvals
 
     def datatuples(self, *, unfiltered=False, unsorted=False, raw=False):
+        #  TODO: fix it so that operation is lazy!
         """
         Return this instance's xvals and associated yvals, possibly
         filtered or in the original sorting used when this instance
-        was created. Note this is a completely lazy operation,
-        consisting of chained generator expressions.
-        Format is an iterator (t1,v1), (t2,v2), ..., identical to the
-        input format.
+        was created. Returns a list of 2-tuples.
         """
         if raw:
             unfiltered = True
@@ -148,18 +164,19 @@ class DataSeries(Sequence):
         else:
             tuples = zip(self._xvals, self._yvals)
         if not unfiltered and self._start_xvals is not None:
-            for start, end in zip(self._start_xvals,
-                                  self._end_xvals):
-                tuples = ((xval, yval) for xval, yval in tuples
-                          if xval < start or xval > end)
-        for tup in tuples:
-            yield tup
+            tuples = list(tuples)  # avoid chaining generators in for loop
+            for ind, (start, end) in enumerate(zip(self._start_xvals,
+                                                   self._end_xvals)):
+                tuples = [(xval, yval)
+                           for xval, yval in tuples
+                           if xval < start or xval > end]
+        return tuples
 
     def datalists(self, *, unfiltered=False, unsorted=False, raw=False):
         """
         Return this instance's xvals and associated yvals, possibly
         filtered or in the original sorting used when this instance
-        was created.
+        was created. xvals and yvals are lists.
         Format is (xvals, yvals), identical to (xvals(), yvals())
         Consider using "pyplot.plot(*dataseries.datalists())" for plots
         """
@@ -171,7 +188,7 @@ class DataSeries(Sequence):
                                                 unsorted=unsorted))
             xvals = list(xvals)
             yvals = list(yvals)
-        except ValueError:  # happens if all yvals are filtered out
+        except ValueError:  # happens if all empty or yvals are filtered out
             xvals = []
             yvals = []
         return xvals, yvals
@@ -181,14 +198,13 @@ class DataSeries(Sequence):
         Return this instance's list of excluded xval intervals.
         Note this is a completely lazy operation, consisting of
         chained generator expressions.
-        Format is an iterator (start, stop), (start,stop), ...,
+        Format is an list [(start, stop), (start,stop), ...],
         identical to the excluded_intervals input format.
         """
         if self._start_xvals is None:
-            return
+            return []
         else:
-            for start, end in zip(self._start_xvals, self._end_xvals):
-                yield start, end
+            return list(zip(self._start_xvals, self._end_xvals))
 
     def is_excluded(self, xval):
         if self._start_xvals is not None:
@@ -205,6 +221,15 @@ class DataSeries(Sequence):
         """
         return self.__class__(zip(self.xvals(raw=True),
                               self.yvals(raw=True)),
+                              excluded_intervals=self.excluded_intervals())
+
+    def copy_subset(self, index_list):
+        if any(ind > len(self) for ind in index_list):
+            print("Warning: DataSeries.copy_subset(...) index_list " +
+                  "parameter contains out of bounds indices, ignoring.")
+        return self.__class__([xypair
+                               for ind, xypair in enumerate(self(raw=True))
+                               if ind in index_list],
                               excluded_intervals=self.excluded_intervals())
 
     def __call__(self, *args, **kwargs):
@@ -246,8 +271,9 @@ class DataSeries(Sequence):
                 outputstr += " [EXCLUDED]"
         return outputstr
 
-    def __add__(self, other):
-        excluded_intervals = []
+    def general_numeric_fcn(self, other, function, fcn_verb):
+        fcn_verb = str(fcn_verb)
+        excluded_intervals = list(self.excluded_intervals())
         map_to_unsorted = self.map_to_unsorted
         if isinstance(other, Iterable):
             try:
@@ -257,13 +283,14 @@ class DataSeries(Sequence):
             except AttributeError:  # not a DataSeries
                 otherlist = list(other)
                 if len(otherlist) is not len(self):
-                    raise TypeError('attemped to add list of non-matching' +
+                    raise TypeError('attemped to ' + fcn_verb + ' ' +
+                                    'list of non-matching' +
                                     ' length to DataSeries instance')
             else:  # is a DataSeries
                 othermap = other.map_to_unsorted
                 if self._xvals != otherxvals:
                     raise TypeError('DataSeries instances have different' +
-                                    ' xvalues, so they cannot be added')
+                                    ' xvalues, so failed to ' + fcn_verb)
                 if self.map_to_unsorted != othermap:
                     print('Warning: combining two DataSeries instances' +
                           ' with different sort orders, resulting sort' +
@@ -271,33 +298,48 @@ class DataSeries(Sequence):
                     if self.map_to_unsorted == tuple(range(len(self))):
                         map_to_unsorted = othermap
                 # Combine filter lists, excluding duplicates
-                excluded_intervals = list(self.excluded_intervals())
                 excluded_intervals.extend(
                     interval for interval in other_intervals
                     if interval not in self.excluded_intervals())
-            newyvals = [yval + otherlist[index]
-                        for index, yval in enumerate(self._yvals)]
-            # Only unsort after adding sorted so 1:1 correspondence between
-            # identical xvals. This might be odd when adding a naked list,
+            # Only unsort after processing sorted so 1:1 correspondence between
+            # identical xvals. This might be odd when processing a naked list,
             # but better practice is to covert that list to DataSeries first.
             # Don't filter yvals at all, as we are setting filters above.
+            newyvals = [function(yval, otherlist[index])
+                        for index, yval in enumerate(self._yvals)]
             newyvals = [newyvals[i] for i in map_to_unsorted]
-        else:
-            newyvals = [yval + other for yval in self.yvals(unsorted=True,
-                                                            unfiltered=True)]
+        else:  # is a scalar
+            newyvals = [function(yval, other) for yval in self.yvals(raw=True)]
         newxvals = [self._xvals[i] for i in map_to_unsorted]
         return self.__class__(zip(newxvals, newyvals),
                               excluded_intervals=excluded_intervals)
+
+    def __add__(self, other):
+        fcn_verb = "add"
+        def fcn(x, y):
+            return x + y
+        return self.general_numeric_fcn(other, fcn, fcn_verb)
 
     def __sub__(self, other):
         return self.__add__(-1*other)
 
     def __mul__(self, other):
-        if isinstance(other, Iterable):
-            raise TypeError('Can only multiply DataSeries by a scalar value')
-        newyvals = [yval * other for yval in self.yvals(raw=True)]
-        return self.__class__(zip(self.xvals(raw=True), newyvals),
-                              excluded_intervals=self.excluded_intervals())
+        fcn_verb = "multiply"
+        def fcn(x, y):
+            return x * y
+        return self.general_numeric_fcn(other, fcn, fcn_verb)
+
+    def __div__(self, other):
+        fcn_verb = "divide"
+        def fcn(x, y):
+            return x / y
+        return self.general_numeric_fcn(other, fcn, fcn_verb)
+
+    def __pow__(self, other):
+        fcn_verb = "raise"
+        def fcn(x, y):
+            return x**y
+        return self.general_numeric_fcn(other, fcn, fcn_verb)
 
     def __radd__(self, other):
         return self.__add__(other)
@@ -318,3 +360,14 @@ class DataSeries(Sequence):
         newyvals = [abs(yval) for yval in self.yvals(raw=True)]
         return self.__class__(zip(self.xvals(raw=True), newyvals),
                               excluded_intervals=self.excluded_intervals())
+
+    def __eq__(self, other):
+        tol = 1e-6  # tolerance for equality of floating point numbers
+        try:
+            return all(
+                [approx_equal_lists(self.excluded_intervals(),
+                                    other.excluded_intervals(), tol),
+                 approx_equal_lists(self.xvals(), other.xvals(), tol),
+                 approx_equal_lists(self.yvals(), other.yvals(), tol)])
+        except AttributeError:  # not a DataSeries
+            return False

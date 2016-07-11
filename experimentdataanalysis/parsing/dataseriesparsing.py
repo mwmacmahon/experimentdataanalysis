@@ -15,30 +15,47 @@ from experimentdataanalysis.analysis.dataclasses \
 
 # %%
 def fetch_dir_as_unfit_scandata_iterator(directorypath=None,
-                                         attribute='lockin2x'):
+                                         attribute='lockin2x',
+                                         parser='csv'):
     """
     Takes a directory and returns an iterator, which upon each call gives
     the contents of a csv file in that directory or its subdirectories in
-    DataSeries form, along with the filename and filepath.
+    ScanData form. Other file types can be read via other parsers.
+    
+    Important note: parsers should return ITERATORS, NOT LISTS.
+    This function should parse that iterator one element at a time
+    and yield a corresponding scandata, so that in theory one could sort
+    through thousands of files with only one invocation of this function.
+        read file, convert to scandata, yield scandata, repeat...
+    See csvparser.py and the csv parsing "if" branch for an example.
 
     Yield format: (String filepath, String filename, DataSeries data)
 
     Keyword arguments:
     directorypath -- if given, the target directory. If not given, a
         GUI is used to select the directory. (default None)
-    attribute -- the csv column to be used for the DataSeries values.
-        (default 'lockin2x')
+    attribute -- if found, the given field will be moved to index 0
+        in the list (default 'lockin2x')
     """
-    # Grab raw data
-    if directorypath is not None:
-        csvfiles = csvparser.parse_csv_directory(directorypath, delimiter='\t')
-    else:
-        csvfiles = csvparser.parse_csv_directory_gui('C:\\Data\\',
+    if parser == 'csv':  # default case: csv files
+        if directorypath is not None:
+            csvfiles = csvparser.parse_csv_directory(directorypath,
                                                      delimiter='\t')
-    for filepath, rawdata in csvfiles:
-        scandata = parsed_csv_to_unfit_scandata(filepath, rawdata, attribute)
-        yield scandata
-
+        else:
+            csvfiles = csvparser.parse_csv_directory_gui('C:\\Data\\',
+                                                         delimiter='\t')
+        # NOTE: csvfiles is an iterator, only reads one
+        # file on demand each time through loop:
+        for filepath, tabledata in csvfiles:
+            scandata = tabledata_to_unfit_scandata(filepath,
+                                                   tabledata, attribute)
+            yield scandata
+#    elif parser == 'xxx':
+#    elif parser == 'yyy':
+#    elif parser == 'zzz':
+    else:
+        raise AttributeError("fetch_dir_as_unfit_scandata_iterator: parsing " +
+                             "type invalid or not given.")
 
 # %%
 def fetch_csv_as_unfit_scandata(filepath=None,
@@ -49,20 +66,26 @@ def fetch_csv_as_unfit_scandata(filepath=None,
     else:
         filepath, rawdata = csvparser.parse_csv_gui('C:\\Data\\',
                                                     delimiter='\t')
-    scandata = parsed_csv_to_unfit_scandata(filepath, rawdata, attribute)
+    scandata = tabledata_to_unfit_scandata(filepath, rawdata, attribute)
     return scandata
 
 
 # %%
-def parsed_csv_to_unfit_scandata(filepath, rawdata, attribute='lockin2x'):
+def tabledata_to_unfit_scandata(filepath, rawdata, attribute='lockin2x'):
     colnames, coldata = rawdata
     # Assemble ScanData
+    fields = list(colnames)
     scaninfo = analyze_scan_filepath(filepath)
-    fields = tuple(colnames)
-    dataseries = tuple(DataSeries(zip(coldata[0], column))
-                       for column in coldata)
-    fitdata = tuple(None for name in colnames)
-    scandata = ScanData(filepath, scaninfo, fields, dataseries, fitdata)
+    scaninfo_list = [scaninfo.copy() for field in fields]
+    dataseries_list = list(DataSeries(zip(coldata[0], column))
+                           for column in coldata)
+    error_dataseries_list = [None for field in fields]
+    fitdata_list = [None for field in fields]
+    scandata = ScanData(fields,
+                        scaninfo_list,
+                        dataseries_list,
+                        error_dataseries_list,
+                        fitdata_list)
     sorted_scandata = move_scandata_attribute_to_front(scandata, attribute)
     return sorted_scandata
 
@@ -81,12 +104,45 @@ def move_scandata_attribute_to_front(scandata, attribute):
     rawdata_indices = [attribute_index] + rawdata_indices
 
     # Assemble ScanData
-    filepath = scandata.filepath
-    scaninfo = analyze_scan_filepath(scandata.filepath)
-    fields = tuple(scandata.fields[ind] for ind in rawdata_indices)
-    dataseries = tuple(scandata.dataseries[ind] for ind in rawdata_indices)
-    fitdata = tuple(scandata.fitdata[ind] for ind in rawdata_indices)
-    newscandata = ScanData(filepath, scaninfo, fields, dataseries, fitdata)
+    fields = list(scandata.fields[ind]
+                  for ind in rawdata_indices)
+    scaninfo_list = list(scandata.scaninfo_list[ind].copy()
+                         for ind in rawdata_indices)
+    dataseries_list = list(scandata.dataseries_list[ind]
+                           for ind in rawdata_indices)
+    error_dataseries_list = list(scandata.error_dataseries_list[ind]
+                                 for ind in rawdata_indices)
+    fitdata_list = list(scandata.fitdata_list[ind]
+                        for ind in rawdata_indices)
+    newscandata = ScanData(fields,
+                           scaninfo_list,
+                           dataseries_list,
+                           error_dataseries_list,
+                           fitdata_list)
+    return newscandata
+
+
+# %%
+def set_scandata_error(scandata, field_index, uncertainty_value):
+    """
+    For a given field index, sets the scandata's error_dataseries_list
+    entry to a copy of the dataseries_list entry, but with all y-values
+    replaced by the given uncertainty_value
+    """
+    reference_series = scandata.dataseries_list[field_index]
+    xvals_list = list(reference_series.xvals(raw=True))
+    yvals_list = [uncertainty_value for x in xvals_list]
+    intervals = reference_series.excluded_intervals()
+    new_error_dataseries = DataSeries(zip(xvals_list, yvals_list),
+                                      excluded_intervals=intervals)
+
+    error_dataseries_list = list(scandata.error_dataseries_list)
+    error_dataseries_list[field_index] = new_error_dataseries
+    newscandata = ScanData(scandata.fields,
+                           scandata.scaninfo_list,
+                           scandata.dataseries_list,
+                           error_dataseries_list,
+                           scandata.fitdata_list)
     return newscandata
 
 

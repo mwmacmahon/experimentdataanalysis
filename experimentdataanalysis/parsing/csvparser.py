@@ -31,24 +31,39 @@ def parse_csv(filepath, delimiter='\t'):
     """
     with open(filepath, newline='') as csvfile:
         csvreader = csv.reader(csvfile, delimiter=delimiter)
-        firstrow = next(csvreader)
-        ncols = len(firstrow)
-        if all(not is_numeric(value) for value in firstrow):  # row is names
-            columnheaders = firstrow
-            columndata = [[] for col in range(ncols)]
-        else:  # row is data
-            columnheaders = ["Column {}".format(x + 1) for x in range(ncols)]
-            columndata = [[float(value)] for value in firstrow]
-        for row in csvreader:
-            if len(row) >= ncols:  # ignore empty crap rows, such as at end
-                for colindex, value in enumerate(row[:ncols]):  # or extra ""s
-                    try:
-                        columndata[colindex].append(float(value))
-                    except ValueError:
-                        columndata[colindex].append(value)
-        csvrawdata = RawData(tuple(columnheaders),
-                             tuple(tuple(col) for col in columndata))
-        return filepath, csvrawdata
+        csvrows = [row for row in csvreader]  # read file into memory
+    csvrows = [[col.strip() for col in row]  # strip whitespace and newlines
+               for row in csvrows]
+    csvrows = [row for row in csvrows  # excise any rows with no values
+               if any(row)]
+
+    ncols = 1  # find number of rows as # of cols in last non-footer line
+    table_start = 0
+    table_end = 0
+    for rownum, row in reversed(list(enumerate(csvrows))):  # note: 2x RAM used
+        if ncols == 1:
+            ncols = len(row)
+            table_end = rownum + 1
+        elif ncols == len(row):
+            table_start = rownum
+        else:
+            break
+    headerfooterrows = csvrows[:table_start] + csvrows[table_end:]
+    headerfooterstr = "\n".join(" ".join(row)
+                                for row in headerfooterrows)
+
+    if not all(is_numeric(col) for col in csvrows[table_start]):  # header row
+        colheaders = tuple(csvrows[table_start])
+        table_start += 1
+    else:
+        colheaders = tuple("Column " + str(colnum + 1)
+                           for colnum in range(ncols))
+    coltuples = tuple(tuple(float(row[colnum])
+                            for row in csvrows[table_start:table_end])
+                      for colnum in range(ncols))
+
+    csvrawdata = RawData(colheaders, coltuples)
+    return filepath, headerfooterstr, csvrawdata
 
 
 # %%
@@ -72,9 +87,9 @@ def parse_csv_directory(directorypath, delimiter='\t'):
     Returns an iterator whose elements are tuples corresponding to each
     csv file in directory and subdirectories. Subdirectories' contents are
     guaranteed to be returned back-to-back.
-    
+
     Operates lazily; only reads files when iterated.
-    
+
     Returned tuple contains the following:
     1st element: filepath (including filename)
     2nd element: result of parse_csv(filepath))

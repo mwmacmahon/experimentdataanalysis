@@ -32,7 +32,8 @@ def parse_csv(filepath, delimiter='\t'):
     with open(filepath, newline='') as csvfile:
         csvreader = csv.reader(csvfile, delimiter=delimiter)
         csvrows = [row for row in csvreader]  # read file into memory
-    csvrows = [[col.strip() for col in row]  # strip whitespace and newlines
+    csvrows = [[col.strip() for col in row  # no whitespace, newlines, blanks
+                if col.strip() != ""]
                for row in csvrows]
     csvrows = [row for row in csvrows  # excise any rows with no values
                if any(row)]
@@ -58,10 +59,12 @@ def parse_csv(filepath, delimiter='\t'):
     else:
         colheaders = tuple("Column " + str(colnum + 1)
                            for colnum in range(ncols))
-    coltuples = tuple(tuple(float(row[colnum])
-                            for row in csvrows[table_start:table_end])
-                      for colnum in range(ncols))
-
+    try:
+        coltuples = tuple(tuple(float(row[colnum])
+                                for row in csvrows[table_start:table_end])
+                          for colnum in range(ncols))
+    except ValueError:
+        raise ValueError("csvparser: non-numeric value in table contents")
     csvrawdata = RawData(colheaders, coltuples)
     return filepath, headerfooterstr, csvrawdata
 

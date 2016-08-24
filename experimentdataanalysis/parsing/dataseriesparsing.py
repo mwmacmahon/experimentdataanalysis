@@ -15,13 +15,14 @@ from experimentdataanalysis.analysis.dataclasses \
 
 # %%
 def fetch_dir_as_unfit_scandata_iterator(directorypath=None,
-                                         attribute='lockin2x',
-                                         parser='csv'):
+                                         attribute='',
+                                         delimiter=None,
+                                         parser='tsv'):
     """
     Takes a directory and returns an iterator, which upon each call gives
     the contents of a csv file in that directory or its subdirectories in
     ScanData form. Other file types can be read via other parsers.
-    
+
     Important note: parsers should return ITERATORS, NOT LISTS.
     This function should parse that iterator one element at a time
     and yield a corresponding scandata, so that in theory one could sort
@@ -37,45 +38,66 @@ def fetch_dir_as_unfit_scandata_iterator(directorypath=None,
     attribute -- if found, the given field will be moved to index 0
         in the list (default 'lockin2x')
     """
-    if parser == 'csv':  # default case: csv files
+    if parser == 'tsv':  # default case: tsv files
+        if not delimiter:
+            delimiter = '\t'
         if directorypath is not None:
             csvfiles = csvparser.parse_csv_directory(directorypath,
-                                                     delimiter='\t')
+                                                     delimiter)
         else:
             csvfiles = csvparser.parse_csv_directory_gui('C:\\Data\\',
-                                                         delimiter='\t')
+                                                         delimiter)
         # NOTE: csvfiles is an iterator, only reads one
         # file on demand each time through loop:
-        for filepath, tabledata in csvfiles:
-            scandata = tabledata_to_unfit_scandata(filepath,
+        for filepath, headerfooterstr, tabledata in csvfiles:
+            scandata = tabledata_to_unfit_scandata(filepath, headerfooterstr,
                                                    tabledata, attribute)
             yield scandata
-#    elif parser == 'xxx':
-#    elif parser == 'yyy':
-#    elif parser == 'zzz':
+#    elif parser == '???':
+#        if not delimiter:
+#            delimiter = 'vOv'
+#       ...
+#       yield scandata
     else:
         raise AttributeError("fetch_dir_as_unfit_scandata_iterator: parsing " +
                              "type invalid or not given.")
 
+
 # %%
 def fetch_csv_as_unfit_scandata(filepath=None,
-                                attribute='lockin2x'):
-    # Grab raw data
-    if filepath is not None:
-        filepath, rawdata = csvparser.parse_csv(filepath, delimiter='\t')
+                                attribute='',
+                                delimiter=None,
+                                parser='tsv'):
+    if parser == 'tsv':  # default case: tsv files
+        if not delimiter:
+            delimiter = '\t'
+        if filepath is not None:
+            filepath, headerfooterstr, tabledata = \
+                csvparser.parse_csv(filepath, delimiter)
+        else:
+            filepath, headerfooterstr, tabledata = \
+                csvparser.parse_csv_gui('C:\\Data\\', delimiter)
+        scandata = tabledata_to_unfit_scandata(filepath, headerfooterstr,
+                                               tabledata, attribute)
+        return scandata
+#    elif parser == '???':
+#        if not delimiter:
+#            delimiter = 'vOv'
+#       ...
+#       yield scandata
     else:
-        filepath, rawdata = csvparser.parse_csv_gui('C:\\Data\\',
-                                                    delimiter='\t')
-    scandata = tabledata_to_unfit_scandata(filepath, rawdata, attribute)
-    return scandata
+        raise AttributeError("fetch_csv_as_unfit_scandata: parsing " +
+                             "type invalid or not given.")
 
 
 # %%
-def tabledata_to_unfit_scandata(filepath, rawdata, attribute='lockin2x'):
+def tabledata_to_unfit_scandata(filepath, headerfooterstr,
+                                rawdata, attribute=''):
     colnames, coldata = rawdata
     # Assemble ScanData
     fields = list(colnames)
     scaninfo = analyze_scan_filepath(filepath)
+    scaninfo = analyze_string_for_dict_pairs(headerfooterstr, scaninfo)
     scaninfo_list = [scaninfo.copy() for field in fields]
     dataseries_list = list(DataSeries(zip(coldata[0], column))
                            for column in coldata)
@@ -95,9 +117,10 @@ def move_scandata_attribute_to_front(scandata, attribute):
     try:
         attribute_index = scandata.fields.index(attribute)
     except ValueError:  # invalid attribute, so no matching index found
-        print("Warning: Attribute {} not found in ".format(attribute) +
-              "csv file, order from csv file will be kept.")
         attribute_index = 0
+        # too noisy:
+        # print("Warning: Attribute {} not found in ".format(attribute) +
+        #       "csv file, order from csv file will be kept.")
     # Work out field ordering based on given attribute - attribute to front
     rawdata_indices = list(range(len(scandata.fields)))
     rawdata_indices.remove(attribute_index)
@@ -147,32 +170,37 @@ def set_scandata_error(scandata, field_index, uncertainty_value):
 
 
 # %%
-def analyze_scan_filepath(filepath):
+def analyze_scan_filepath(filepath, scaninfo={}, keywordlists=None):
     """
     Scans the filepath (including filename) of a scan, and returns
     a dict containing all the info and tags it can match.
 
     Custom keyword lists can be passed by the keywordlists keyword
-    argument, where None for a keywordlist type means
+    argument, where None for a keywordlist type means use defaults
     """
-    scaninfo = {'Filepath': filepath}
+    scaninfo['Filepath'] = filepath
     scaninfo['File Last Modified'] = time.ctime(os.path.getmtime(filepath))
-    # SEARCH TERMS:
-    # 1. If first string found, register second string as
-    #    tag containing third string/value
-    this_element_keyword_list = []
-    # 2. Grab next element(s) if this one CONTAINS first string,
-    #    tag next element(s) as second string(s)
-    next_element_keyword_list = [("Voltage", "Voltage"),
-                                 ("Ind", "FastScanIndex"),
-                                 ("2Dscan", ["MiddleScanType",
-                                             "FastScanType"])]
-    # 3. Grab this element if it CONTAINS first string,
-    #    tag remainder as second string
-    inside_this_element_keyword_list = [("Channel", "Channel"),
-                                        ("K", "SetTemperature"),
-                                        ("nm", "Wavelength"),
-                                        ("x.dat", "MiddleScanCoord")]
+    if keywordlists:
+        this_element_keyword_list, \
+            next_element_keyword_list, \
+            inside_this_element_keyword_list = keywordlists
+    else:
+        # SEARCH TERMS:
+        # 1. If first string found, register second string as
+        #    tag containing third string/value
+        this_element_keyword_list = []
+        # 2. Grab next element(s) if this one CONTAINS first string,
+        #    tag next element(s) as second string(s)
+        next_element_keyword_list = [("Voltage", "Voltage"),
+                                     ("Ind", "FastScanIndex"),
+                                     ("2Dscan", ["MiddleScanType",
+                                                 "FastScanType"])]
+        # 3. Grab this element if it CONTAINS first string,
+        #    tag remainder as second string
+        inside_this_element_keyword_list = [("Channel", "Channel"),
+                                            ("K", "SetTemperature"),
+                                            ("nm", "Wavelength"),
+                                            ("x.dat", "MiddleScanCoord")]
     for segment in filepath.split("\\"):
         # get rid of idiosyncratic delimiters by swapping with _
         segment = segment.replace(" ", "_")
@@ -210,4 +238,26 @@ def analyze_scan_filepath(filepath):
                     except ValueError:
                         value = value
                     scaninfo[tag] = value
+    return scaninfo
+
+
+# %%
+def analyze_string_for_dict_pairs(infostr, scaninfo={}):
+    """
+    Currently looks for key, value pairs in form "key: value" in the
+    provided strings and adds them to the dict given (or otherwise
+    creates a new dict).
+    """
+#    raise NotImplementedError("implement string dict pair finding ASAP!")
+    strrows = infostr.splitlines()
+    for row in strrows:
+        key, value = "", ""
+        try:
+            key, value = row.split(":")
+        except ValueError:
+            pass
+        if key:
+            key = key.strip()
+            value = value.strip()
+            scaninfo[key] = value
     return scaninfo

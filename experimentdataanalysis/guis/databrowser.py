@@ -369,14 +369,20 @@ class DataBrowserWindow(QtGui.QMainWindow):
         self.statusBar.showMessage("Ready")
 
     def update_datatype_box_target(self, scandata):
+        last_datatype_ind = self.cmb_datatype.currentIndex()
+        last_datatype_ind = max(last_datatype_ind, 0)  # ensure not -1
         last_datatype = self.cmb_datatype.currentText()
         self.cmb_datatype.clear()
         for field in scandata.fields:
             self.cmb_datatype.addItem(field)
-        if last_datatype in scandata.fields:
+        if scandata.fields.count(last_datatype) == 1:  # if >1, causes issues
             for ind, field in enumerate(scandata.fields):
                 if field == last_datatype:
                     self.cmb_datatype.setCurrentIndex(ind)
+        elif last_datatype_ind < len(scandata.fields):  # for repeating fields
+            self.cmb_datatype.setCurrentIndex(last_datatype_ind)
+        else:
+            self.cmb_datatype.setCurrentIndex(0)
 
     def clear_all_scandata(self, suppress_update=False):
         while self.current_scan_list:  # while scandata remain
@@ -390,24 +396,24 @@ class DataBrowserWindow(QtGui.QMainWindow):
         try:
             midtype_str = scandata_to_add.scaninfo_list[0]['MiddleScanType']
         except (KeyError, IndexError):
-            midtype_str = "[Unknown]"
+            midtype_str = "Y"
         try:
             midval_str = \
                 str(scandata_to_add.scaninfo_list[0]['MiddleScanCoord'])
         except (KeyError, IndexError):
-            midval_str = "[Unknown]"
+            midval_str = "?"
         try:
             fasttype_str = scandata_to_add.scaninfo_list[0]['FastScanType']
         except (KeyError, IndexError):
-            fasttype_str = "[Unknown]"
+            fasttype_str = "X"
         try:
             start_str = str(scandata_to_add.dataseries_list[0].xvals()[0])
         except (KeyError, IndexError):
-            start_str = "[Unknown]"
+            start_str = "[error]"
         try:
             stop_str = str(scandata_to_add.dataseries_list[0].xvals()[-1])
         except (KeyError, IndexError):
-            stop_str = "[Unknown]"
+            stop_str = "[error]"
         scandata_string = \
             "{midtype}: {midval}, {fasttype}: {start} to {stop}".format(
                 midtype=midtype_str, midval=midval_str,
@@ -495,11 +501,12 @@ class DataBrowserWindow(QtGui.QMainWindow):
             axes = self.canvas.axes
             dataseries = scandata.dataseries_list[field_index]
             error_dataseries = scandata.error_dataseries_list[field_index]
-            fitdata=scandata.fitdata_list[field_index]
+            fitdata = scandata.fitdata_list[field_index]
             if error_dataseries is not None:
                 axes.errorbar(dataseries.xvals(unfiltered=True),
                               dataseries.yvals(unfiltered=True),
-                              error_dataseries.yvals(unfiltered=True), fmt='b.')
+                              error_dataseries.yvals(unfiltered=True),
+                              fmt='b.')
             else:
                 axes.plot(dataseries.xvals(unfiltered=True),
                           dataseries.yvals(unfiltered=True), 'b.')
@@ -538,12 +545,14 @@ class DataBrowserWindow(QtGui.QMainWindow):
             plotdatalength = len(refdatayvals)
             data2d = []
             for scandata in scandata_list:
-                for ind, field in enumerate(scandata.fields):
-                    if field == plotfield:
-                        datayvals = scandata.dataseries_list[ind].yvals(
+                try:
+                    ind = scandata.fields.index(plotfield)
+                    datayvals = scandata.dataseries_list[ind].yvals(
                                                             unfiltered=True)
-                        if len(datayvals) == plotdatalength:
-                            data2d.append(datayvals)
+                    if len(datayvals) == plotdatalength:
+                        data2d.append(datayvals)
+                except ValueError:  # field not present
+                    pass
             if data2d:
                 imageplot = self.canvas.axes.imshow(data2d,
                                                     interpolation="none",

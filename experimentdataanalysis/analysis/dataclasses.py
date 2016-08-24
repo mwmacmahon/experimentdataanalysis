@@ -92,6 +92,8 @@ class DataSeries(Sequence):
             except ValueError:
                 raise ValueError("all data elements used to initialize " +
                                  "DataSeries must be in form (xval, yval)")
+            xvals = [float(x) for x in xvals]  # in case non-numeric
+            yvals = [float(y) for y in yvals]
             sortedxvallist = sorted(enumerate(xvals),
                                     key=lambda tuple: tuple[1])
             self.map_to_sorted, self._xvals = zip(*sortedxvallist)  # unzip

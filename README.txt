@@ -1,8 +1,14 @@
 INSTALLATION:
 -Recommended python package manager is Anaconda for its simplicity.
     Python 3.5 is recommended; multiprocessing requires it!
+-Install Git, one simple option is Git For Windows:
+    https://git-scm.com/downloads
 -After setting up Git, use "git clone" to pull a copy of directory onto
     your computer, automatically set up to track shared online version.
+
+    In directory where you want to put project, open Git Bash and type:
+        git clone https://github.com/vsihlab/experimentdataanalysis.git
+
 -Should immediately switch to a new custom branch with your name and upload
     it. This keeps your changes local to your "branch" both on your computer
     and online, and lets the rest of us see any proposed changes to be merged

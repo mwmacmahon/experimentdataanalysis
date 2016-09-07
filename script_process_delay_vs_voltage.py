@@ -27,7 +27,8 @@ spin_lifetime_model = \
                         (810, 830), (0, 2*np.pi),
                         (-1e-6, 1e-6), (-0.01, 0.01)],
         error_thresholds=[None, None, 0.2, 2000, None, None, None, None],
-        dim2_key="Voltage")
+        dim2_key="Voltage",
+        field_index=1)  # use lockin2x directly instead of, say, area
 
 
 # %% FILTER FUNCTIONS
@@ -121,11 +122,21 @@ if __name__ == "__main__":
 # %%  ANALYSIS OF DELAY SCANS, LIFETIME VS VOLTAGE
     # LOAD DATA, ORGANIZE, AND FIT IN ANALYZER
     analyzer = ScanDataSetsAnalyzer(spin_lifetime_model,
-                                    dirpath="C:\\Data\\160702\\delayscans_-6V_to_6V_noautocenter",
+#                                    dirpath="C:\\Data\\160702\\delayscans_-6V_to_6V_noautocenter",
 #                                    dirpath="C:\\Data\\160702\\delayscans_-6V_to_6V",
+                                    dirpath="C:\\Data\\160901\\DelayScansNewWavelength",
                                     uncertainty_value=1e-4,
                                     set_key="Voltage"  # group consecutive runs
                                     )
+
+    # fix improper "StageZ" 2nd coord, change Vapp to V/cm anyway
+    for scandataset in analyzer.scandataset_list:
+        for scandata in scandataset.scandata_list:
+            field = scandata.scaninfo_list[0]['Voltage']*20
+            for scaninfo in scandata.scaninfo_list:
+                scaninfo['MiddleScanType'] = 'Electric Field (V/cm)'
+                scaninfo['MiddleScanCoord'] = field
+
 #    analyzer.break_up_repeating_scandatasets()  # breaks up sets too much!
     analyzer.apply_transform_to_all_scandata(get_positive_time_delay_scandata,
                                              zero_delay_offset=-15)
@@ -135,19 +146,40 @@ if __name__ == "__main__":
                                              start=-15, stop=100)
     analyzer.fit_all_scandata_to_model(multiprocessing=True)
 
-    # APPLY FILTERS, PLOT CHANNEL LIFETIME FIT DATA
-    analyzer.add_filter_to_each_scandataset(
-        get_filter_fcn_no_super_long_lifetimes(threshold=5000))
-    analyzer.add_filter_to_each_scandataset(
-        get_filter_fcn_no_first_n_scans_in_series(num_ignored=1))
+    # APPLY FILTERS AND EXTRACT FITTED SCANDATA AND SCANDATA OF FITS
+#    analyzer.add_filter_to_each_scandataset(
+#        get_filter_fcn_no_super_long_lifetimes(threshold=999999))
+#    analyzer.add_filter_to_each_scandataset(
+#        get_filter_fcn_no_first_n_scans_in_series(num_ignored=1))
+    lifetime_scandata_list = \
+        analyzer.collapse_to_scandata_list(filtered=False)
+    collapsed_scandata_list = \
+        analyzer.collapse_to_model_fit_scandata_list(new_scan_type="[Unknown]",
+                                                     filtered=False)
+
+
+# %% OVERVIEW OF FITS
+    field_index = 1  # lockin2x
+    for scandata in lifetime_scandata_list[4:5]:
+       plot_scandata(scandata, field_index, fmt="bd")
+    plt.xlabel("Delay (ps)")
+    plt.ylabel("Kerr Rotation (AU)")
+    plt.text(8000, 0,
+             "Last fit lifetime: {}ns\n     +={}ns".format(
+                 scandata.fitdata_list[field_index].fitparams[3]/1000,
+                 scandata.fitdata_list[field_index].fitparamstds[3]/1000))
+    plt.show()
+
+
+# %%
     collapsed_scandata_list = \
         analyzer.collapse_to_model_fit_scandata_list(new_scan_type="[Unknown]",
                                                      filtered=True)
-    field_index = 3  # dataseries: x:voltage, y:single long lifetime fit value
+    field_index = 3  # dataseries: x:field, y:single long lifetime fit value
     plt.figure()
     plt.hold(True)
-    for scandata in collapsed_scandata_list:
-        plot_scandata(scandata, field_index, fmt="-bd")
+    for scandata in collapsed_scandata_list[0:1]:
+        plot_scandata(scandata, field_index, fmt="bd")
 
     # LABEL AND DISPLAY GRAPH
     plt.xlabel("Applied Voltage (V)  |  Electric Field (V/500um)")

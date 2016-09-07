@@ -199,6 +199,6 @@ if __name__ == "__main__":
 
 
     # PICK: WHAT TO DROP INTO WORKSPACE    
-#    scandata_list = gaussian_fit_scandata_list
+    scandata_list = gaussian_fit_scandata_list
 #    scandata_list = lifetime_scandata_list
-    scandata_list = collapsed_lifetime_scandata_list
+#    scandata_list = collapsed_lifetime_scandata_list

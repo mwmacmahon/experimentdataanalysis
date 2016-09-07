@@ -10,7 +10,7 @@ Contains simple functions used by other modules to fit data
 import numpy as np
 
 
-LASER_REPRATE = 13100  # ps period
+LASER_REPRATE = 13160  # ps period
 
 
 # %% NEEDS SPHINX DOCUMENTATION

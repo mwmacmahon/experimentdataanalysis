@@ -151,7 +151,7 @@ class GaussianModel(ScanDataModel):
     def __init__(self, **kwargs):
         self.model_type = "1d_gaussian_with_linear_offset"
         self.dim2_key = "MiddleScanCoord"
-        self.field_index = 0
+        self.field_index = 1
         self.fitfunction = fitfcns.fitfcn_1d_gaussian_with_linear_offset
         # params = amplitude, x0, sigma, slope, offset
         self.free_params = [True, True, True, True, True]
@@ -297,7 +297,7 @@ class SinusoidalSpinLifetimeModel(ScanDataModel):
     def __init__(self, **kwargs):
         self.model_type = "fitfcn_two_exp_sin_decay"
         self.dim2_key = "Voltage"
-        self.field_index = 0  # gaussian area
+        self.field_index = 1  # lockin2x
         self.fitfunction = fitfcns.fitfcn_two_exp_sin_decay
         # params = pulse_amp1, lifetime1, pulse_amp2,
         #          lifetime2, osc_period, phase, offset

@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from experimentdataanalysis.analysis.dataseriesprocessing \
-    import get_positive_time_delay_scandata, add_excluded_interval_scandata
+    import get_positive_time_delay_scandata
 from experimentdataanalysis.analysis.scandatamodels \
     import SinusoidalSpinLifetimeModel
 from experimentdataanalysis.analysis.scandatasetprocessing \
@@ -28,7 +28,8 @@ spin_lifetime_model = \
                         (-1e-6, 1e-6), (-0.01, 0.01)],
         error_thresholds=[None, None, 0.2, 2000, None, None, None, None],
         dim2_key="Voltage",
-        field_index=1)  # use lockin2x directly instead of, say, area
+        field_index=1,  # use lockin2x directly instead of, say, area
+        excluded_intervals=[[-15, 100], [7000, 15000]])
 
 
 # %% FILTER FUNCTIONS
@@ -77,19 +78,17 @@ def get_filter_fcn_only_one_channel(target_channel):
 
 # %% PLOTTING FUNCTION
 def plot_scandata(scandata, field_index,
-                  label="", fmt="-bd", fit_fmt="xr:", unfiltered=True):
-    x_vals, y_vals = \
-        scandata.dataseries_list[field_index].\
-                                        datalists(unfiltered=unfiltered)
+                  label="", fmt="-bd", fit_fmt="xr:"):
+    x_vals, y_vals = scandata.dataseries_list[field_index].data()
     error_dataseries = scandata.error_dataseries_list[field_index]
     if error_dataseries is not None:
-        _, y_errs = error_dataseries.datalists(unfiltered=unfiltered)
+        _, y_errs = error_dataseries.data()
         plt.errorbar(x_vals, y_vals, yerr=y_errs, label=label, fmt=fmt)
     else:
         plt.plot(x_vals, y_vals, fmt, label=label)
     if scandata.fitdata_list[field_index] is not None:
         x_vals, y_vals = \
-            scandata.fitdata_list[field_index].fitdataseries.datalists()
+            scandata.fitdata_list[field_index].fitdataseries.data()
         plt.plot(x_vals, y_vals, fit_fmt)
 
 
@@ -124,7 +123,7 @@ if __name__ == "__main__":
     analyzer = ScanDataSetsAnalyzer(spin_lifetime_model,
 #                                    dirpath="C:\\Data\\160702\\delayscans_-6V_to_6V_noautocenter",
 #                                    dirpath="C:\\Data\\160702\\delayscans_-6V_to_6V",
-                                    dirpath="C:\\Data\\160901\\DelayScansNewWavelength",
+                                    dirpath="C:\\Data\\august_data\\160901\\DelayScansNewWavelength",
                                     uncertainty_value=1e-4,
                                     set_key="Voltage"  # group consecutive runs
                                     )
@@ -140,10 +139,10 @@ if __name__ == "__main__":
 #    analyzer.break_up_repeating_scandatasets()  # breaks up sets too much!
     analyzer.apply_transform_to_all_scandata(get_positive_time_delay_scandata,
                                              zero_delay_offset=-15)
-    analyzer.apply_transform_to_all_scandata(add_excluded_interval_scandata,
-                                             start=7000, stop=15000)
-    analyzer.apply_transform_to_all_scandata(add_excluded_interval_scandata,
-                                             start=-15, stop=100)
+#    analyzer.apply_transform_to_all_scandata(add_excluded_interval_scandata,
+#                                             start=7000, stop=15000)
+#    analyzer.apply_transform_to_all_scandata(add_excluded_interval_scandata,
+#                                             start=-15, stop=100)
     analyzer.fit_all_scandata_to_model(multiprocessing=True)
 
     # APPLY FILTERS AND EXTRACT FITTED SCANDATA AND SCANDATA OF FITS
@@ -160,7 +159,7 @@ if __name__ == "__main__":
 
 # %% OVERVIEW OF FITS
     field_index = 1  # lockin2x
-    for scandata in lifetime_scandata_list[4:5]:
+    for scandata in lifetime_scandata_list[:]:
        plot_scandata(scandata, field_index, fmt="bd")
     plt.xlabel("Delay (ps)")
     plt.ylabel("Kerr Rotation (AU)")
@@ -172,13 +171,10 @@ if __name__ == "__main__":
 
 
 # %%
-    collapsed_scandata_list = \
-        analyzer.collapse_to_model_fit_scandata_list(new_scan_type="[Unknown]",
-                                                     filtered=True)
     field_index = 3  # dataseries: x:field, y:single long lifetime fit value
     plt.figure()
     plt.hold(True)
-    for scandata in collapsed_scandata_list[0:1]:
+    for scandata in collapsed_scandata_list[:]:
         plot_scandata(scandata, field_index, fmt="bd")
 
     # LABEL AND DISPLAY GRAPH
@@ -200,10 +196,10 @@ if __name__ == "__main__":
 #    analyzer.break_up_repeating_scandatasets()  # breaks up sets too much!
     analyzer.apply_transform_to_all_scandata(get_positive_time_delay_scandata,
                                              zero_delay_offset=-15)
-    analyzer.apply_transform_to_all_scandata(add_excluded_interval_scandata,
-                                             start=7000, stop=15000)
-    analyzer.apply_transform_to_all_scandata(add_excluded_interval_scandata,
-                                             start=-15, stop=100)
+#    analyzer.apply_transform_to_all_scandata(add_excluded_interval_scandata,
+#                                             start=7000, stop=15000)
+#    analyzer.apply_transform_to_all_scandata(add_excluded_interval_scandata,
+#                                             start=-15, stop=100)
     analyzer.fit_all_scandata_to_model(multiprocessing=True)
 
     # DEFINE SHARED FILTERS TO USE EVERY TIME FOR CONVENIENCE

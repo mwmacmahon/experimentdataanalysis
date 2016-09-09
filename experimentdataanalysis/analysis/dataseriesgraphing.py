@@ -90,12 +90,12 @@ def plot_dataseries(dataseries, error_dataseries=None,
     if axes is None:
         fig, axes = plt.subplots()
     if error_dataseries is not None:
-        axes.errorbar(dataseries.xvals(unfiltered=True),
-                      dataseries.yvals(unfiltered=True),
-                      error_dataseries.yvals(unfiltered=True), fmt='b.')
+        axes.errorbar(dataseries.xvals(),
+                      dataseries.yvals(),
+                      error_dataseries.yvals(), fmt='b.')
     else:
-        axes.plot(dataseries.xvals(unfiltered=True),
-                  dataseries.yvals(unfiltered=True), 'b.')
+        axes.plot(dataseries.xvals(),
+                  dataseries.yvals(), 'b.')
     if xlabel:
         axes.set_xlabel(xlabel)
     if ylabel:
@@ -105,8 +105,8 @@ def plot_dataseries(dataseries, error_dataseries=None,
     if fitdata is not None:
         axes.hold(True)
         fitdataseries = fitdata.fitdataseries
-        axes.plot(fitdataseries.xvals(unfiltered=True),
-                  fitdataseries.yvals(unfiltered=True), 'r-')
+        axes.plot(fitdataseries.xvals(),
+                  fitdataseries.yvals(), 'r-')
         if not plot_options.get('suppress_legend'):
             # text box with parameters of fit
             props = dict(boxstyle='round', facecolor='palegreen',
@@ -124,12 +124,12 @@ def plot_additional_dataseries(dataseries, error_dataseries=None,
         fig, axes = plt.subplots()
     axes.hold(True)
     if error_dataseries is not None:
-        axes.errorbar(dataseries.xvals(unfiltered=True),
-                      dataseries.yvals(unfiltered=True),
-                      error_dataseries.yvals(unfiltered=True), fmt='b.')
+        axes.errorbar(dataseries.xvals(),
+                      dataseries.yvals(),
+                      error_dataseries.yvals(), fmt='b.')
     else:
-        axes.plot(dataseries.xvals(unfiltered=True),
-                  dataseries.yvals(unfiltered=True), 'b.')
+        axes.plot(dataseries.xvals(),
+                  dataseries.yvals(), 'b.')
 
 
 # %%

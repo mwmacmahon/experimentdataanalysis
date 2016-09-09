@@ -34,6 +34,7 @@ class ScanDataModel:
         self.param_bounds = [(0, 0)]
         self.error_thresholds = [None]
         self.max_fcn_evals = 20000
+        self.excluded_intervals = None
         # keyword args override defaults
         for key, val in kwargs.items():
             self.__dict__[key] = val
@@ -106,6 +107,7 @@ class LinearFitModel(ScanDataModel):
         self.param_bounds = [(-np.inf, np.inf), (-np.inf, np.inf)]
         self.error_thresholds = [None, None]
         self.max_fcn_evals = 20000
+        self.excluded_intervals = None
         # keyword args override defaults
         for key, val in kwargs.items():
             self.__dict__[key] = val
@@ -160,6 +162,7 @@ class GaussianModel(ScanDataModel):
                              (5, 200), (-0.01, 0.01), (-0.01, 0.01)]
         self.error_thresholds = [0.01, 15, 15, None, None]
         self.max_fcn_evals = 20000
+        self.excluded_intervals = None
         # keyword args override defaults
         for key, val in kwargs.items():
             self.__dict__[key] = val
@@ -236,6 +239,7 @@ class SpinLifetimeModel(ScanDataModel):
                              (0, 1), (10, 1e6), (-0.01, 0.01)]
         self.error_thresholds = [None, None, None, None, None]
         self.max_fcn_evals = 20000
+        self.excluded_intervals = None
         # keyword args override defaults
         for key, val in kwargs.items():
             self.__dict__[key] = val
@@ -311,6 +315,7 @@ class SinusoidalSpinLifetimeModel(ScanDataModel):
         self.error_thresholds = [None, None, None, None,
                                  None, None, None, None]
         self.max_fcn_evals = 20000
+        self.excluded_intervals = None
         # keyword args override defaults
         for key, val in kwargs.items():
             self.__dict__[key] = val

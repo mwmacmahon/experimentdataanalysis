@@ -49,8 +49,8 @@ class DataBrowserWindow(QtGui.QMainWindow):
             cmbbox.addItem('SetTemperature')
             cmbbox.addItem('Voltage')
             cmbbox.addItem('Wavelength')
-        self.cmb_primarysort.setCurrentIndex(0)
-        self.cmb_secondarysort.setCurrentIndex(1)
+        self.cmb_primarysort.setCurrentIndex(1)
+        self.cmb_secondarysort.setCurrentIndex(2)
         # Set up application signals
         self.btn_loadfile.pressed.connect(
                                         self.callback_add_file)
@@ -145,7 +145,9 @@ class DataBrowserWindow(QtGui.QMainWindow):
             self.add_scandata_to_list(scandata)
         self.list_scandata.setCurrentRow(0)
         self.update_state()
+        self.ignore_input = False
         self.callback_sort_scan_list()
+        self.ignore_input = True
         self.update_state()
         self.statusBar.showMessage("Ready")
         self.ignore_input = False
@@ -503,13 +505,13 @@ class DataBrowserWindow(QtGui.QMainWindow):
             error_dataseries = scandata.error_dataseries_list[field_index]
             fitdata = scandata.fitdata_list[field_index]
             if error_dataseries is not None:
-                axes.errorbar(dataseries.xvals(unfiltered=True),
-                              dataseries.yvals(unfiltered=True),
-                              error_dataseries.yvals(unfiltered=True),
+                axes.errorbar(dataseries.xvals(),
+                              dataseries.yvals(),
+                              error_dataseries.yvals(),
                               fmt='b.')
             else:
-                axes.plot(dataseries.xvals(unfiltered=True),
-                          dataseries.yvals(unfiltered=True), 'b.')
+                axes.plot(dataseries.xvals(),
+                          dataseries.yvals(), 'b.')
             try:
                 xlabel = scandata.scaninfo_list[field_index]['FastScanType']
                 axes.set_xlabel(xlabel)
@@ -519,8 +521,8 @@ class DataBrowserWindow(QtGui.QMainWindow):
             if fitdata is not None:
                 axes.hold(True)
                 fitdataseries = fitdata.fitdataseries
-                axes.plot(fitdataseries.xvals(unfiltered=True),
-                          fitdataseries.yvals(unfiltered=True), 'r-')
+                axes.plot(fitdataseries.xvals(),
+                          fitdataseries.yvals(), 'r-')
             axes.set_aspect('auto')
             self.canvas.figure.tight_layout()
             self.canvas.draw()
@@ -541,14 +543,14 @@ class DataBrowserWindow(QtGui.QMainWindow):
             # get first row of plot's length to ensure all rows match
             ind = ref_scandata.fields.index(plotfield)
             refdatayvals = \
-                ref_scandata.dataseries_list[ind].yvals(unfiltered=True)
+                ref_scandata.dataseries_list[ind].yvals()
             plotdatalength = len(refdatayvals)
             data2d = []
             for scandata in scandata_list:
                 try:
                     ind = scandata.fields.index(plotfield)
                     datayvals = scandata.dataseries_list[ind].yvals(
-                                                            unfiltered=True)
+                                                            )
                     if len(datayvals) == plotdatalength:
                         data2d.append(datayvals)
                 except ValueError:  # field not present

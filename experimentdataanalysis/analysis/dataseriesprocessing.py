@@ -17,20 +17,21 @@ from experimentdataanalysis.analysis.dataclasses \
     import FitData, ScanData, DataSeries
 
 
-LASER_REPRATE = 13100  # ps period
+LASER_REPRATE = 13160  # ps period
 
 
 # %% NEEDS TEST, SPHINX DOCUMENTATION
 def scandata_dataseries_fit(scandata, field_index, fitfunction,
                             free_params, initial_params, param_bounds,
-                            max_fcn_evals=20000):
+                            max_fcn_evals=20000, excluded_intervals=None):
     """
     """
     new_fitdata = dataseries_fit(scandata.dataseries_list[field_index],
                                  fitfunction, free_params,
                                  initial_params, param_bounds,
                                  scandata.error_dataseries_list[field_index],
-                                 max_fcn_evals)
+                                 max_fcn_evals=max_fcn_evals,
+                                 excluded_intervals=excluded_intervals)
     new_scandata_fitdata_list = list(scandata.fitdata_list)
     new_scandata_fitdata_list[field_index] = new_fitdata
     return ScanData(scandata.fields,
@@ -43,7 +44,8 @@ def scandata_dataseries_fit(scandata, field_index, fitfunction,
 # %% NEEDS TEST, SPHINX DOCUMENTATION
 def dataseries_fit(dataseries, fitfunction,
                    free_params, initial_params, param_bounds,
-                   weights_dataseries=None, max_fcn_evals=20000):
+                   weights_dataseries=None, max_fcn_evals=20000,
+                   excluded_intervals=None):
     """
     Takes a DataSeries and fits as a function of an arbitrary single-
     valued scalar function whose first parameter is assumed to correspond
@@ -59,6 +61,10 @@ def dataseries_fit(dataseries, fitfunction,
     :param_bounds: list/tuple containing parameter upper and lower bounds,
     needs a 2-tuple for all free non-x parameters (and anything for
     fixed parameters)
+
+    Optional arguments:
+    :excluded_intervals: list/tuple containing pairs (x_start, x_end)
+        corresponding to x-intervals in which data should not be used for fit
 
     Return type:
     :rtype: fitparams, fitparamstds - lists of fitted parameters and their
@@ -112,40 +118,35 @@ def dataseries_fit(dataseries, fitfunction,
     partial_bounds = (partial_lower_bound, partial_upper_bound)
 
     # fit partial function with curve_fit, use sorted (but filtered) data
-    xvals = dataseries.xvals(unsorted=False)
-    yvals = dataseries.yvals(unsorted=False)
+    xvals, yvals = dataseries.data(unsorted=False)
     if weights_dataseries:  # first ensure same xvals range
         weights_xvals = weights_dataseries.xvals(unsorted=False)
-        if weights_xvals == xvals:
+        if np.array_equal(weights_xvals, xvals):
             weights = weights_dataseries.yvals(unsorted=False)
             use_weights = True
         else:
-#==============================================================================
-# TODO: test this and see if this works
-#             weights_can_be_created = True
-#             for xval in xvals:
-#                 if xval not in weights_xvals:
-#                     weights_can_be_created = False
-#             if weights_can_be_created:
-#                 raw_weights_tuples = \
-#                     weights_dataseries.datatuples(unsorted=False,
-#                                                   unfiltered=True)
-#                 filtered_weights_tuples = []
-#                 for xval in xvals:
-#                     for xytuple in raw_weights_tuples:
-#                         if xytuple[0] == xval:
-#                             filtered_weights_tuples.append(xytuple)
-#                 weights = DataSeries(filtered_weights_tuples)
-#                 use_weights = True
-#             else:
-#                 weights = None
-#                 use_weights = False
-#==============================================================================
             weights = None
             use_weights = False
     else:
         weights = None
         use_weights = False
+    if excluded_intervals is not None:
+        try:
+            excluded_indices = []
+            for x_start, x_end in excluded_intervals:
+                is_excluded = np.logical_and(xvals > x_start, xvals < x_end)
+                new_excluded_indices = list(np.argwhere(is_excluded).flatten())
+                excluded_indices += new_excluded_indices
+            included_indices = [index for index in range(len(xvals))
+                                if index not in excluded_indices]
+            xvals = xvals[included_indices]
+            yvals = yvals[included_indices]
+            if use_weights:
+                weights = weights[included_indices]
+        except ValueError:
+            print("Warning: curve_fit given invalid exclusion bounds. " +
+                  "Exclusion bounds must be an iterable containing 2-tuples " +
+                  "of form (x_start, x_end)")
     with np.errstate(all='ignore'):
         try:
             rawfitparams, rawcovariances = curve_fit(partialfcn, xvals, yvals,
@@ -166,10 +167,8 @@ def dataseries_fit(dataseries, fitfunction,
 
     # convert results to FitData object and return it
     # note fitdataseries should have same sorting and filters
-    fitdataseries = DataSeries([(xval, fitfunction(xval, *fitparams))
-                                for xval in dataseries.xvals(raw=True)],
-                               excluded_intervals=\
-                                   dataseries.excluded_intervals())
+    xvals = dataseries.xvals(raw=True)
+    fitdataseries = DataSeries(xvals, fitfunction(xvals, *fitparams))
     meansquarederror = (1./len(dataseries))* \
                         sum((y_fit - y_real)**2 for y_fit, y_real in
                             zip(fitdataseries.yvals(), dataseries.yvals()))
@@ -266,55 +265,57 @@ def get_positive_time_delay_scandata(scandata, zero_delay_offset=0):
 
 
 def get_positive_time_delay_dataseries(dataseries, zero_delay_offset=0):
-    oldxvals = dataseries.xvals(raw=True)
-    oldyvals = dataseries.yvals(raw=True)
-    newxvals = oldxvals[:]
-    for i, x in enumerate(oldxvals):
+    oldxvals, yvals = dataseries.data(raw=True)
+    newxvals = oldxvals.copy()
+    for i, x in enumerate(newxvals):
         if x < zero_delay_offset:
             newxvals[i] = x + LASER_REPRATE
-    return DataSeries(zip(newxvals, oldyvals),
-                      excluded_intervals=dataseries.excluded_intervals())
+    return DataSeries(newxvals, yvals)
 
 
 # %% TODO: NEEDS TEST, SPHINX DOCUMENTATION
-def add_excluded_interval_scandata(scandata, start, stop, field_list=[0]):
-    new_dataseries_list = []
-    new_error_dataseries_list = []
-    for ind, dataseries in enumerate(scandata.dataseries_list):
-        if ind in field_list and dataseries is not None:
-            new_dataseries = \
-                get_excluded_interval_dataseries(dataseries, start, stop)
-            new_dataseries_list.append(new_dataseries)
-        else:
-            new_dataseries_list.append(dataseries)
-    for ind, error_dataseries in enumerate(scandata.error_dataseries_list):
-        if ind in field_list and error_dataseries is not None:
-            new_error_dataseries = \
-                get_excluded_interval_dataseries(error_dataseries, start, stop)
-            new_error_dataseries_list.append(new_error_dataseries)
-        else:
-            new_error_dataseries_list.append(error_dataseries)
-    return ScanData(scandata.fields,
-                    [scaninfo.copy() for scaninfo in scandata.scaninfo_list],
-                    new_dataseries_list,
-                    new_error_dataseries_list,
-                    [None for field in scandata.fields])  # invalidates fits
-
-
-def get_excluded_interval_dataseries(dataseries, start, stop):
-    datatuples = dataseries.datatuples(raw=True)
-    excluded_intervals_list = list(dataseries.excluded_intervals())
-    excluded_intervals_list.append(tuple([start, stop]))
-    return DataSeries(datatuples,
-                      excluded_intervals=excluded_intervals_list)
-
+#==============================================================================
+# # OUTDATED, EXCLUDED INTERVALS REMOVED FROM DATASERIES AND MOVED TO FITTING
+# def add_excluded_interval_scandata(scandata, start, stop, field_list=[0]):
+#     new_dataseries_list = []
+#     new_error_dataseries_list = []
+#     for ind, dataseries in enumerate(scandata.dataseries_list):
+#         if ind in field_list and dataseries is not None:
+#             new_dataseries = \
+#                 get_excluded_interval_dataseries(dataseries, start, stop)
+#             new_dataseries_list.append(new_dataseries)
+#         else:
+#             new_dataseries_list.append(dataseries)
+#     for ind, error_dataseries in enumerate(scandata.error_dataseries_list):
+#         if ind in field_list and error_dataseries is not None:
+#             new_error_dataseries = \
+#                 get_excluded_interval_dataseries(error_dataseries, start, stop)
+#             new_error_dataseries_list.append(new_error_dataseries)
+#         else:
+#             new_error_dataseries_list.append(error_dataseries)
+#     return ScanData(scandata.fields,
+#                     [scaninfo.copy() for scaninfo in scandata.scaninfo_list],
+#                     new_dataseries_list,
+#                     new_error_dataseries_list,
+#                     [None for field in scandata.fields])  # invalidates fits
+# 
+# 
+# def get_excluded_interval_dataseries(dataseries, start, stop):
+#     datatuples = dataseries.datatuples(raw=True)
+#     excluded_intervals_list = list(dataseries.excluded_intervals())
+#     excluded_intervals_list.append(tuple([start, stop]))
+#     return DataSeries(datatuples,
+#                       excluded_intervals=excluded_intervals_list)
+# 
+#==============================================================================
 
 # %% TODO: NEEDS TEST, SPHINX DOCUMENTATION
 def get_max_yval_xypair(dataseries):
     """
     """
-    xval_at_yvalmax = dataseries.xvals()[0]
-    yvalmax = dataseries.yvals()[0]
+    xvals, yvals = dataseries.data()
+    xval_at_yvalmax = xvals[0]
+    yvalmax = yvals[0]
     for xval, yval in dataseries.datatuples():
         if yval > yvalmax:
             xval_at_yvalmax = xval
@@ -343,20 +344,14 @@ def get_x_offset_dataseries_TRKRstyle(dataseries, otherseries=[]):
     if len(excluded_xvals) > len(dataseries)/4:
         excluded_xvals = [excluded_xvals[0]]
     xval_offset = excluded_xvals[-1]
-    exclusion_start = excluded_xvals[0] - xval_offset
-    new_dataseries = DataSeries([(xval - xval_offset, yval)
-                                 for xval, yval in
-                                 dataseries.datatuples(raw=True)],
-                                excluded_intervals=[(exclusion_start, 0)])
+    xvals, yvals = dataseries.data(raw=True)
+    new_dataseries = DataSeries(xvals - xval_offset, yvals)
     print(xval_offset)
+
     if otherseries:
         new_otherseries_list = []
         for series in otherseries:
-            new_otherseries_list.append(
-                    DataSeries([(xval - xval_offset, yval)
-                                 for xval, yval in
-                                 series.datatuples(raw=True)],
-                                excluded_intervals=[(exclusion_start, 0)]))
+            xvals, yvals = series.data(raw=True)
         return new_dataseries, new_otherseries_list
     else:
         return new_dataseries

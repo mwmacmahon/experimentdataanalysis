@@ -20,7 +20,8 @@ from experimentdataanalysis.analysis.generalutilities \
 # %% NEEDS TEST, SPHINX DOCUMENTATION
 def scandata_iterable_fit(scandata_iterable, field_index, fitfunction,
                           free_params, initial_params, param_bounds,
-                          max_fcn_evals=20000, multiprocessing=False):
+                          max_fcn_evals=20000, multiprocessing=False,
+                          excluded_intervals=None):
     """
     """
     scandata_list = list(scandata_iterable)
@@ -31,7 +32,8 @@ def scandata_iterable_fit(scandata_iterable, field_index, fitfunction,
                                 initial_params, param_bounds,
                                 [scandata.error_dataseries_list[field_index]
                                  for scandata in scandata_list],
-                                max_fcn_evals, multiprocessing)
+                                max_fcn_evals, multiprocessing,
+                                excluded_intervals)
     new_scandata_list = []
     for ind, scandata in enumerate(scandata_list):
         new_scandata_fitdata_list = list(scandata.fitdata_list)
@@ -50,7 +52,8 @@ def scandata_iterable_fit(scandata_iterable, field_index, fitfunction,
 def dataseries_iterable_fit(dataseries_iterable, fitfunction,
                             free_params, initial_params, param_bounds,
                             weights_dataseries_iterable=None,
-                            max_fcn_evals=20000, multiprocessing=False):
+                            max_fcn_evals=20000, multiprocessing=False,
+                            excluded_intervals=None):
     """
     """
     #package for processing
@@ -61,7 +64,8 @@ def dataseries_iterable_fit(dataseries_iterable, fitfunction,
         weights_dataseries_list = list(weights_dataseries_iterable)
     input_args_list = [[dataseries, fitfunction,
                         free_params, initial_params,
-                        param_bounds, weights_dataseries, max_fcn_evals]
+                        param_bounds, weights_dataseries,
+                        max_fcn_evals, excluded_intervals]
                        for dataseries, weights_dataseries in
                        zip(dataseries_list, weights_dataseries_list)]
     output_list = multiprocessable_map(dataseries_fit,

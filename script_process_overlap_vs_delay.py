@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from experimentdataanalysis.analysis.dataseriesprocessing \
-    import get_positive_time_delay_scandata, add_excluded_interval_scandata
+    import get_positive_time_delay_scandata
 from experimentdataanalysis.analysis.scandatamodels \
     import GaussianModel, SpinLifetimeModel
 from experimentdataanalysis.analysis.scandatasetprocessing \
@@ -21,13 +21,15 @@ from experimentdataanalysis.analysis.scandatasetprocessing \
 # %% ANALYSIS MODELS
 gaussian_model = \
     GaussianModel(max_fcn_evals=80000,
-                  error_thresholds=[0.1, 30, 30, None, None])
+                  error_thresholds=[0.1, 30, 30, None, None],
+                  excluded_intervals=None)
 lifetime_model = \
     SpinLifetimeModel(max_fcn_evals=80000,
                       free_params=[True, True, True, True, True],
                       error_thresholds=[0.2, 200, 0.2, 2000, None],
                       dim2_key="Voltage",
-                      field_index=0)  # use amplitude instead of area
+                      field_index=0,  # use amplitude instead of area
+                      excluded_intervals=[[-15, 100], [7000, 15000]])
 
 # %% FILTER FUNCTIONS
 def get_filter_fcn_no_super_long_lifetimes(threshold=5000):
@@ -74,20 +76,17 @@ def get_filter_fcn_only_one_channel(target_channel):
 
 
 # %% PLOTTING FUNCTION
-def plot_scandata(scandata, field_index,
-                  label="", fmt="-bd", fit_fmt="xr:", unfiltered=True):
-    x_vals, y_vals = \
-        scandata.dataseries_list[field_index].\
-                                        datalists(unfiltered=unfiltered)
+def plot_scandata(scandata, field_index, label="", fmt="-bd", fit_fmt="xr:"):
+    x_vals, y_vals = scandata.dataseries_list[field_index].data()
     error_dataseries = scandata.error_dataseries_list[field_index]
     if error_dataseries is not None:
-        _, y_errs = error_dataseries.datalists(unfiltered=unfiltered)
+        _, y_errs = error_dataseries.data()
         plt.errorbar(x_vals, y_vals, yerr=y_errs, label=label, fmt=fmt)
     else:
         plt.plot(x_vals, y_vals, fmt, label=label)
     if scandata.fitdata_list[field_index] is not None:
         x_vals, y_vals = \
-            scandata.fitdata_list[field_index].fitdataseries.datalists()
+            scandata.fitdata_list[field_index].fitdataseries.data()
         plt.plot(x_vals, y_vals, fit_fmt)
 
 
@@ -142,10 +141,10 @@ if __name__ == "__main__":
         set_key=None)  # one scandataset per voltage?
     analyzer2.apply_transform_to_all_scandata(get_positive_time_delay_scandata,
                                              zero_delay_offset=-15)
-    analyzer2.apply_transform_to_all_scandata(add_excluded_interval_scandata,
-                                             start=7000, stop=15000)
-    analyzer2.apply_transform_to_all_scandata(add_excluded_interval_scandata,
-                                             start=-15, stop=100)
+#    analyzer2.apply_transform_to_all_scandata(add_excluded_interval_scandata,
+#                                             start=7000, stop=15000)
+#    analyzer2.apply_transform_to_all_scandata(add_excluded_interval_scandata,
+#                                             start=-15, stop=100)
     analyzer2.fit_all_scandata_to_model(multiprocessing=True)
 
     # APPLY FILTERS, PLOT CHANNEL LIFETIME FIT DATA

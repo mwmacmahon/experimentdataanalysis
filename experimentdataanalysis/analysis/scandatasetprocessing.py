@@ -180,15 +180,29 @@ class ScanDataSet:
 
     def get_model_param_dataseries_list(self, filtered=True):
         if filtered:
-            return [series.copy_subset(self.get_filtered_scandata_indices())
-                    for series in self.model_param_dataseries_list]
+            filtered_indices = self.get_filtered_scandata_indices()
+            if len(filtered_indices) > 0:
+                return [series.copy_subset(filtered_indices)
+                        for series in self.model_param_dataseries_list]
+            else:
+                print('Warning: all scandata have been filtered out! ' +
+                      'get_model_param_dataseries_list filters ignored.')
+                return self.model_param_dataseries_list.copy()
         else:
             return self.model_param_dataseries_list.copy()
 
     def get_model_param_uncertainty_dataseries_list(self, filtered=True):
         if filtered:
-            return [series.copy_subset(self.get_filtered_scandata_indices())
-                    for series in self.model_param_uncertainty_dataseries_list]
+            filtered_indices = self.get_filtered_scandata_indices()
+            if len(filtered_indices) > 0:
+                return [series.copy_subset(filtered_indices)
+                        for series in \
+                            self.model_param_uncertainty_dataseries_list]
+            else:
+                print('Warning: all scandata have been filtered out! ' +
+                      'get_model_param_uncertainty_dataseries_list filters ' +
+                      'ignored.')
+                return self.model_param_uncertainty_dataseries_list.copy()
         else:
             return self.model_param_uncertainty_dataseries_list.copy()
 
@@ -199,10 +213,10 @@ class ScanDataSet:
         fields, field_dataseries_list, field_uncertainty_dataseries_list = \
             self.model.all_model_fields(params, param_sigmas)
         if len(self.get_scandata_list(filtered)) > 0:
-            scandata_to_use = self.get_scandata_list(filtered)[0]
+            scandata_for_scaninfo = self.get_scandata_list(filtered)[0]
         else:  # even if no scandata survive filters, still grab a scaninfo
-            scandata_to_use = self.scandata_list[0]
-        scaninfo_list = [scandata_to_use.scaninfo_list[0].copy()
+            scandata_for_scaninfo = self.scandata_list[0]
+        scaninfo_list = [scandata_for_scaninfo.scaninfo_list[0].copy()
                          for field in fields]
         # update scaninfo to reflect new coord types:
         updated_scaninfo_list = []

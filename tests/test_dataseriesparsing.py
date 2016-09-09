@@ -21,11 +21,11 @@ import experimentdataanalysis.parsing.dataseriesparsing as dsparsing
 
 
 # %% NON FIXTURE HELPER FUNCTIONS
-def check_scandata_veracity(scandata, scancoord_index):
+def check_scandata_veracity(scandata, scancoord_field_index):
     filepath = scandata.scaninfo_list[0]['Filepath']
     filepathinfo = dsparsing.analyze_scan_filepath(filepath)
     assert scandata.scaninfo_list[0]['Voltage'] == filepathinfo['Voltage']
-    scancoord_dataseries = scandata.dataseries_list[scancoord_index]
+    scancoord_dataseries = scandata.dataseries_list[scancoord_field_index]
     for xval, yval in scancoord_dataseries.datatuples():
         assert abs(xval - yval) == 0  # should default to scancoord
 
@@ -40,8 +40,8 @@ def loadcsvdir():
     test_dir_path = __file__[:__file__.rfind("\\")]
     filepath = (test_dir_path + "\\representative3ddata")
     csvdirdata = csvparser.parse_csv_directory(filepath, delimiter='\t')
-    filepath_list, rawcsvdata_list = zip(*csvdirdata)
-    return filepath_list, rawcsvdata_list
+    filepath_list, headerfooterstr_list, rawcsvdata_list = zip(*csvdirdata)
+    return filepath_list, headerfooterstr_list, rawcsvdata_list
 
 
 # JUST HERE FOR SYNTAX REFERENCE
@@ -60,23 +60,23 @@ def test_extract_scandata_iter_from_filepath(test_dir_path):
     filepath = (test_dir_path + "\\representative3ddata")
     scandatalist = dsparsing.fetch_dir_as_unfit_scandata_iterator(filepath)
     for scandata in scandatalist:
-        check_scandata_veracity(scandata, scancoord_index=1)
+        check_scandata_veracity(scandata, scancoord_field_index=0)
 
 
 def test_extract_scandata_from_filepath(loadcsvdir):
-    filepath_list, rawcsvdata_list = loadcsvdir
+    filepath_list, headerfooterstr_list, rawcsvdata_list = loadcsvdir
     for filepath in filepath_list:
         scandata = dsparsing.fetch_csv_as_unfit_scandata(
                                     filepath, 'scancoord')
-        check_scandata_veracity(scandata, scancoord_index=0)
+        check_scandata_veracity(scandata, scancoord_field_index=0)
 
 
 def test_tryinvalidattribute_singlefile(loadcsvdir):
-    filepath_list, rawcsvdata_list = loadcsvdir
+    filepath_list, headerfooterstr_list, rawcsvdata_list = loadcsvdir
     for filepath in filepath_list:
         scandata = dsparsing.fetch_csv_as_unfit_scandata(
                                     filepath, 'invalid')
-        check_scandata_veracity(scandata, scancoord_index=0)
+        check_scandata_veracity(scandata, scancoord_field_index=0)
 
 
 def test_filenameparsing(test_dir_path):

@@ -155,9 +155,7 @@ def set_scandata_error(scandata, field_index, uncertainty_value):
     reference_series = scandata.dataseries_list[field_index]
     xvals_list = list(reference_series.xvals(raw=True))
     yvals_list = [uncertainty_value for x in xvals_list]
-    intervals = reference_series.excluded_intervals()
-    new_error_dataseries = DataSeries(zip(xvals_list, yvals_list),
-                                      excluded_intervals=intervals)
+    new_error_dataseries = DataSeries(xvals_list, yvals_list)
 
     error_dataseries_list = list(scandata.error_dataseries_list)
     error_dataseries_list[field_index] = new_error_dataseries

@@ -24,7 +24,7 @@ spin_lifetime_model = \
         free_params=[True, True, True, True, True, True, True, True],
         initial_params = [0.002, 50, 0.002, 1000, 810, 0, 0, 0],
         param_bounds = [(-1, 1), (1, 200), (-1, 1), (10, 1e6),
-                        (810, 830), (0, 2*np.pi),
+                        (810, 830), (-np.pi, np.pi),
                         (-1e-6, 1e-6), (-0.01, 0.01)],
         error_thresholds=[None, None, 0.2, 2000, None, None, None, None],
         dim2_key="Voltage",

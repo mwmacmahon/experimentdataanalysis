@@ -238,58 +238,23 @@ def check_fit_parameter_consistency(num_nonx_args, free_params,
 
 
 # %% TODO: NEEDS TEST, SPHINX DOCUMENTATION
-def get_positive_time_delay_scandata(scandata, zero_delay_offset=0):
-    new_dataseries_list = []
-    new_error_dataseries_list = []
-    for dataseries in scandata.dataseries_list:
-        if dataseries is not None:
-            new_dataseries = \
-                get_positive_time_delay_dataseries(dataseries,
-                                                   zero_delay_offset)
-            new_dataseries_list.append(new_dataseries)
-        else:
-            new_dataseries_list.append(dataseries)
-    for error_dataseries in scandata.error_dataseries_list:
-        if error_dataseries is not None:
-            new_error_dataseries = \
-                get_positive_time_delay_dataseries(error_dataseries,
-                                                   zero_delay_offset)
-            new_error_dataseries_list.append(new_error_dataseries)
-        else:
-            new_error_dataseries_list.append(error_dataseries)
-    return ScanData(scandata.fields,
-                    [scaninfo.copy() for scaninfo in scandata.scaninfo_list],
-                    new_dataseries_list,
-                    new_error_dataseries_list,
-                    [None for field in scandata.fields])  # invalidates fits
-
-
-def get_positive_time_delay_dataseries(dataseries, zero_delay_offset=0):
-    oldxvals, yvals = dataseries.data(raw=True)
-    newxvals = oldxvals.copy()
-    for i, x in enumerate(newxvals):
-        if x < zero_delay_offset:
-            newxvals[i] = x + LASER_REPRATE
-    return DataSeries(newxvals, yvals)
-
-
-# %% TODO: NEEDS TEST, SPHINX DOCUMENTATION
 #==============================================================================
-# # OUTDATED, EXCLUDED INTERVALS REMOVED FROM DATASERIES AND MOVED TO FITTING
-# def add_excluded_interval_scandata(scandata, start, stop, field_list=[0]):
+# def get_positive_time_delay_scandata(scandata, zero_delay_offset=0):
 #     new_dataseries_list = []
 #     new_error_dataseries_list = []
-#     for ind, dataseries in enumerate(scandata.dataseries_list):
-#         if ind in field_list and dataseries is not None:
+#     for dataseries in scandata.dataseries_list:
+#         if dataseries is not None:
 #             new_dataseries = \
-#                 get_excluded_interval_dataseries(dataseries, start, stop)
+#                 get_positive_time_delay_dataseries(dataseries,
+#                                                    zero_delay_offset)
 #             new_dataseries_list.append(new_dataseries)
 #         else:
 #             new_dataseries_list.append(dataseries)
-#     for ind, error_dataseries in enumerate(scandata.error_dataseries_list):
-#         if ind in field_list and error_dataseries is not None:
+#     for error_dataseries in scandata.error_dataseries_list:
+#         if error_dataseries is not None:
 #             new_error_dataseries = \
-#                 get_excluded_interval_dataseries(error_dataseries, start, stop)
+#                 get_positive_time_delay_dataseries(error_dataseries,
+#                                                    zero_delay_offset)
 #             new_error_dataseries_list.append(new_error_dataseries)
 #         else:
 #             new_error_dataseries_list.append(error_dataseries)
@@ -300,14 +265,53 @@ def get_positive_time_delay_dataseries(dataseries, zero_delay_offset=0):
 #                     [None for field in scandata.fields])  # invalidates fits
 # 
 # 
-# def get_excluded_interval_dataseries(dataseries, start, stop):
-#     datatuples = dataseries.datatuples(raw=True)
-#     excluded_intervals_list = list(dataseries.excluded_intervals())
-#     excluded_intervals_list.append(tuple([start, stop]))
-#     return DataSeries(datatuples,
-#                       excluded_intervals=excluded_intervals_list)
-# 
+# def get_positive_time_delay_dataseries(dataseries, zero_delay_offset=0):
+#     oldxvals, yvals = dataseries.data(raw=True)
+#     newxvals = oldxvals.copy()
+#     for i, x in enumerate(newxvals):
+#         if x < zero_delay_offset:
+#             newxvals[i] = x + LASER_REPRATE
+#     return DataSeries(newxvals, yvals)
 #==============================================================================
+
+
+# %% TODO: NEEDS TEST, SPHINX DOCUMENTATION
+#==============================================================================
+# def get_x_offset_dataseries_TRKRstyle(dataseries, otherseries=[]):
+#     """
+#     """
+#     xval_at_datamax, datamax = get_max_yval_xypair(dataseries)
+#     excluded_xvals = []
+#     for xval, yval in dataseries.datatuples():  # ensure one continuous seg.
+#         if not excluded_xvals:  # if no xvals yet
+#             if  yval > datamax*2/3:
+#                 excluded_xvals.append(xval)
+#         else:  # if already started getting xvals
+#             if yval >= datamax*2/3:
+#                 excluded_xvals.append(xval)
+#             else:
+#                 break
+# #    excluded_xvals = [xval for xval, yval in dataseries.datatuples()
+# #                      if abs(yval) >= datamax/2]
+#     # insert sanity check if too many xvals excluded?
+#     if len(excluded_xvals) > len(dataseries)/4:
+#         excluded_xvals = [excluded_xvals[0]]
+#     xval_offset = excluded_xvals[-1]
+#     xvals, yvals = dataseries.data(raw=True)
+#     new_dataseries = DataSeries(xvals - xval_offset, yvals)
+#     print(xval_offset)
+# 
+#     if otherseries:
+#         new_otherseries_list = []
+#         for series in otherseries:
+#             xvals, yvals = series.data(raw=True)
+#         return new_dataseries, new_otherseries_list
+#     else:
+#         return new_dataseries
+#==============================================================================
+
+
+# %% ----------DATASERIES PROCESSING LIBRARY----------
 
 # %% TODO: NEEDS TEST, SPHINX DOCUMENTATION
 def get_max_yval_xypair(dataseries):
@@ -324,34 +328,81 @@ def get_max_yval_xypair(dataseries):
 
 
 # %% TODO: NEEDS TEST, SPHINX DOCUMENTATION
-def get_x_offset_dataseries_TRKRstyle(dataseries, otherseries=[]):
-    """
-    """
-    xval_at_datamax, datamax = get_max_yval_xypair(dataseries)
-    excluded_xvals = []
-    for xval, yval in dataseries.datatuples():  # ensure one continuous seg.
-        if not excluded_xvals:  # if no xvals yet
-            if  yval > datamax*2/3:
-                excluded_xvals.append(xval)
-        else:  # if already started getting xvals
-            if yval >= datamax*2/3:
-                excluded_xvals.append(xval)
-            else:
-                break
-#    excluded_xvals = [xval for xval, yval in dataseries.datatuples()
-#                      if abs(yval) >= datamax/2]
-    # insert sanity check if too many xvals excluded?
-    if len(excluded_xvals) > len(dataseries)/4:
-        excluded_xvals = [excluded_xvals[0]]
-    xval_offset = excluded_xvals[-1]
-    xvals, yvals = dataseries.data(raw=True)
-    new_dataseries = DataSeries(xvals - xval_offset, yvals)
-    print(xval_offset)
+def process_dataseries_and_error_in_scandata(scandata,
+                                   process_fcn, process_fcn_params):
+    new_dataseries_list = []
+    new_error_dataseries_list = []
+    for dataseries, error_dataseries in \
+            zip(scandata.dataseries_list, scandata.error_dataseries_list):
+        new_dataseries, new_error_dataseries = \
+            process_fcn(dataseries, error_dataseries, *process_fcn_params)
+        new_dataseries_list.append(new_dataseries)
+        new_error_dataseries_list.append(new_error_dataseries)
+    return ScanData(scandata.fields,
+                    [scaninfo.copy() for scaninfo in scandata.scaninfo_list],
+                    new_dataseries_list,
+                    new_error_dataseries_list,
+                    [None for field in scandata.fields])  # invalidates fits
 
-    if otherseries:
-        new_otherseries_list = []
-        for series in otherseries:
-            xvals, yvals = series.data(raw=True)
-        return new_dataseries, new_otherseries_list
-    else:
-        return new_dataseries
+
+# %%
+def get_positive_time_delay_scandata(scandata, zero_delay_offset=0):
+    def get_positive_time_delay_dataseries(dataseries, error_dataseries,
+                                           dataseries_zero_delay_offset):
+        oldxvals, yvals = dataseries.data(raw=True)
+        newxvals = oldxvals.copy()
+        for i, x in enumerate(newxvals):
+            if x < dataseries_zero_delay_offset:
+                newxvals[i] = x + LASER_REPRATE
+
+        new_dataseries = DataSeries(newxvals, yvals)
+        if error_dataseries is not None:
+            error_yvals = error_dataseries.yvals(raw=True)
+            new_error_dataseries = DataSeries(newxvals, error_yvals)
+        else:
+            new_error_dataseries = None
+
+        return new_dataseries, new_error_dataseries
+
+    process_fcn = get_positive_time_delay_dataseries
+    process_fcn_params = [zero_delay_offset]
+    return process_dataseries_and_error_in_scandata(scandata,
+                                   process_fcn, process_fcn_params)
+
+
+# %% high pass filter?
+def get_high_pass_filtered_scandata(scandata, min_freq_cutoff=0):
+    def get_high_pass_filtered_dataseries(dataseries, error_dataseries,
+                                          dataseries_min_freq_cutoff):
+        # extract data and handle error_dataseries & if odd # elements
+        xvals, oldyvals = dataseries.data(raw=True)
+        if len(xvals) % 2 > 0:
+            xvals = xvals[1:]
+            oldyvals = oldyvals[1:]
+            if error_dataseries is not None:
+                errorxvals, erroryvals = error_dataseries.data(raw=True)
+                new_error_dataseries = DataSeries(errorxvals[1:],
+                                                  erroryvals[1:])
+            else:
+                new_error_dataseries = None
+        else:
+            if error_dataseries is not None:
+                new_error_dataseries = error_dataseries
+            else:
+                new_error_dataseries = None
+
+        # now actually calculate fft-filtered yvals
+        inverse_sample_rate = xvals[1] - xvals[0]
+        f_space_freqs = np.fft.rfftfreq(oldyvals.shape[-1],
+                                        d=inverse_sample_rate)
+        f_space_yvals = np.fft.rfft(oldyvals)
+        f_space_yvals[f_space_freqs < dataseries_min_freq_cutoff] = 0
+        newyvals = np.fft.irfft(f_space_yvals)
+        new_dataseries = DataSeries(xvals, newyvals)
+        return new_dataseries, new_error_dataseries
+
+    process_fcn = get_high_pass_filtered_dataseries
+    process_fcn_params = [min_freq_cutoff]
+    return process_dataseries_and_error_in_scandata(scandata,
+                                   process_fcn, process_fcn_params)
+

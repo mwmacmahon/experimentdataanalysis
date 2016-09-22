@@ -183,18 +183,25 @@ def analyze_scan_filepath(filepath, scaninfo={}, keywordlists=None):
             next_element_keyword_list, \
             inside_this_element_keyword_list = keywordlists
     else:
-        # SEARCH TERMS:
+        # DEFAULT SEARCH TERMS AND SEARCH RULES:
         # 1. If first string found, register second string as
         #    tag containing third string/value
+        #        e.g. if keyword_list contains ("warmup", "Warmup?", "Yes"):
+        #             "...warmup..." -> {"Warmup?": "Yes"}
         this_element_keyword_list = []
         # 2. Grab next element(s) if this one CONTAINS first string,
         #    tag next element(s) as second string(s)
+        #        e.g. "..._Ind_3_..." -> {"FastScanIndex": 3}
+        #        e.g. "..._2Dscan_MirrorY_MirrorZ_..."
+        #                 -> {"MiddleScanType": "MirrorY",
+        #                     "FastScanType": "MirrorZ"}
         next_element_keyword_list = [("Voltage", "Voltage"),
                                      ("Ind", "FastScanIndex"),
                                      ("2Dscan", ["MiddleScanType",
                                                  "FastScanType"])]
         # 3. Grab this element if it CONTAINS first string,
         #    tag remainder as second string
+        #        e.g. "..._30K_..." -> {"SetTemperature": 30}
         inside_this_element_keyword_list = [("Channel", "Channel"),
                                             ("K", "SetTemperature"),
                                             ("nm", "Wavelength"),

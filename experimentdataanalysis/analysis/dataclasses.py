@@ -181,6 +181,7 @@ class DataSeries(Sequence):
         return self.__class__(*self.data(raw=True))
 
     def copy_subset(self, index_list):
+        index_list = list(index_list)
         if any(ind > len(self) for ind in index_list):
             print("Warning: DataSeries.copy_subset(...) index_list " +
                   "parameter contains out of bounds indices, ignoring.")
@@ -195,10 +196,28 @@ class DataSeries(Sequence):
         for index in range(len(self)):
             yield self[index]
 
-    def __getitem__(self, index):
-        if index >= len(self):
-            raise IndexError('Index out of range')
-        return self._xvals[index], self._yvals[index]
+    def __getitem__(self, indices):
+        if isinstance(indices, slice):
+            if indices.start is not None:
+                start = indices.start
+            else:
+                start = 0
+            if indices.stop is not None:
+                stop = indices.stop
+            else:
+                stop = len(self)
+            if indices.step is not None:
+                step = indices.step
+            else:
+                step = 1
+            return self.copy_subset(range(start, stop, step))
+        else:
+            if isinstance(indices, Iterable):
+                raise IndexError('DataSeries.__getitem__: ' +
+                                 'Index cannot be iterable.')
+            if indices >= len(self):
+                raise IndexError('DataSeries.__getitem__: Index out of range')
+            return self._xvals[indices], self._yvals[indices]
 
     def __len__(self):
         return len(self._xvals)

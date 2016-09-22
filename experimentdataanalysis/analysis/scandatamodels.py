@@ -215,6 +215,95 @@ class GaussianModel(ScanDataModel):
 
 
 # %% NEEDS TESTS, SPHINX DOCUMENTATION
+class RSAFieldScanModel(ScanDataModel):
+    """
+    Stores the parameters and formulas needed to fit scandata to a
+    1D model and extract attributes. Should not store any data, although
+    it can be modified after creation (e.g. to increase max_fcn_evals
+    attribute or adjust the experimental uncertainty assumed).
+
+    Can be inherited from to change the fit model, may only need to change
+    __init__ method if first 3 fit parameters are left the same.
+
+    All models should have fcns all_model_fields and get_model_filter_fcns
+    """
+    def __init__(self, **kwargs):
+        self.model_type = "fitfcn_rsa_field_scan"
+        self.dim2_key = "MiddleScanCoord"  # should be 3rd coord, but unknown!
+        self.field_index = 1  # lockin2x
+        self.fitfunction = fitfcns.fitfcn_rsa_field_scan
+        # params = num_pulses, delay_time,
+        #          pulse_amplitude, lifetime, freq_per_T,
+        #          field_offset, drift_velocity, phase, slope, offset
+        self.free_params = [False, False,
+                            True, True, True,
+                            True, False, True, True, True]
+        self.initial_params = [40, -160,
+                               0.05, 2000, 0.01,
+                               0, 0, 0, 0, 0]
+        self.param_bounds = [(1, 1000), (-1000, 10000),
+                             (0, 1), (10, 1e9), (1e-4, 0.1),
+                             (-0.1, 0.1), (-0.01, 0.01), (-np.pi, np.pi),
+                             (-0.05, 0.05), (-0.01, 0.01)]
+        self.error_thresholds = [None, None,
+                                 None, None, None,
+                                 None, None, None, None, None]
+        self.max_fcn_evals = 10000
+        self.excluded_intervals = None
+        # keyword args override defaults
+        for key, val in kwargs.items():
+            self.__dict__[key] = val
+
+    def all_model_fields(self, model_param_dataseries_list,
+                         model_param_uncertainty_dataseries_list):
+        params = model_param_dataseries_list
+        param_sigmas = model_param_uncertainty_dataseries_list
+        fields = ["pulse_amplitudes",
+                  "lifetimes",
+                  "freq_per_Ts",
+                  "field_offsets",
+                  "drift_velocities"]
+        dataseries_list, uncertainty_dataseries_list = \
+            zip(*[self.pulse_amplitudes(params, param_sigmas),
+                  self.lifetimes(params, param_sigmas),
+                  self.freq_per_Ts(params, param_sigmas),
+                  self.field_offsets(params, param_sigmas),
+                  self.drift_velocities(params, param_sigmas),
+                  ])
+        return fields, dataseries_list, uncertainty_dataseries_list
+
+    def pulse_amplitudes(self, model_param_dataseries_list,
+                         model_param_uncertainty_dataseries_list):
+        params = model_param_dataseries_list[2]
+        params_sigma = model_param_uncertainty_dataseries_list[2]
+        return params, params_sigma
+
+    def lifetimes(self, model_param_dataseries_list,
+                        model_param_uncertainty_dataseries_list):
+        params = model_param_dataseries_list[3]
+        params_sigma = model_param_uncertainty_dataseries_list[3]
+        return params, params_sigma
+
+    def freq_per_Ts(self, model_param_dataseries_list,
+                        model_param_uncertainty_dataseries_list):
+        params = model_param_dataseries_list[4]
+        params_sigma = model_param_uncertainty_dataseries_list[4]
+        return params, params_sigma
+
+    def field_offsets(self, model_param_dataseries_list,
+                       model_param_uncertainty_dataseries_list):
+        params = model_param_dataseries_list[5]
+        params_sigma = model_param_uncertainty_dataseries_list[5]
+        return params, params_sigma
+
+    def drift_velocities(self, model_param_dataseries_list,
+                       model_param_uncertainty_dataseries_list):
+        params = model_param_dataseries_list[6]
+        params_sigma = model_param_uncertainty_dataseries_list[6]
+        return params, params_sigma
+
+
+# %% NEEDS TESTS, SPHINX DOCUMENTATION
 class SpinLifetimeModel(ScanDataModel):
     """
     Stores the parameters and formulas needed to fit scandata to a
@@ -310,7 +399,7 @@ class SinusoidalSpinLifetimeModel(ScanDataModel):
         self.initial_params = [0.05, 50, 0.05, 2000, 800, 0, 0, 0]
         self.param_bounds = [(0, 1), (1, 200),
                              (0, 1), (10, 1e6),
-                             (600, 1000), (0, 2*np.pi),
+                             (600, 1000), (-np.pi, np.pi),
                              (-1e-6, 1e-6), (-0.01, 0.01)]
         self.error_thresholds = [None, None, None, None,
                                  None, None, None, None]
@@ -359,4 +448,136 @@ class SinusoidalSpinLifetimeModel(ScanDataModel):
                        model_param_uncertainty_dataseries_list):
         params = model_param_dataseries_list[3]
         params_sigma = model_param_uncertainty_dataseries_list[3]
+        return params, params_sigma
+
+
+# %% NEEDS TESTS, SPHINX DOCUMENTATION
+class IndependentSinusoidalSpinLifetimeModel(ScanDataModel):
+    """
+    Stores the parameters and formulas needed to fit scandata to a
+    1D model and extract attributes. Should not store any data, although
+    it can be modified after creation (e.g. to increase max_fcn_evals
+    attribute or adjust the experimental uncertainty assumed).
+
+    Can be inherited from to change the fit model, may only need to change
+    __init__ method if first 3 fit parameters are left the same.
+
+    All models should have fcns all_model_fields and get_model_filter_fcns
+    """
+    def __init__(self, **kwargs):
+        self.model_type = "fitfcn_two_indep_exp_sin_decay"
+        self.dim2_key = "Voltage"
+        self.field_index = 1  # lockin2x
+        self.fitfunction = fitfcns.fitfcn_two_indep_exp_sin_decay
+        # params = num_pulses, pulse_amp1, pulse_amp2, lifetime1, lifetime2,
+        #          osc_period1, osc_period2, drift_velocity1, drift_velocity2,
+        #          phase1, phase2, slope, offset
+        self.free_params = [False, True, True, True, True,
+                            True, True, False, False,
+                            True, True, True, True]
+        self.initial_params = [40, 0.05, 0.05, 50, 2000,
+                               800, 800, 0, 0,
+                               0, 0, 0, 0]
+        self.param_bounds = [(1,1000), (0, 1), (0, 1),
+                             (1, 1e9), (1, 1e9),
+                             (600, 1000), (600, 1000),
+                             (-.01, .01), (-.01, .01),
+                             (-np.pi, np.pi), (-np.pi, np.pi),
+                             (-1e-6, 1e-6), (-0.01, 0.01)]
+        self.error_thresholds = [None, None, None, None, None,
+                                 None, None, None, None,
+                                 None, None, None, None]
+        self.max_fcn_evals = 10000
+        self.excluded_intervals = None
+        # keyword args override defaults
+        for key, val in kwargs.items():
+            self.__dict__[key] = val
+
+    def all_model_fields(self, model_param_dataseries_list,
+                         model_param_uncertainty_dataseries_list):
+        params = model_param_dataseries_list
+        param_sigmas = model_param_uncertainty_dataseries_list
+        # TODO: design a model field decorator fcn to make this automatic
+        fields = ["short_amplitudes",
+                  "long_amplitudes",
+                  "short_lifetimes",
+                  "long_lifetimes",
+                  "short_osc_periods",
+                  "long_osc_periods",
+                  "short_drift_velocities",
+                  "long_drift_velocities",
+                  "short_phases",
+                  "long_phases"]
+        dataseries_list, uncertainty_dataseries_list = \
+            zip(*[self.short_amplitudes(params, param_sigmas),
+                  self.long_amplitudes(params, param_sigmas),
+                  self.short_lifetimes(params, param_sigmas),
+                  self.long_lifetimes(params, param_sigmas),
+                  self.short_osc_periods(params, param_sigmas),
+                  self.long_osc_periods(params, param_sigmas),
+                  self.short_drift_velocities(params, param_sigmas),
+                  self.long_drift_velocities(params, param_sigmas),
+                  self.short_phases(params, param_sigmas),
+                  self.long_phases(params, param_sigmas),
+                  ])
+        return fields, dataseries_list, uncertainty_dataseries_list
+
+    def short_amplitudes(self, model_param_dataseries_list,
+                         model_param_uncertainty_dataseries_list):
+        params = model_param_dataseries_list[1]
+        params_sigma = model_param_uncertainty_dataseries_list[1]
+        return params, params_sigma
+
+    def long_amplitudes(self, model_param_dataseries_list,
+                        model_param_uncertainty_dataseries_list):
+        params = model_param_dataseries_list[2]
+        params_sigma = model_param_uncertainty_dataseries_list[2]
+        return params, params_sigma
+
+    def short_lifetimes(self, model_param_dataseries_list,
+                        model_param_uncertainty_dataseries_list):
+        params = model_param_dataseries_list[3]
+        params_sigma = model_param_uncertainty_dataseries_list[3]
+        return params, params_sigma
+
+    def long_lifetimes(self, model_param_dataseries_list,
+                       model_param_uncertainty_dataseries_list):
+        params = model_param_dataseries_list[4]
+        params_sigma = model_param_uncertainty_dataseries_list[4]
+        return params, params_sigma
+
+    def short_osc_periods(self, model_param_dataseries_list,
+                        model_param_uncertainty_dataseries_list):
+        params = model_param_dataseries_list[5]
+        params_sigma = model_param_uncertainty_dataseries_list[5]
+        return params, params_sigma
+
+    def long_osc_periods(self, model_param_dataseries_list,
+                       model_param_uncertainty_dataseries_list):
+        params = model_param_dataseries_list[6]
+        params_sigma = model_param_uncertainty_dataseries_list[6]
+        return params, params_sigma
+
+    def short_drift_velocities(self, model_param_dataseries_list,
+                        model_param_uncertainty_dataseries_list):
+        params = model_param_dataseries_list[7]
+        params_sigma = model_param_uncertainty_dataseries_list[7]
+        return params, params_sigma
+
+    def long_drift_velocities(self, model_param_dataseries_list,
+                       model_param_uncertainty_dataseries_list):
+        params = model_param_dataseries_list[8]
+        params_sigma = model_param_uncertainty_dataseries_list[8]
+        return params, params_sigma
+
+    def short_phases(self, model_param_dataseries_list,
+                        model_param_uncertainty_dataseries_list):
+        params = model_param_dataseries_list[9]
+        params_sigma = model_param_uncertainty_dataseries_list[9]
+        return params, params_sigma
+
+    def long_phases(self, model_param_dataseries_list,
+                       model_param_uncertainty_dataseries_list):
+        params = model_param_dataseries_list[10]
+        params_sigma = model_param_uncertainty_dataseries_list[10]
         return params, params_sigma

@@ -4,6 +4,16 @@ Created on Wed May  4 17:32:21 2016
 
 Contains simple functions used by other modules to fit data
 
+Note on mobility dependence of signal:
+Assuming gaussian spin packet with center x1 and width s1,
+         gaussian probe beam with center x2 and width s2:
+Signal expected to follow integral of product of gaussians.
+This result can be expressed in the form of a gaussian itself,
+varying from 1 at xdiff=x1-x2=0, to 0 as xdiff->infinity. However,
+effective sigma^2 = sigma1^2 + sigma2^2. Thus formula used:
+
+drift_signal_factor = np.exp(-xdiff**2/(2*(sigma1**2 + sigma2**2)))
+
 @author: vsih-lab
 """
 
@@ -11,7 +21,6 @@ import numpy as np
 
 
 LASER_REPRATE = 13160  # ps period
-
 
 # %% NEEDS SPHINX DOCUMENTATION
 def fitfcn_simple_line(t, slope, offset):
@@ -127,3 +136,62 @@ def fitfcn_two_exp_sin_decay(t, pulse_amplitude, lifetime,
     lastpulse = single_pulse_fcn(last_t)
     lastpulse2 = single_pulse_fcn(last_t_2)
     return offset + slope*t + thispulse + lastpulse + lastpulse2
+
+
+# %% NEEDS SPHINX DOCUMENTATION
+def fitfcn_two_indep_exp_sin_decay(t, num_pulses,
+                                   pulse_amplitude1, pulse_amplitude2,
+                                   lifetime1, lifetime2,
+                                   osc_period1, osc_period2,
+                                   drift_velocity1, drift_velocity2,
+                                   phase1, phase2, slope, offset):
+    """
+    Expected units:
+    lifetime: ps
+    osc_period: ps
+    drift_velocity: um/ps
+    """
+    def single_pulse_fcn(t_pulse):
+        sigma1 = 17.5  # probe beam waist in um, +- 0.5um, from Marta's paper
+        sigma2 = sigma1  # assuming no diffusion
+        xdiff1 = drift_velocity1*t_pulse
+        xdiff2 = drift_velocity2*t_pulse
+        drift_signal_factor1 = np.exp(-xdiff1**2/(2*(sigma1**2 + sigma2**2)))
+        drift_signal_factor2 = np.exp(-xdiff2**2/(2*(sigma1**2 + sigma2**2)))
+        effective_amplitude1 = pulse_amplitude1 * drift_signal_factor1
+        effective_amplitude2 = pulse_amplitude2 * drift_signal_factor2
+        return (effective_amplitude1*np.exp(-t_pulse/lifetime1)*np.cos(
+                                        2*np.pi*t_pulse/osc_period1 + phase1) +
+                effective_amplitude2*np.exp(-t_pulse/lifetime2)*np.cos(
+                                        2*np.pi*t_pulse/osc_period2 + phase2))
+
+    pulsesum = sum([single_pulse_fcn(t + pulsenum*LASER_REPRATE)
+                    for pulsenum in range(num_pulses)])
+    return offset + slope*t + pulsesum
+
+
+# %% NEEDS SPHINX DOCUMENTATION
+def fitfcn_rsa_field_scan(field, num_pulses, delay_time,
+                          pulse_amplitude, lifetime, freq_per_T,
+                          field_offset, drift_velocity,
+                          phase, slope, offset):
+    """
+    Expected units:
+    delay_time, lifetime: ps
+    drift_velocity: um/ps
+    field_offset: Tesla
+    freq_per_t: (1/ps) / Tesla
+    """
+    B = field + field_offset
+    def single_pulse_fcn(t_pulse):
+        sigma1 = 17.5  # probe beam waist in um, +- 0.5um, from Marta's paper
+        sigma2 = sigma1  # assuming no diffusion
+        xdiff = drift_velocity*t_pulse
+        drift_signal_factor = np.exp(-xdiff**2/(2*(sigma1**2 + sigma2**2)))
+        effective_amplitude = pulse_amplitude * drift_signal_factor
+        return effective_amplitude*np.exp(-t_pulse/lifetime)*np.cos(
+                                      2*np.pi*freq_per_T*B*t_pulse + phase)
+
+    pulsesum = sum([single_pulse_fcn(delay_time + pulsenum*LASER_REPRATE)
+                    for pulsenum in range(num_pulses)])
+    return offset + slope*field + pulsesum

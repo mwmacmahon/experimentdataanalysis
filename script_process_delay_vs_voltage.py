@@ -28,7 +28,7 @@ spin_lifetime_model = \
                         (-1e-6, 1e-6), (-0.01, 0.01)],
         error_thresholds=[None, None, 0.2, 2000, None, None, None, None],
         dim2_key="Voltage",
-        field_index=1,  # use lockin2x directly instead of, say, area
+        field_index=0,  # use lockin2x directly instead of, say, area
         excluded_intervals=[[-15, 100], [7000, 15000]])
 
 
@@ -158,7 +158,7 @@ if __name__ == "__main__":
 
 
 # %% OVERVIEW OF FITS
-    field_index = 1  # lockin2x
+    field_index = 0  # lockin2x
     for scandata in lifetime_scandata_list[:]:
        plot_scandata(scandata, field_index, fmt="bd")
     plt.xlabel("Delay (ps)")

@@ -24,7 +24,7 @@ from experimentdataanalysis.analysis.scandatasetprocessing \
 #          field_offset, drift_velocity, phase, slope, offset
 rsa_field_scan_model = \
     RSAFieldScanModel(
-        field_index=1,  # lockin2x
+        field_index=0,  # lockin2x
         max_fcn_evals=40000,
         free_params=[False, False,
                      True, True, True,
@@ -48,7 +48,7 @@ rsa_field_scan_model = \
 #          phase1, phase2, slope, offset
 spin_lifetime_model = \
     IndependentSinusoidalSpinLifetimeModel(
-        field_index=1,  # lockin2x
+        field_index=0,  # lockin2x
         max_fcn_evals=20000,
         free_params=[False, True, True, True, False,
                      True, False, False, False,
@@ -161,7 +161,7 @@ if __name__ == "__main__":
 
 
 # %% OVERVIEW OF FITS
-    field_index = 1  # x:delay, y:lockin2x
+    field_index = 0  # x:delay, y:lockin2x
     for scandata in lifetime_scandata_list[:]:
         plot_scandata(scandata, field_index, fmt="bd")
     plt.xlabel("Delay (ps)")
@@ -228,7 +228,7 @@ if __name__ == "__main__":
 
 
 # %% OVERVIEW OF RSA FITS
-    field_index = 1  # x:field, y:lockin2x
+    field_index = 0  # x:field, y:lockin2x
     for scandata in lifetime_scandata_list[0:9]:
        plot_scandata(scandata, field_index, fmt="bd")
     plt.xlabel("Delay (ps)")

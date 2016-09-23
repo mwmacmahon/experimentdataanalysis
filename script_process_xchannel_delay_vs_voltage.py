@@ -10,7 +10,8 @@ from experimentdataanalysis.analysis.dataseriesprocessing \
 from experimentdataanalysis.analysis.scandatamodels \
     import IndependentSinusoidalSpinLifetimeModel
 from experimentdataanalysis.analysis.scandatasetprocessing \
-    import ScanDataSetsAnalyzer
+    import ScanDataSetsAnalyzer, sort_scandata_into_sets
+import experimentdataanalysis.parsing.dataseriesparsing as dsparsing
 
 
 #==============================================================================
@@ -25,7 +26,7 @@ from experimentdataanalysis.analysis.scandatasetprocessing \
 #          phase1, phase2, slope, offset
 spin_lifetime_model = \
     IndependentSinusoidalSpinLifetimeModel(
-        field_index=1,  # lockin2x
+        field_index=0,  # lockin2x
         max_fcn_evals=20000,
         free_params=[False, True, True, True, False,
                      True, True, False, False,
@@ -63,7 +64,7 @@ spin_lifetime_model = \
 #          phase1, phase2, slope, offset
 spin_lifetime_model_2 = \
     IndependentSinusoidalSpinLifetimeModel(
-        field_index=1,  # lockin2x
+        field_index=0,  # lockin2x
         max_fcn_evals=2000,
         free_params=[False, True, False, False, False,
                      True, False, False, False,
@@ -150,18 +151,30 @@ def plot_scandata(scandata, field_index,
 if __name__ == "__main__":
 # %%  ANALYSIS OF 818.9nm DELAY SCANS
     # LOAD DATA, ORGANIZE, AND FIT IN ANALYZER
-    analyzer = ScanDataSetsAnalyzer(spin_lifetime_model,
-#                                    dirpath="C:\\Data\\160702\\delayscans_-6V_to_6V_noautocenter",
-#                                    dirpath="C:\\Data\\160702\\delayscans_-6V_to_6V",
-#                                    dirpath="C:\\Data\\august_data\\160902\\WavelengthDependence_TRKR_300mT",
-#                                    dirpath="C:\\Data\\august_data\\160902\\WavelengthDependence_TRKRvsV_300mT_033XT-A5_818.9nm_30K_2Dscan_Voltage_DelayTime",
-#                                    dirpath="C:\\Data\\august_data\\160902\\LowV_818.0nm_WavelengthDependence_TRKRvsV_200mT",
-                                    dirpath="C:\\Data\\august_data\\160902\\GoodDataFromWavelengthDependence_TRKRvsV_300mT_033XT-A5_818.9nm_30K_2Dscan_Voltage_DelayTime",
-#                                    dirpath="C:\\Data\\august_data\\160902\\BestDataFromWavelengthDependence_TRKRvsV_300mT_033XT-A5_818.9nm_30K_2Dscan_Voltage_DelayTime",
-#                                    dirpath="C:\\Data\\august_data\\160901\\DelayScansNewWavelength",  # requires other assumptions in model! do seperately below...
-                                    uncertainty_value=1e-4,
-                                    set_key=None  # only one export scandata
-                                    )
+
+#    dirpath = ("C:\\Data\\160702\\" +
+#               "delayscans_-6V_to_6V_noautocenter")
+#               "delayscans_-6V_to_6V")
+#    dirpath = ("C:\\Data\\august_data\\160901\\" +
+#               "DelayScansNewWavelength")  # requires other assumptions in model! do seperately below...
+    dirpath = ("C:\\Data\\august_data\\160902\\" +
+               "GoodDataFromWavelengthDependence_TRKRvsV_300mT_033XT-A5_818.9nm_30K_2Dscan_Voltage_DelayTime")
+#               "WavelengthDependence_TRKR_300mT")
+#               "WavelengthDependence_TRKRvsV_300mT_033XT-A5_818.9nm_30K_2Dscan_Voltage_DelayTime")
+#               "LowV_818.0nm_WavelengthDependence_TRKRvsV_200mT")
+#               "BestDataFromWavelengthDependence_TRKRvsV_300mT_033XT-A5_818.9nm_30K_2Dscan_Voltage_DelayTime")
+
+    fixed_uncertainty = 1e-4  # manually set uncertainty of data set
+    model = spin_lifetime_model
+    sort_key = None  # just one ScanDataSet
+
+    scandata_list = list(dsparsing.fetch_dir_as_unfit_scandata_iterator(
+                                     directorypath=dirpath,
+                                     key_field="lockin2x",
+                                     key_field_error_val=fixed_uncertainty))
+    scandataset_list = sort_scandata_into_sets(scandata_list, model, sort_key)
+    analyzer = ScanDataSetsAnalyzer(scandataset_list)
+
 
     # fix improper "StageZ" 2nd coord, change Vapp to V/cm anyway
     for scandataset in analyzer.scandataset_list:
@@ -174,7 +187,7 @@ if __name__ == "__main__":
 
 #    analyzer.break_up_repeating_scandatasets()  # breaks up sets too much!
     analyzer.apply_transform_to_all_scandata(get_high_pass_filtered_scandata,
-                                              min_freq_cutoff=0.01)
+                                              min_freq_cutoff=0)
     analyzer.apply_transform_to_all_scandata(get_positive_time_delay_scandata,
                                              zero_delay_offset=-15)
     analyzer.fit_all_scandata_to_model(multiprocessing=True)
@@ -192,7 +205,7 @@ if __name__ == "__main__":
 
 
 # %% OVERVIEW OF FITS
-    field_index = 1  # lockin2x
+    field_index = 0  # lockin2x
     for scandata in lifetime_scandata_list[0:10]:
        plot_scandata(scandata, field_index, fmt="bd")
     plt.xlabel("Delay (ps)")
@@ -222,19 +235,29 @@ if __name__ == "__main__":
 
 # %%  ANALYSIS OF 818.0nm DELAY SCANS
     # LOAD DATA, ORGANIZE, AND FIT IN ANALYZER
-    analyzer2 = ScanDataSetsAnalyzer(spin_lifetime_model_2,
-#                                    dirpath="C:\\Data\\160702\\delayscans_-6V_to_6V_noautocenter",
-#                                    dirpath="C:\\Data\\160702\\delayscans_-6V_to_6V",
-#                                    dirpath="C:\\Data\\august_data\\160902\\WavelengthDependence_TRKR_300mT",
-#                                    dirpath="C:\\Data\\august_data\\160902\\WavelengthDependence_TRKRvsV_300mT_033XT-A5_818.9nm_30K_2Dscan_Voltage_DelayTime",
-#                                    dirpath="C:\\Data\\august_data\\160902\\GoodDataFromWavelengthDependence_TRKRvsV_300mT_033XT-A5_818.9nm_30K_2Dscan_Voltage_DelayTime",
-#                                    dirpath="C:\\Data\\august_data\\160902\\BestDataFromWavelengthDependence_TRKRvsV_300mT_033XT-A5_818.9nm_30K_2Dscan_Voltage_DelayTime",
-                                    dirpath="C:\\Data\\august_data\\160902\\LowV_818.0nm_WavelengthDependence_TRKRvsV_200mT",
-#                                    dirpath="C:\\Data\\august_data\\160902\\818.0nm_WavelengthDependence_TRKRvsV_200mT\\Voltage_1_NewWavelengthDelayScans_033XT-A5_818.0nm_30K_2Dscan_StageZ_DelayTime",
-#                                    dirpath="C:\\Data\\august_data\\160902\\818.0nm_WavelengthDependence_TRKRvsV_200mT\\Voltage_0.5_NewWavelengthDelayScans_033XT-A5_818.0nm_30K_2Dscan_StageZ_DelayTime",
-                                    uncertainty_value=1e-4,
-                                    set_key=None  # only one export scandata
-                                    )
+
+#    dirpath = ("C:\\Data\\160702\\" +
+#               "delayscans_-6V_to_6V_noautocenter")
+#               "delayscans_-6V_to_6V")
+#    dirpath = ("C:\\Data\\august_data\\160901\\" +
+#               "DelayScansNewWavelength")  # requires other assumptions in model! do seperately below...
+    dirpath = ("C:\\Data\\august_data\\160902\\" +
+#               "GoodDataFromWavelengthDependence_TRKRvsV_300mT_033XT-A5_818.9nm_30K_2Dscan_Voltage_DelayTime")
+#               "WavelengthDependence_TRKR_300mT")
+#               "WavelengthDependence_TRKRvsV_300mT_033XT-A5_818.9nm_30K_2Dscan_Voltage_DelayTime")
+               "LowV_818.0nm_WavelengthDependence_TRKRvsV_200mT")
+#               "BestDataFromWavelengthDependence_TRKRvsV_300mT_033XT-A5_818.9nm_30K_2Dscan_Voltage_DelayTime")
+
+    fixed_uncertainty = 1e-4  # manually set uncertainty of data set
+    model = spin_lifetime_model_2
+    sort_key = None  # just one ScanDataSet
+
+    scandata_list = list(dsparsing.fetch_dir_as_unfit_scandata_iterator(
+                                     directorypath=dirpath,
+                                     key_field="lockin2x",
+                                     key_field_error_val=fixed_uncertainty))
+    scandataset_list = sort_scandata_into_sets(scandata_list, model, sort_key)
+    analyzer2 = ScanDataSetsAnalyzer(scandataset_list)
 
     # fix improper "StageZ" 2nd coord, change Vapp to V/cm anyway
     for scandataset in analyzer2.scandataset_list:

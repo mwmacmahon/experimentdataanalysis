@@ -11,7 +11,6 @@ from experimentdataanalysis.analysis.multidataseriesprocessing \
     import scandata_iterable_fit, scandata_iterable_sort
 from experimentdataanalysis.analysis.scandatamodels \
     import ScanDataModel
-import experimentdataanalysis.parsing.dataseriesparsing as dsparsing
 
 
 # %% NEEDS TESTS, SPHINX DOCUMENTATION
@@ -20,7 +19,7 @@ class ScanDataSet:
     Stores a list of ScanData, a model used to fit them, and the results of
     said fits once they are performed. Note this is a mutable data structure,
     and ScanData themselves are mutable (they will, for example, gain a
-    FitData attribute after fitting).
+    FitData key_field after fitting).
     
     add_filter / add_filters add filters that limit which scandatasets are
     returned by get_
@@ -66,7 +65,12 @@ class ScanDataSet:
 
     def purge_zero_error_scandata(self, field_index):
         def has_zero_error(scandata):
-            return 0 in scandata.error_dataseries_list[field_index].yvals()
+            if scandata.error_dataseries_list[field_index] is None:
+                return True
+            elif 0 in scandata.error_dataseries_list[field_index].yvals():
+                return True
+            else:
+                return None
 
         fail_message = ("Warning: ScanData value found with 0 uncertainty " +
                         "in  DataSeries, so ScanData was thrown out as " +
@@ -238,75 +242,16 @@ class ScanDataSet:
 # %% NEEDS TESTS, SPHINX DOCUMENTATION
 class ScanDataSetsAnalyzer:
     """
-    Load a directory into a list of ScanDataSets. Each csv/tsv file will be
-    added to a ScanDataSet corresponding to its parent directory. Can also
-    simply load in a series of scandata, but they will be sorted by
-
-    Note this means in the case of nested directories, a parent directory's
-    related ScanDataSet will only contain the free csv/tsv files directly
-    within that directory, not those belonging to its subdirectories.
+    Object that takes ownership of a given list of ScanDataSets, analyzing
+    them in parallel and potentially condensing them into ScanData representing
+    fit results of entire ScanDataSets.
     """
-    def __init__(self, model, dirpath="", *, scandata_list=[],
-                 uncertainty_value=None, set_key="Filepath"):
-        self.set_model = model
-        self.scandataset_list = []
-        if scandata_list:
-            scandata_list = list(scandata_list)
-        elif dirpath:
-            scandata_list = \
-                list(dsparsing.fetch_dir_as_unfit_scandata_iterator(
-                     directorypath=dirpath))
+    def __init__(self, scandataset_list):
+        if any(not isinstance(item, ScanDataSet) for item in scandataset_list):
+            raise ValueError("ScanDataSetsAnalyzer: requires " +
+                             "ScanDataSet list as input")
         else:
-            raise TypeError("No data source provided to ScanDataSetsAnalyzer")
-        if uncertainty_value:
-            scandata_list = [dsparsing.set_scandata_error(scandata,
-                                                          model.field_index,
-                                                          uncertainty_value)
-                             for scandata in scandata_list]
-        self.load_scandata_list(scandata_list, model, set_key)
-
-    def load_scandata_list(self, scandata_list, model, set_key="Filepath"):
-        if len(scandata_list) == 0:
-            raise TypeError("Empty scandata list provided to " +
-                            "ScanDataSetsAnalyzer.")
-        try:  # if numerical values for this sort key, pre-sort scandata list
-            for scandata in scandata_list:
-                float(scandata.scaninfo_list[0][set_key])
-        except KeyError:
-            if set_key is None:
-                pass  # all scandata put into one set, ignore sorting
-            else:
-                raise KeyError("Invalid set_key for ScanDataSetsAnalyzer")
-        except ValueError:
-            scandata_list, _ = scandata_iterable_sort(scandata_list, 0,
-                                                      set_key, set_key,
-                                                      numeric_sort=False)
-        else:
-            scandata_list, _ = scandata_iterable_sort(scandata_list, 0,
-                                                      set_key, set_key,
-                                                      numeric_sort=True)
-        scandata_list = list(scandata_list)
-        current_scandataset = ScanDataSet("[default]", ScanDataModel())
-        last_setname = ""
-        for scandata in scandata_list:
-            try:  # use sort key's value to group ScanData into ScanDataSets
-                setname = scandata.scaninfo_list[0][set_key]
-                if set_key == "Filepath":  # special case
-                    setname = setname.split("\\")[-2]
-            except KeyError:
-                if set_key == None:
-                    setname = "All ScanData"                    
-                else:
-                    print("Warning: ScanDataSet sort key not found in " +
-                          "ScanData! Sets may not be properly grouped")
-                    setname = "key_error_set"
-            if setname != last_setname:
-                current_scandataset.sort_scandata_list()
-                current_scandataset = ScanDataSet(setname, model)
-                self.scandataset_list.append(current_scandataset)
-                last_setname = setname
-            current_scandataset.scandata_list.append(scandata)
-        current_scandataset.sort_scandata_list()  # sort last scandataset        
+            self.scandataset_list = list(scandataset_list)
 
     def fit_all_scandata_to_model(self, multiprocessing=False):
         if not multiprocessing:
@@ -374,7 +319,7 @@ class ScanDataSetsAnalyzer:
                     sublist_index_lists.append(index_list)
                 for new_subdir_indices in sublist_index_lists:
                     new_scandataset = ScanDataSet(scandataset.setname,
-                                                  self.set_model)
+                                                  scandataset.model)
                     new_scandataset.scandata_list = \
                         [scandataset.scandata_list[ind]
                          for ind in new_subdir_indices]
@@ -423,11 +368,11 @@ class ScanDataSetsAnalyzer:
             return scandata_list
 
 #==============================================================================
-#     def extract_model_attribute(self, attribute_fcn_name, filtered=True):
+#     def extract_model_key_field(self, key_field_fcn_name, filtered=True):
 #         """
-#         Pulls out the desired model attribute from each ScanDataSet,
+#         Pulls out the desired model key_field from each ScanDataSet,
 #         returning the following lists:
-#         1. a list containing the attribute dataseries from each ScanDataSet
+#         1. a list containing the key_field dataseries from each ScanDataSet
 #         2. a list containing the corresponding uncertainty dataseries from
 #            each ScanDataSet
 #         3. a list containing [references to] each ScanDataSet. Note these
@@ -437,9 +382,9 @@ class ScanDataSetsAnalyzer:
 #         dataseries_uncertainty_list = []
 #         scandataset_list = []
 #         for scandataset in self.scandataset_list:
-#             attribute_fcn = \
-#                 scandataset.model.__getattribute__(attribute_fcn_name)
-#             dataseries, uncertainty_dataseries = attribute_fcn(
+#             key_field_fcn = \
+#                 scandataset.model.__getkey_field__(key_field_fcn_name)
+#             dataseries, uncertainty_dataseries = key_field_fcn(
 #                 scandataset.model_param_dataseries_list,
 #                 scandataset.model_param_uncertainty_dataseries_list)
 #             dataseries_list.append(dataseries)
@@ -449,15 +394,74 @@ class ScanDataSetsAnalyzer:
 #==============================================================================
 
 #==============================================================================
-#     def fit_model_attribute(self, attribute_fcn_name,
+#     def fit_model_key_field(self, key_field_fcn_name,
 #                             scandata_filtered=True,
 #                             scandataset_filtered=True):
 #         """
-#         [like extract_model_attribute, but returns a single dataseries
-#          corresponding to the fit of model attributes instead of the
-#          attributes themselves. to get those, just use
-#          extract_model_attribute]
+#         [like extract_model_key_field, but returns a single dataseries
+#          corresponding to the fit of model key_fields instead of the
+#          key_fields themselves. to get those, just use
+#          extract_model_key_field]
 #         """
-#         raise NotImplementedError("fit_model_attribute not implemented yet")
+#         raise NotImplementedError("fit_model_key_field not implemented yet")
 # 
 #==============================================================================
+
+
+# %%
+def sort_scandata_into_sets(scandata_list, model, sort_key="Filepath"):
+    """
+    Takes a list of ScanData and sorts them into sets based on the sort
+    key given. For example, if sort_key is "Voltage", will sort each
+    ScanData into sets with shared scaninfo entry {..."Voltage": X, ...}
+    where X is different for each set.
+
+    Returns a list of ScanDataSets, each with the analysis model provided.
+    """
+    if len(scandata_list) == 0:
+        raise TypeError("sort_scandata_into_sets: " +
+                        "empty ScanData list provided")
+    try:  # test key existence & if values associated with sort_key numerical
+        for scandata in scandata_list:
+            float(scandata.scaninfo_list[0][sort_key])
+    except KeyError:
+        if sort_key is None:
+            pass  # all scandata put into one set, ignore sorting
+        else:
+            raise KeyError("sort_scandata_into_sets: invalid sort_key")
+    except ValueError:  # sort key non-numeric, so pre-sort alphanumerically
+        scandata_list, _ = scandata_iterable_sort(scandata_list, 0,
+                                                  sort_key, sort_key,
+                                                  numeric_sort=False)
+    else:  # sort key numeric, so pre-sort numerically
+        scandata_list, _ = scandata_iterable_sort(scandata_list, 0,
+                                                  sort_key, sort_key,
+                                                  numeric_sort=True)
+
+    # Divide ScanData into ScanDataSets. Since pre-sorted, create a new
+    # set whenever a new value is found.
+    scandataset_list = []
+    scandata_list = list(scandata_list)
+    current_scandataset = ScanDataSet("[default]", ScanDataModel())
+    last_setname = ""
+    for scandata in scandata_list:
+        try:  # use sort key's value to group ScanData into ScanDataSets
+            setname = scandata.scaninfo_list[0][sort_key]
+            if sort_key == "Filepath":  # special case
+                setname = setname.split("\\")[-2]
+        except KeyError:
+            if sort_key == None:
+                setname = "All ScanData"                    
+            else:
+                print("Warning: ScanDataSet sort key not found in " +
+                      "ScanData! Sets may not be properly grouped")
+                setname = "key_error_set"
+        if setname != last_setname:
+            current_scandataset.sort_scandata_list()
+            current_scandataset = ScanDataSet(setname, model)
+            scandataset_list.append(current_scandataset)
+            last_setname = setname
+        current_scandataset.scandata_list.append(scandata)
+    current_scandataset.sort_scandata_list()  # sort last scandataset   
+
+    return scandataset_list     

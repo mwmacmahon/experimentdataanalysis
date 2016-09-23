@@ -60,6 +60,10 @@ class ScanDataModel:
                          model_param_uncertainty_dataseries_list):
         params = model_param_dataseries_list
         param_sigmas = model_param_uncertainty_dataseries_list
+        if len(params) == 0 or len(params) != len(param_sigmas):
+            raise ValueError("ScanDataModel: tried to extract " +
+                             "fit results without successful fit")
+            
         fields = ["model_attribute"]
         dataseries_list, uncertainty_dataseries_list = \
             zip(*[self.model_attribute(params, param_sigmas)])
@@ -116,6 +120,10 @@ class LinearFitModel(ScanDataModel):
                          model_param_uncertainty_dataseries_list):
         params = model_param_dataseries_list
         param_sigmas = model_param_uncertainty_dataseries_list
+        if len(params) == 0 or len(params) != len(param_sigmas):
+            raise ValueError("ScanDataModel: tried to extract " +
+                             "fit results without successful fit")
+            
         fields = ["slope",
                   "offset"]
         dataseries_list, uncertainty_dataseries_list = \
@@ -153,7 +161,7 @@ class GaussianModel(ScanDataModel):
     def __init__(self, **kwargs):
         self.model_type = "1d_gaussian_with_linear_offset"
         self.dim2_key = "MiddleScanCoord"
-        self.field_index = 1
+        self.field_index = 0  # key field, probably lockin2x
         self.fitfunction = fitfcns.fitfcn_1d_gaussian_with_linear_offset
         # params = amplitude, x0, sigma, slope, offset
         self.free_params = [True, True, True, True, True]
@@ -171,6 +179,10 @@ class GaussianModel(ScanDataModel):
                          model_param_uncertainty_dataseries_list):
         params = model_param_dataseries_list
         param_sigmas = model_param_uncertainty_dataseries_list
+        if len(params) == 0 or len(params) != len(param_sigmas):
+            raise ValueError("ScanDataModel: tried to extract " +
+                             "fit results without successful fit")
+            
         fields = ["gaussian_amplitudes",
                   "gaussian_widths",
                   "gaussian_centers",
@@ -230,7 +242,7 @@ class RSAFieldScanModel(ScanDataModel):
     def __init__(self, **kwargs):
         self.model_type = "fitfcn_rsa_field_scan"
         self.dim2_key = "MiddleScanCoord"  # should be 3rd coord, but unknown!
-        self.field_index = 1  # lockin2x
+        self.field_index = 0  # key field, probably lockin2x
         self.fitfunction = fitfcns.fitfcn_rsa_field_scan
         # params = num_pulses, delay_time,
         #          pulse_amplitude, lifetime, freq_per_T,
@@ -258,6 +270,10 @@ class RSAFieldScanModel(ScanDataModel):
                          model_param_uncertainty_dataseries_list):
         params = model_param_dataseries_list
         param_sigmas = model_param_uncertainty_dataseries_list
+        if len(params) == 0 or len(params) != len(param_sigmas):
+            raise ValueError("ScanDataModel: tried to extract " +
+                             "fit results without successful fit")
+            
         fields = ["pulse_amplitudes",
                   "lifetimes",
                   "freq_per_Ts",
@@ -337,6 +353,10 @@ class SpinLifetimeModel(ScanDataModel):
                          model_param_uncertainty_dataseries_list):
         params = model_param_dataseries_list
         param_sigmas = model_param_uncertainty_dataseries_list
+        if len(params) == 0 or len(params) != len(param_sigmas):
+            raise ValueError("ScanDataModel: tried to extract " +
+                             "fit results without successful fit")
+            
         fields = ["short_amplitudes",
                   "short_lifetimes",
                   "long_amplitudes",
@@ -390,7 +410,7 @@ class SinusoidalSpinLifetimeModel(ScanDataModel):
     def __init__(self, **kwargs):
         self.model_type = "fitfcn_two_exp_sin_decay"
         self.dim2_key = "Voltage"
-        self.field_index = 1  # lockin2x
+        self.field_index = 0  # key field, probably lockin2x
         self.fitfunction = fitfcns.fitfcn_two_exp_sin_decay
         # params = pulse_amp1, lifetime1, pulse_amp2,
         #          lifetime2, osc_period, phase, offset
@@ -413,6 +433,10 @@ class SinusoidalSpinLifetimeModel(ScanDataModel):
                          model_param_uncertainty_dataseries_list):
         params = model_param_dataseries_list
         param_sigmas = model_param_uncertainty_dataseries_list
+        if len(params) == 0 or len(params) != len(param_sigmas):
+            raise ValueError("ScanDataModel: tried to extract " +
+                             "fit results without successful fit")
+            
         # TODO: design a model field decorator fcn to make this automatic
         fields = ["short_amplitudes",
                   "short_lifetimes",
@@ -467,7 +491,7 @@ class IndependentSinusoidalSpinLifetimeModel(ScanDataModel):
     def __init__(self, **kwargs):
         self.model_type = "fitfcn_two_indep_exp_sin_decay"
         self.dim2_key = "Voltage"
-        self.field_index = 1  # lockin2x
+        self.field_index = 0  # key field, probably lockin2x
         self.fitfunction = fitfcns.fitfcn_two_indep_exp_sin_decay
         # params = num_pulses, pulse_amp1, pulse_amp2, lifetime1, lifetime2,
         #          osc_period1, osc_period2, drift_velocity1, drift_velocity2,
@@ -497,6 +521,10 @@ class IndependentSinusoidalSpinLifetimeModel(ScanDataModel):
                          model_param_uncertainty_dataseries_list):
         params = model_param_dataseries_list
         param_sigmas = model_param_uncertainty_dataseries_list
+        if len(params) == 0 or len(params) != len(param_sigmas):
+            raise ValueError("ScanDataModel: tried to extract " +
+                             "fit results without successful fit")
+            
         # TODO: design a model field decorator fcn to make this automatic
         fields = ["short_amplitudes",
                   "long_amplitudes",

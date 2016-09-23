@@ -15,9 +15,10 @@ from experimentdataanalysis.analysis.dataclasses \
 
 # %%
 def fetch_dir_as_unfit_scandata_iterator(directorypath=None,
-                                         attribute='',
+                                         key_field=None,
                                          delimiter=None,
-                                         parser='tsv'):
+                                         parser='tab-delimited',
+                                         key_field_error_val=None):
     """
     Takes a directory and returns an iterator, which upon each call gives
     the contents of a csv file in that directory or its subdirectories in
@@ -35,10 +36,10 @@ def fetch_dir_as_unfit_scandata_iterator(directorypath=None,
     Keyword arguments:
     directorypath -- if given, the target directory. If not given, a
         GUI is used to select the directory. (default None)
-    attribute -- if found, the given field will be moved to index 0
+    key_field -- if found, the given field will be moved to index 0
         in the list (default 'lockin2x')
     """
-    if parser == 'tsv':  # default case: tsv files
+    if parser == 'tab-delimited':  # default case
         if not delimiter:
             delimiter = '\t'
         if directorypath is not None:
@@ -51,7 +52,8 @@ def fetch_dir_as_unfit_scandata_iterator(directorypath=None,
         # file on demand each time through loop:
         for filepath, headerfooterstr, tabledata in csvfiles:
             scandata = tabledata_to_unfit_scandata(filepath, headerfooterstr,
-                                                   tabledata, attribute)
+                                                   tabledata, key_field,
+                                                   key_field_error_val)
             yield scandata
 #    elif parser == '???':
 #        if not delimiter:
@@ -65,10 +67,11 @@ def fetch_dir_as_unfit_scandata_iterator(directorypath=None,
 
 # %%
 def fetch_csv_as_unfit_scandata(filepath=None,
-                                attribute='',
+                                key_field=None,
                                 delimiter=None,
-                                parser='tsv'):
-    if parser == 'tsv':  # default case: tsv files
+                                parser='tab-delimited',
+                                key_field_error_val=None):
+    if parser == 'tab-delimited':  # default case
         if not delimiter:
             delimiter = '\t'
         if filepath is not None:
@@ -78,7 +81,8 @@ def fetch_csv_as_unfit_scandata(filepath=None,
             filepath, headerfooterstr, tabledata = \
                 csvparser.parse_csv_gui('C:\\Data\\', delimiter)
         scandata = tabledata_to_unfit_scandata(filepath, headerfooterstr,
-                                               tabledata, attribute)
+                                               tabledata, key_field,
+                                               key_field_error_val)
         return scandata
 #    elif parser == '???':
 #        if not delimiter:
@@ -92,7 +96,8 @@ def fetch_csv_as_unfit_scandata(filepath=None,
 
 # %%
 def tabledata_to_unfit_scandata(filepath, headerfooterstr,
-                                rawdata, attribute=''):
+                                rawdata, key_field=None,
+                                key_field_error_val=None):
     colnames, coldata = rawdata
     # Assemble ScanData
     fields = list(colnames)
@@ -108,23 +113,25 @@ def tabledata_to_unfit_scandata(filepath, headerfooterstr,
                         dataseries_list,
                         error_dataseries_list,
                         fitdata_list)
-    sorted_scandata = move_scandata_attribute_to_front(scandata, attribute)
-    return sorted_scandata
+    if key_field:  # if field not found, let fcn throw warning, then do nothing
+        scandata = move_scandata_key_field_to_front(scandata, key_field)
+        if key_field_error_val and key_field in scandata.fields:
+            scandata = set_scandata_error(scandata, 0, key_field_error_val)
+    return scandata
 
 
 # %%
-def move_scandata_attribute_to_front(scandata, attribute):
+def move_scandata_key_field_to_front(scandata, key_field):
     try:
-        attribute_index = scandata.fields.index(attribute)
-    except ValueError:  # invalid attribute, so no matching index found
-        attribute_index = 0
-        # too noisy:
-        # print("Warning: Attribute {} not found in ".format(attribute) +
-        #       "csv file, order from csv file will be kept.")
-    # Work out field ordering based on given attribute - attribute to front
+        key_field_index = scandata.fields.index(key_field)
+    except ValueError:  # invalid key_field, so no matching index found
+        key_field_index = 0
+        print("Warning: key_field {} not found in ".format(key_field) +
+              "csv file, field order from csv file will be kept.")
+    # Work out field ordering based on given key_field - key_field to front
     rawdata_indices = list(range(len(scandata.fields)))
-    rawdata_indices.remove(attribute_index)
-    rawdata_indices = [attribute_index] + rawdata_indices
+    rawdata_indices.remove(key_field_index)
+    rawdata_indices = [key_field_index] + rawdata_indices
 
     # Assemble ScanData
     fields = list(scandata.fields[ind]
@@ -253,7 +260,6 @@ def analyze_string_for_dict_pairs(infostr, scaninfo={}):
     provided strings and adds them to the dict given (or otherwise
     creates a new dict).
     """
-#    raise NotImplementedError("implement string dict pair finding ASAP!")
     strrows = infostr.splitlines()
     for row in strrows:
         key, value = "", ""

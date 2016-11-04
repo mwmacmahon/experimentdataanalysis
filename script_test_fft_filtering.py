@@ -7,6 +7,7 @@ Created on Mon Sep 19 20:09:50 2016
 
 import matplotlib.pyplot as plt
 import numpy as np
+import scipy.ndimage.filters as filters
 
 from experimentdataanalysis.analysis.dataseriesprocessing \
     import get_positive_time_delay_scandata, get_high_pass_filtered_scandata
@@ -94,3 +95,37 @@ axes3.set_autoscalex_on(False)
 axes3.set_xlim([min(f_space_periods), max(f_space_periods)])
 
 plt.tight_layout()
+
+# %%
+
+dirpath = ("C:\\Data\\august_data\\160902\\" +
+           "WavelengthDependence_RSA")
+#dirpath="C:\\Data\\august_data\\160902\\GoodDataFromWavelengthDependence_TRKRvsV_300mT_033XT-A5_818.9nm_30K_2Dscan_Voltage_DelayTime"
+scandatalist = list(dsparsing.fetch_dir_as_unfit_scandata_iterator(dirpath))
+#dataseries = scandatalist[13].dataseries_list[1]  # perfect decaying sine
+dataseries = scandatalist[1].dataseries_list[1]
+x_scale_factor = 5e-4
+plt.figure()
+plt.hold(True)
+data = dataseries.yvals()
+xvals = [x_scale_factor*index for index in range(len(data))]
+plt.plot(xvals, data, 'wd', label='original data')
+
+sigma_list = [0, 0.006]
+filtered_data = []
+for sigma in sigma_list:
+    fdata = filters.gaussian_filter1d(data,
+                                      sigma=sigma/x_scale_factor,
+                                      mode='reflect')
+    plt.plot(xvals, fdata, linewidth=2,
+             label='gaussian smoothed, sigma= {}'.format(sigma))
+    filtered_data.append(fdata)
+plt.legend()
+
+# %%
+smoothed_data = filtered_data[0]
+trend_data = filtered_data[1]
+
+plt.plot(smoothed_data, 'wd')
+plt.plot(smoothed_data - filtered_data[1])
+

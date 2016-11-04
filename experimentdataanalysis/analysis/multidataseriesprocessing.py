@@ -143,3 +143,55 @@ def scandata_iterable_sort(scandata_iterable, field_index,
                                         zip(scandata_list, index_ordering),
                                         key=key_fcn))
     return scandata_list, index_ordering
+
+
+# %%
+def aggregate_and_process_scandata_into_dict(scandata, process_fcn_list=None,
+                                             xcoord_indices_to_use=None,
+                                             xcoord_name=None):
+    """
+    Accepts a scandata, and converts each dataseries into a dict for easy
+    lookup of results by field name. Optionally takes a list of process
+    functions - where each takes the xvals, yvals & error of a given field
+    and outputs a dict of analysis results - and appends the results of those
+    functions to the aggregated data dict, with the field name added to the
+    front of each process function key, and repeats for all fields in scandata
+        (e.g. "linear_fit_slope" -> "[field name 1]_linear_fit_slope",
+                                    "[field name 2]_linear_fit_slope", ...)
+    """
+    if xcoord_indices_to_use is None:
+        xcoord_indices_to_use = list(range(len(scandata.fields)))
+    if xcoord_name is None:
+        xcoord_name = "xvalues"
+
+    xvalues = scandata.dataseries_list[0].xvals()[xcoord_indices_to_use]
+
+    # construct dictionary containing 1d arrays of field values (vs xvalues):
+    aggregated_data = {'xcoord_name': xcoord_name,
+                       xcoord_name: xvalues,
+                       'field_names': list(scandata.fields).copy()}
+    aggregated_data.update(
+        zip(scandata.fields,
+            [series.yvals()[xcoord_indices_to_use]
+             for series in scandata.dataseries_list]))
+    # append fit parameter uncertainties:
+    field_param_error_names = \
+        [param_name + "_error" for param_name in scandata.fields]
+    aggregated_data.update(
+        zip(field_param_error_names,
+            [series.yvals()[xcoord_indices_to_use]
+             for series in scandata.error_dataseries_list]))
+    # perform process fit to attributes
+    if process_fcn_list is not None:
+        for field_name in scandata.fields:
+            for process_fcn in process_fcn_list:
+                process_result = \
+                    process_fcn(xvalues,
+                                aggregated_data[field_name],
+                                aggregated_data[field_name + '_error'])
+                for key, value in process_result.items():
+                    new_key = field_name + "_" + key
+                    aggregated_data[new_key] = value
+
+    return aggregated_data
+

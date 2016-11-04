@@ -292,6 +292,18 @@ class ScanDataSetsAnalyzer:
                                                     fit_scandata_list)
                 start_ind = end_ind
 
+    def regroup_scandatasets(self, new_model, sort_key="Filepath"):
+        """
+        Resort ScanDataSets into different ScanDataSets using the new
+        model and sort key. If FitData is still valid for new model
+        (i.e. same parameters in same order, same output fields),
+        can still collapse new sets into scandata.
+        
+        Note all ScanDataSets must share the same new model!
+        """
+        self.scandataset_list = regroup_scandatasets(self.scandataset_list,
+                                                     new_model, sort_key)
+
     def break_up_repeating_scandatasets(self):
         """
         break into smaller scandatasets based on repeated xval patterns
@@ -458,10 +470,22 @@ def sort_scandata_into_sets(scandata_list, model, sort_key="Filepath"):
                 setname = "key_error_set"
         if setname != last_setname:
             current_scandataset.sort_scandata_list()
-            current_scandataset = ScanDataSet(setname, model)
+            current_scandataset = ScanDataSet(setname, model.copy())
             scandataset_list.append(current_scandataset)
             last_setname = setname
         current_scandataset.scandata_list.append(scandata)
     current_scandataset.sort_scandata_list()  # sort last scandataset   
 
     return scandataset_list     
+
+
+def regroup_scandatasets(scandataset_list, new_model, sort_key="Filepath"):
+    all_scandata_list = sum((scandataset.scandata_list
+                             for scandataset in scandataset_list), [])
+    new_scandataset_list = sort_scandata_into_sets(all_scandata_list,
+                                                   model=new_model,
+                                                   sort_key=sort_key)
+    for scandataset in new_scandataset_list:  # reparse fit results
+        scandataset.parse_fit_scandata_list(scandataset.model.field_index,
+                                            scandataset.scandata_list)
+    return new_scandataset_list

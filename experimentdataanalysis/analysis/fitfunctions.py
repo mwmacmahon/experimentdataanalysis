@@ -20,7 +20,9 @@ drift_signal_factor = np.exp(-xdiff**2/(2*(sigma1**2 + sigma2**2)))
 import numpy as np
 
 
+GFACTORCONSTANT = 0.013996  # 1/(ps*Tesla), = bohr magneton/2*pi*hbar
 LASER_REPRATE = 13160  # ps period
+
 
 # %% NEEDS SPHINX DOCUMENTATION
 def fitfcn_simple_line(t, slope, offset):
@@ -160,19 +162,29 @@ def fitfcn_two_indep_exp_sin_decay(t, num_pulses,
         drift_signal_factor2 = np.exp(-xdiff2**2/(2*(sigma1**2 + sigma2**2)))
         effective_amplitude1 = pulse_amplitude1 * drift_signal_factor1
         effective_amplitude2 = pulse_amplitude2 * drift_signal_factor2
-        return (effective_amplitude1*np.exp(-t_pulse/lifetime1)*np.cos(
+        if np.any(drift_signal_factor1 > 1e-6) or \
+                np.any(drift_signal_factor2 > 1e-6):  # avoid if unnecessary
+            return (effective_amplitude1*np.exp(-t_pulse/lifetime1)*np.cos(
                                         2*np.pi*t_pulse/osc_period1 + phase1) +
-                effective_amplitude2*np.exp(-t_pulse/lifetime2)*np.cos(
+                    effective_amplitude2*np.exp(-t_pulse/lifetime2)*np.cos(
                                         2*np.pi*t_pulse/osc_period2 + phase2))
+        else:
+            return 0*t_pulse
 
     pulsesum = sum([single_pulse_fcn(t + pulsenum*LASER_REPRATE)
                     for pulsenum in range(num_pulses)])
-    return offset + slope*t + pulsesum
+
+    wrapped_t = t.copy()  # deep copy to avoid changing original, may be slow
+    wrapped_t[t > 1e4] -= LASER_REPRATE
+#    wrapped_t = t[:]  # shallow copy, must avoid changing original!
+#    wrapped_t = np.hstack([t[t < 1e4], t[t > 1e4] - 13160])  # assumes ordered
+    linear_offset = offset + slope*wrapped_t
+    return linear_offset + pulsesum
 
 
 # %% NEEDS SPHINX DOCUMENTATION
 def fitfcn_rsa_field_scan(field, num_pulses, delay_time,
-                          pulse_amplitude, lifetime, freq_per_T,
+                          pulse_amplitude, lifetime, gfactor,
                           field_offset, drift_velocity,
                           phase, slope, offset):
     """
@@ -180,7 +192,7 @@ def fitfcn_rsa_field_scan(field, num_pulses, delay_time,
     delay_time, lifetime: ps
     drift_velocity: um/ps
     field_offset: Tesla
-    freq_per_t: (1/ps) / Tesla
+    gfactor: (1/ps) / Tesla
     """
     B = field + field_offset
     def single_pulse_fcn(t_pulse):
@@ -188,9 +200,12 @@ def fitfcn_rsa_field_scan(field, num_pulses, delay_time,
         sigma2 = sigma1  # assuming no diffusion
         xdiff = drift_velocity*t_pulse
         drift_signal_factor = np.exp(-xdiff**2/(2*(sigma1**2 + sigma2**2)))
-        effective_amplitude = pulse_amplitude * drift_signal_factor
-        return effective_amplitude*np.exp(-t_pulse/lifetime)*np.cos(
-                                      2*np.pi*freq_per_T*B*t_pulse + phase)
+        if drift_signal_factor > 1e-6:  # avoid unnecessary calculations
+            effective_amplitude = pulse_amplitude * drift_signal_factor
+            return effective_amplitude*np.exp(-t_pulse/lifetime)*np.cos(
+                        2*np.pi*GFACTORCONSTANT*gfactor*B*t_pulse + phase)
+        else:
+            return 0*B
 
     pulsesum = sum([single_pulse_fcn(delay_time + pulsenum*LASER_REPRATE)
                     for pulsenum in range(num_pulses)])

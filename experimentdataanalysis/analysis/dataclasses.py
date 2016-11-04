@@ -57,7 +57,8 @@ class DataSeries(Sequence):
     provided upon construction. Adding or subtracting DataSeries
     instances ensures proper matching of yvals corresponding to the
     same xval. Scalar values and lists of matching length may also be
-    added, subtracted, multiplied, and divided.
+    added, subtracted, multiplied, and divided. In the latter case,
+    operations are done element-by-element in sorted order.
 
     Calling this object is equivalent to using its data() method
     """
@@ -255,14 +256,14 @@ class DataSeries(Sequence):
                     if np.array_equal(map_to_unsorted, np.arange(len(self))):
                         map_to_unsorted = othermap  # if self-sorted, other map
                 newyvals = np.array(function(self._yvals, otheryvals))
-                newyvals = newyvals[map_to_unsorted]
             except AttributeError:
                 print('Warning: failed to combine DataSeries with apparent ' +
                       'DataSeries, treating latter as generic list/array')
-                newyvals = function(self.yvals(raw=True), other)
+                newyvals = function(self.yvals(unsorted=False), other)
         else:  # not a DataSeries: let numpy handle it
-            newyvals = function(self.yvals(raw=True), other)
+            newyvals = function(self.yvals(unsorted=False), other)
         newxvals = self._xvals[map_to_unsorted]
+        newyvals = newyvals[map_to_unsorted]
         return self.__class__(newxvals, newyvals)
 
     def __add__(self, other):
@@ -281,6 +282,12 @@ class DataSeries(Sequence):
         return self.general_numeric_fcn(other, fcn, fcn_verb)
 
     def __div__(self, other):
+        fcn_verb = "divide"
+        def fcn(x, y):
+            return x / y
+        return self.general_numeric_fcn(other, fcn, fcn_verb)
+
+    def __truediv__(self, other):
         fcn_verb = "divide"
         def fcn(x, y):
             return x / y

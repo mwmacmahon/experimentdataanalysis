@@ -10,6 +10,10 @@ import numpy as np
 import experimentdataanalysis.analysis.fitfunctions as fitfcns
 
 
+gfactorCONSTANT = 71.44773  # ps*Tesla, = 2*pi*hbar/bohr magneton
+GFACTORCONSTANT2 = 0.013996  # 1/(ps*Tesla), = bohr magneton/2*pi*hbar
+
+
 # %% NEEDS TESTS, SPHINX DOCUMENTATION
 class ScanDataModel:
     """
@@ -67,6 +71,8 @@ class ScanDataModel:
         fields = ["model_attribute"]
         dataseries_list, uncertainty_dataseries_list = \
             zip(*[self.model_attribute(params, param_sigmas)])
+        dataseries_list = list(dataseries_list)
+        uncertainty_dataseries_list = list(uncertainty_dataseries_list)
         return fields, dataseries_list, uncertainty_dataseries_list
 
     # DUMMY, SHOULD BE OVERWRITTEN BY ONE OR MORE FUNCTIONS
@@ -75,6 +81,18 @@ class ScanDataModel:
         attribute = model_param_dataseries_list[0]
         attribute_sigma = model_param_uncertainty_dataseries_list[0]
         return attribute, attribute_sigma
+
+    def copy(self):  # must deep copy all mutable attributes
+        kwargs = self.__dict__.copy()
+        kwargs['free_params'] = list(self.free_params)
+        kwargs['initial_params'] = list(self.initial_params)
+        kwargs['param_bounds'] = [tuple(pair)
+                                  for pair in self.param_bounds]
+        kwargs['error_thresholds'] = list(self.error_thresholds)
+        if self.excluded_intervals is not None:
+            kwargs['excluded_intervals'] = [tuple(pair)
+                                            for pair in self.excluded_intervals]
+        return self.__class__(**kwargs)
 
     def __eq__(self, other):
         return all([
@@ -127,22 +145,24 @@ class LinearFitModel(ScanDataModel):
         fields = ["slope",
                   "offset"]
         dataseries_list, uncertainty_dataseries_list = \
-            zip(*[self.slopes(params, param_sigmas),
-                  self.offsets(params, param_sigmas),
+            zip(*[self.slope(params, param_sigmas),
+                  self.offset(params, param_sigmas),
                   ])
+        dataseries_list = list(dataseries_list)
+        uncertainty_dataseries_list = list(uncertainty_dataseries_list)
         return fields, dataseries_list, uncertainty_dataseries_list
 
-    def slopes(self, model_param_dataseries_list,
+    def slope(self, model_param_dataseries_list,
                model_param_uncertainty_dataseries_list):
-        slopes = model_param_dataseries_list[0]
-        slopes_sigma = model_param_uncertainty_dataseries_list[0]
-        return slopes, slopes_sigma
+        slope = model_param_dataseries_list[0]
+        slope_sigma = model_param_uncertainty_dataseries_list[0]
+        return slope, slope_sigma
 
-    def offsets(self, model_param_dataseries_list,
+    def offset(self, model_param_dataseries_list,
                 model_param_uncertainty_dataseries_list):
-        offsets = model_param_dataseries_list[1]
-        offsets_sigma = model_param_uncertainty_dataseries_list[1]
-        return offsets, offsets_sigma
+        offset = model_param_dataseries_list[1]
+        offset_sigma = model_param_uncertainty_dataseries_list[1]
+        return offset, offset_sigma
 
 
 # %% NEEDS TESTS, SPHINX DOCUMENTATION
@@ -183,23 +203,25 @@ class GaussianModel(ScanDataModel):
             raise ValueError("ScanDataModel: tried to extract " +
                              "fit results without successful fit")
             
-        fields = ["gaussian_amplitudes",
+        fields = ["gaussian_amplitude",
                   "gaussian_widths",
                   "gaussian_centers",
                   "gaussian_areas"]
         dataseries_list, uncertainty_dataseries_list = \
-            zip(*[self.gaussian_amplitudes(params, param_sigmas),
+            zip(*[self.gaussian_amplitude(params, param_sigmas),
                   self.gaussian_widths(params, param_sigmas),
                   self.gaussian_centers(params, param_sigmas),
                   self.gaussian_areas(params, param_sigmas),
                   ])
+        dataseries_list = list(dataseries_list)
+        uncertainty_dataseries_list = list(uncertainty_dataseries_list)
         return fields, dataseries_list, uncertainty_dataseries_list
 
-    def gaussian_amplitudes(self, model_param_dataseries_list,
+    def gaussian_amplitude(self, model_param_dataseries_list,
                             model_param_uncertainty_dataseries_list):
-        amplitudes = model_param_dataseries_list[0]
-        amplitudes_sigma = model_param_uncertainty_dataseries_list[0]
-        return amplitudes, amplitudes_sigma
+        amplitude = model_param_dataseries_list[0]
+        amplitude_sigma = model_param_uncertainty_dataseries_list[0]
+        return amplitude, amplitude_sigma
 
     def gaussian_widths(self, model_param_dataseries_list,
                         model_param_uncertainty_dataseries_list):
@@ -215,14 +237,14 @@ class GaussianModel(ScanDataModel):
 
     def gaussian_areas(self, model_param_dataseries_list,
                        model_param_uncertainty_dataseries_list):
-        amplitudes = model_param_dataseries_list[0]
-        amplitudes_sigma = model_param_uncertainty_dataseries_list[0]
+        amplitude = model_param_dataseries_list[0]
+        amplitude_sigma = model_param_uncertainty_dataseries_list[0]
         widths = model_param_dataseries_list[2]
         widths_sigma = model_param_uncertainty_dataseries_list[2]
         # note: uncertainty calc. assumes width, amplitude independent...
-        areas = amplitudes*widths
+        areas = amplitude*widths
         areas_sigma = \
-            ((amplitudes*widths_sigma)**2 + (widths*amplitudes_sigma)**2)**0.5
+            ((amplitude*widths_sigma)**2 + (widths*amplitude_sigma)**2)**0.5
         return areas, areas_sigma
 
 
@@ -244,19 +266,22 @@ class RSAFieldScanModel(ScanDataModel):
         self.dim2_key = "MiddleScanCoord"  # should be 3rd coord, but unknown!
         self.field_index = 0  # key field, probably lockin2x
         self.fitfunction = fitfcns.fitfcn_rsa_field_scan
+        self.model_params = ["pulse_amplitude", "lifetime", "gfactor",
+                             "field_offset", "drift_velocity", "phase",
+                             "slope", "offset"]
         # params = num_pulses, delay_time,
-        #          pulse_amplitude, lifetime, freq_per_T,
+        #          pulse_amplitude, lifetime, gfactor,
         #          field_offset, drift_velocity, phase, slope, offset
         self.free_params = [False, False,
                             True, True, True,
                             True, False, True, True, True]
         self.initial_params = [40, -160,
-                               0.05, 2000, 0.01,
+                               0.05, 2000, 0.43,
                                0, 0, 0, 0, 0]
         self.param_bounds = [(1, 1000), (-1000, 10000),
-                             (0, 1), (10, 1e9), (1e-4, 0.1),
-                             (-0.1, 0.1), (-0.01, 0.01), (-np.pi, np.pi),
-                             (-0.05, 0.05), (-0.01, 0.01)]
+                             (0, 1), (10, 1e9), (0.3, 0.6),
+                             (-0.1, 0.1), (-1e3, 1e3),
+                             (-np.pi, np.pi), (-0.05, 0.05), (-0.01, 0.01)]
         self.error_thresholds = [None, None,
                                  None, None, None,
                                  None, None, None, None, None]
@@ -274,45 +299,65 @@ class RSAFieldScanModel(ScanDataModel):
             raise ValueError("ScanDataModel: tried to extract " +
                              "fit results without successful fit")
             
-        fields = ["pulse_amplitudes",
-                  "lifetimes",
-                  "freq_per_Ts",
-                  "field_offsets",
-                  "drift_velocities"]
+        fields = ["pulse_amplitude",
+                  "lifetime",
+                  "gfactor",
+                  "osc_period_200mT",
+                  "osc_period_300mT",
+                  "field_offset",
+                  "drift_velocity"]
         dataseries_list, uncertainty_dataseries_list = \
-            zip(*[self.pulse_amplitudes(params, param_sigmas),
-                  self.lifetimes(params, param_sigmas),
-                  self.freq_per_Ts(params, param_sigmas),
-                  self.field_offsets(params, param_sigmas),
-                  self.drift_velocities(params, param_sigmas),
+            zip(*[self.pulse_amplitude(params, param_sigmas),
+                  self.lifetime(params, param_sigmas),
+                  self.gfactor(params, param_sigmas),
+                  self.osc_period_200mT(params, param_sigmas),
+                  self.osc_period_300mT(params, param_sigmas),
+                  self.field_offset(params, param_sigmas),
+                  self.drift_velocity(params, param_sigmas),
                   ])
+        dataseries_list = list(dataseries_list)
+        uncertainty_dataseries_list = list(uncertainty_dataseries_list)
         return fields, dataseries_list, uncertainty_dataseries_list
 
-    def pulse_amplitudes(self, model_param_dataseries_list,
+    def pulse_amplitude(self, model_param_dataseries_list,
                          model_param_uncertainty_dataseries_list):
         params = model_param_dataseries_list[2]
         params_sigma = model_param_uncertainty_dataseries_list[2]
         return params, params_sigma
 
-    def lifetimes(self, model_param_dataseries_list,
+    def lifetime(self, model_param_dataseries_list,
                         model_param_uncertainty_dataseries_list):
         params = model_param_dataseries_list[3]
         params_sigma = model_param_uncertainty_dataseries_list[3]
         return params, params_sigma
 
-    def freq_per_Ts(self, model_param_dataseries_list,
+    def gfactor(self, model_param_dataseries_list,
                         model_param_uncertainty_dataseries_list):
         params = model_param_dataseries_list[4]
         params_sigma = model_param_uncertainty_dataseries_list[4]
         return params, params_sigma
 
-    def field_offsets(self, model_param_dataseries_list,
+    def osc_period_200mT(self, model_param_dataseries_list,
+                          model_param_uncertainty_dataseries_list):
+        params = (model_param_dataseries_list[4]*GFACTORCONSTANT2*0.2)**(-1)
+        params_sigma = params*model_param_uncertainty_dataseries_list[4]/(
+                            model_param_dataseries_list[4])
+        return params, params_sigma
+
+    def osc_period_300mT(self, model_param_dataseries_list,
+                          model_param_uncertainty_dataseries_list):
+        params = (model_param_dataseries_list[4]*GFACTORCONSTANT2*0.3)**(-1)
+        params_sigma = params*model_param_uncertainty_dataseries_list[4]/(
+                            model_param_dataseries_list[4])
+        return params, params_sigma
+
+    def field_offset(self, model_param_dataseries_list,
                        model_param_uncertainty_dataseries_list):
         params = model_param_dataseries_list[5]
         params_sigma = model_param_uncertainty_dataseries_list[5]
         return params, params_sigma
 
-    def drift_velocities(self, model_param_dataseries_list,
+    def drift_velocity(self, model_param_dataseries_list,
                        model_param_uncertainty_dataseries_list):
         params = model_param_dataseries_list[6]
         params_sigma = model_param_uncertainty_dataseries_list[6]
@@ -337,7 +382,9 @@ class SpinLifetimeModel(ScanDataModel):
         self.dim2_key = "MiddleScanCoord"  # should be 3rd coord, but unknown!
         self.field_index = 3  # gaussian area
         self.fitfunction = fitfcns.fitfcn_two_exp_decay
-        # params = pulse_amp1, lifetime1, pulse_amp2, lifetime2, offset
+        self.model_params = ["short_amplitude", "short_lifetime", "long_amplitude",
+                             "long_lifetime", "offset"]
+        # params = short_amplitude, short_lifetime, long_amplitude, long_lifetime, offset
         self.free_params = [True, True, True, True, False]
         self.initial_params = [0.05, 50, 0.05, 2000, 0]
         self.param_bounds = [(0, 1), (1, 200),
@@ -357,37 +404,39 @@ class SpinLifetimeModel(ScanDataModel):
             raise ValueError("ScanDataModel: tried to extract " +
                              "fit results without successful fit")
             
-        fields = ["short_amplitudes",
-                  "short_lifetimes",
-                  "long_amplitudes",
-                  "long_lifetimes"]
+        fields = ["short_amplitude",
+                  "short_lifetime",
+                  "long_amplitude",
+                  "long_lifetime"]
         dataseries_list, uncertainty_dataseries_list = \
-            zip(*[self.short_amplitudes(params, param_sigmas),
-                  self.short_lifetimes(params, param_sigmas),
-                  self.long_amplitudes(params, param_sigmas),
-                  self.long_lifetimes(params, param_sigmas),
+            zip(*[self.short_amplitude(params, param_sigmas),
+                  self.short_lifetime(params, param_sigmas),
+                  self.long_amplitude(params, param_sigmas),
+                  self.long_lifetime(params, param_sigmas),
                   ])
+        dataseries_list = list(dataseries_list)
+        uncertainty_dataseries_list = list(uncertainty_dataseries_list)
         return fields, dataseries_list, uncertainty_dataseries_list
 
-    def short_amplitudes(self, model_param_dataseries_list,
+    def short_amplitude(self, model_param_dataseries_list,
                          model_param_uncertainty_dataseries_list):
         params = model_param_dataseries_list[0]
         params_sigma = model_param_uncertainty_dataseries_list[0]
         return params, params_sigma
 
-    def short_lifetimes(self, model_param_dataseries_list,
+    def short_lifetime(self, model_param_dataseries_list,
                         model_param_uncertainty_dataseries_list):
         params = model_param_dataseries_list[1]
         params_sigma = model_param_uncertainty_dataseries_list[1]
         return params, params_sigma
 
-    def long_amplitudes(self, model_param_dataseries_list,
+    def long_amplitude(self, model_param_dataseries_list,
                         model_param_uncertainty_dataseries_list):
         params = model_param_dataseries_list[2]
         params_sigma = model_param_uncertainty_dataseries_list[2]
         return params, params_sigma
 
-    def long_lifetimes(self, model_param_dataseries_list,
+    def long_lifetime(self, model_param_dataseries_list,
                        model_param_uncertainty_dataseries_list):
         params = model_param_dataseries_list[3]
         params_sigma = model_param_uncertainty_dataseries_list[3]
@@ -412,8 +461,10 @@ class SinusoidalSpinLifetimeModel(ScanDataModel):
         self.dim2_key = "Voltage"
         self.field_index = 0  # key field, probably lockin2x
         self.fitfunction = fitfcns.fitfcn_two_exp_sin_decay
-        # params = pulse_amp1, lifetime1, pulse_amp2,
-        #          lifetime2, osc_period, phase, offset
+        self.model_params = ["short_amplitude", "short_lifetime", "long_amplitude",
+                             "long_lifetime", "osc_period", "phase", "offset"]
+        # params = short_amplitude, short_lifetime, long_amplitude,
+        #          long_lifetime, osc_period, phase, offset
         self.free_params = [True, True, True, True,
                             True, True, True, True]
         self.initial_params = [0.05, 50, 0.05, 2000, 800, 0, 0, 0]
@@ -436,39 +487,41 @@ class SinusoidalSpinLifetimeModel(ScanDataModel):
         if len(params) == 0 or len(params) != len(param_sigmas):
             raise ValueError("ScanDataModel: tried to extract " +
                              "fit results without successful fit")
-            
+
         # TODO: design a model field decorator fcn to make this automatic
-        fields = ["short_amplitudes",
-                  "short_lifetimes",
-                  "long_amplitudes",
-                  "long_lifetimes"]
+        fields = ["short_amplitude",
+                  "short_lifetime",
+                  "long_amplitude",
+                  "long_lifetime"]
         dataseries_list, uncertainty_dataseries_list = \
-            zip(*[self.short_amplitudes(params, param_sigmas),
-                  self.short_lifetimes(params, param_sigmas),
-                  self.long_amplitudes(params, param_sigmas),
-                  self.long_lifetimes(params, param_sigmas),
+            zip(*[self.short_amplitude(params, param_sigmas),
+                  self.short_lifetime(params, param_sigmas),
+                  self.long_amplitude(params, param_sigmas),
+                  self.long_lifetime(params, param_sigmas),
                   ])
+        dataseries_list = list(dataseries_list)
+        uncertainty_dataseries_list = list(uncertainty_dataseries_list)
         return fields, dataseries_list, uncertainty_dataseries_list
 
-    def short_amplitudes(self, model_param_dataseries_list,
+    def short_amplitude(self, model_param_dataseries_list,
                          model_param_uncertainty_dataseries_list):
         params = model_param_dataseries_list[0]
         params_sigma = model_param_uncertainty_dataseries_list[0]
         return params, params_sigma
 
-    def short_lifetimes(self, model_param_dataseries_list,
+    def short_lifetime(self, model_param_dataseries_list,
                         model_param_uncertainty_dataseries_list):
         params = model_param_dataseries_list[1]
         params_sigma = model_param_uncertainty_dataseries_list[1]
         return params, params_sigma
 
-    def long_amplitudes(self, model_param_dataseries_list,
+    def long_amplitude(self, model_param_dataseries_list,
                         model_param_uncertainty_dataseries_list):
         params = model_param_dataseries_list[2]
         params_sigma = model_param_uncertainty_dataseries_list[2]
         return params, params_sigma
 
-    def long_lifetimes(self, model_param_dataseries_list,
+    def long_lifetime(self, model_param_dataseries_list,
                        model_param_uncertainty_dataseries_list):
         params = model_param_dataseries_list[3]
         params_sigma = model_param_uncertainty_dataseries_list[3]
@@ -493,9 +546,14 @@ class IndependentSinusoidalSpinLifetimeModel(ScanDataModel):
         self.dim2_key = "Voltage"
         self.field_index = 0  # key field, probably lockin2x
         self.fitfunction = fitfcns.fitfcn_two_indep_exp_sin_decay
-        # params = num_pulses, pulse_amp1, pulse_amp2, lifetime1, lifetime2,
-        #          osc_period1, osc_period2, drift_velocity1, drift_velocity2,
-        #          phase1, phase2, slope, offset
+        self.model_params = ["num_pulses", "short_amplitude", "long_amplitude",
+                             "short_lifetime", "long_lifetime", "short_osc_period",
+                             "long_osc_period", "short_drift_velocity",
+                             "long_drift_velocity", "short_phase", "long_phase",
+                             "slope", "offset"]
+        # params = num_pulses, short_amplitude, long_amplitude, short_lifetime, long_lifetime,
+        #          short_osc_period, long_osc_period, short_drift_velocity, long_drift_velocity,
+        #          short_phase, long_phase, slope, offset
         self.free_params = [False, True, True, True, True,
                             True, True, False, False,
                             True, True, True, True]
@@ -505,7 +563,7 @@ class IndependentSinusoidalSpinLifetimeModel(ScanDataModel):
         self.param_bounds = [(1,1000), (0, 1), (0, 1),
                              (1, 1e9), (1, 1e9),
                              (600, 1000), (600, 1000),
-                             (-.01, .01), (-.01, .01),
+                             (-1e3, 1e3), (-1e3, 1e3),
                              (-np.pi, np.pi), (-np.pi, np.pi),
                              (-1e-6, 1e-6), (-0.01, 0.01)]
         self.error_thresholds = [None, None, None, None, None,
@@ -513,6 +571,10 @@ class IndependentSinusoidalSpinLifetimeModel(ScanDataModel):
                                  None, None, None, None]
         self.max_fcn_evals = 10000
         self.excluded_intervals = None
+        
+        # unique to this model!
+        self.BField = 0  # in mT
+
         # keyword args override defaults
         for key, val in kwargs.items():
             self.__dict__[key] = val
@@ -526,86 +588,126 @@ class IndependentSinusoidalSpinLifetimeModel(ScanDataModel):
                              "fit results without successful fit")
             
         # TODO: design a model field decorator fcn to make this automatic
-        fields = ["short_amplitudes",
-                  "long_amplitudes",
-                  "short_lifetimes",
-                  "long_lifetimes",
-                  "short_osc_periods",
-                  "long_osc_periods",
-                  "short_drift_velocities",
-                  "long_drift_velocities",
-                  "short_phases",
-                  "long_phases"]
+        fields = ["short_amplitude",
+                  "long_amplitude",
+                  "short_lifetime",
+                  "long_lifetime",
+                  "short_osc_period",
+                  "long_osc_period",
+                  "short_gfactor",
+                  "long_gfactor",
+                  "short_drift_velocity",
+                  "long_drift_velocity",
+                  "short_phase",
+                  "long_phase",
+                  "beat_osc_period"]
         dataseries_list, uncertainty_dataseries_list = \
-            zip(*[self.short_amplitudes(params, param_sigmas),
-                  self.long_amplitudes(params, param_sigmas),
-                  self.short_lifetimes(params, param_sigmas),
-                  self.long_lifetimes(params, param_sigmas),
-                  self.short_osc_periods(params, param_sigmas),
-                  self.long_osc_periods(params, param_sigmas),
-                  self.short_drift_velocities(params, param_sigmas),
-                  self.long_drift_velocities(params, param_sigmas),
-                  self.short_phases(params, param_sigmas),
-                  self.long_phases(params, param_sigmas),
+            zip(*[self.short_amplitude(params, param_sigmas),
+                  self.long_amplitude(params, param_sigmas),
+                  self.short_lifetime(params, param_sigmas),
+                  self.long_lifetime(params, param_sigmas),
+                  self.short_osc_period(params, param_sigmas),
+                  self.long_osc_period(params, param_sigmas),
+                  self.short_gfactor(params, param_sigmas),
+                  self.long_gfactor(params, param_sigmas),
+                  self.short_drift_velocity(params, param_sigmas),
+                  self.long_drift_velocity(params, param_sigmas),
+                  self.short_phase(params, param_sigmas),
+                  self.long_phase(params, param_sigmas),
+                  self.beat_osc_period(params, param_sigmas),
                   ])
+        dataseries_list = list(dataseries_list)
+        uncertainty_dataseries_list = list(uncertainty_dataseries_list)
         return fields, dataseries_list, uncertainty_dataseries_list
 
-    def short_amplitudes(self, model_param_dataseries_list,
+    def short_amplitude(self, model_param_dataseries_list,
                          model_param_uncertainty_dataseries_list):
         params = model_param_dataseries_list[1]
         params_sigma = model_param_uncertainty_dataseries_list[1]
         return params, params_sigma
 
-    def long_amplitudes(self, model_param_dataseries_list,
+    def long_amplitude(self, model_param_dataseries_list,
                         model_param_uncertainty_dataseries_list):
         params = model_param_dataseries_list[2]
         params_sigma = model_param_uncertainty_dataseries_list[2]
         return params, params_sigma
 
-    def short_lifetimes(self, model_param_dataseries_list,
+    def short_lifetime(self, model_param_dataseries_list,
                         model_param_uncertainty_dataseries_list):
         params = model_param_dataseries_list[3]
         params_sigma = model_param_uncertainty_dataseries_list[3]
         return params, params_sigma
 
-    def long_lifetimes(self, model_param_dataseries_list,
+    def long_lifetime(self, model_param_dataseries_list,
                        model_param_uncertainty_dataseries_list):
         params = model_param_dataseries_list[4]
         params_sigma = model_param_uncertainty_dataseries_list[4]
         return params, params_sigma
 
-    def short_osc_periods(self, model_param_dataseries_list,
+    def short_osc_period(self, model_param_dataseries_list,
                         model_param_uncertainty_dataseries_list):
         params = model_param_dataseries_list[5]
         params_sigma = model_param_uncertainty_dataseries_list[5]
         return params, params_sigma
 
-    def long_osc_periods(self, model_param_dataseries_list,
+    def long_osc_period(self, model_param_dataseries_list,
                        model_param_uncertainty_dataseries_list):
         params = model_param_dataseries_list[6]
         params_sigma = model_param_uncertainty_dataseries_list[6]
         return params, params_sigma
 
-    def short_drift_velocities(self, model_param_dataseries_list,
+    def short_gfactor(self, model_param_dataseries_list,
+                             model_param_uncertainty_dataseries_list):
+        params = (model_param_dataseries_list[5] * \
+                  GFACTORCONSTANT2*self.BField)**(-1)
+        params_sigma = params*model_param_uncertainty_dataseries_list[5]/(
+                            model_param_dataseries_list[5])
+        return params, params_sigma
+
+    def long_gfactor(self, model_param_dataseries_list,
+                            model_param_uncertainty_dataseries_list):
+        params = (model_param_dataseries_list[6] * \
+                  GFACTORCONSTANT2*self.BField)**(-1)
+        params_sigma = params*model_param_uncertainty_dataseries_list[6]/(
+                            model_param_dataseries_list[6])
+        return params, params_sigma
+
+    def short_drift_velocity(self, model_param_dataseries_list,
                         model_param_uncertainty_dataseries_list):
         params = model_param_dataseries_list[7]
         params_sigma = model_param_uncertainty_dataseries_list[7]
         return params, params_sigma
 
-    def long_drift_velocities(self, model_param_dataseries_list,
+    def long_drift_velocity(self, model_param_dataseries_list,
                        model_param_uncertainty_dataseries_list):
         params = model_param_dataseries_list[8]
         params_sigma = model_param_uncertainty_dataseries_list[8]
         return params, params_sigma
 
-    def short_phases(self, model_param_dataseries_list,
+    def short_phase(self, model_param_dataseries_list,
                         model_param_uncertainty_dataseries_list):
         params = model_param_dataseries_list[9]
         params_sigma = model_param_uncertainty_dataseries_list[9]
         return params, params_sigma
 
-    def long_phases(self, model_param_dataseries_list,
+    def long_phase(self, model_param_dataseries_list,
                        model_param_uncertainty_dataseries_list):
         params = model_param_dataseries_list[10]
         params_sigma = model_param_uncertainty_dataseries_list[10]
+        return params, params_sigma
+
+    def beat_osc_period(self, model_param_dataseries_list,
+                         model_param_uncertainty_dataseries_list):
+#        with np.errstate(all='ignore'):
+#            params = np.array(pow(np.abs(
+#                                pow(model_param_dataseries_list[5],  -1.) -
+#                                pow(model_param_dataseries_list[6], -1.)), -1))
+#        params_sigma_yvals = np.max(np.vstack([
+#                                  model_param_uncertainty_dataseries_list[6].yvals(unsorted=False),
+#                                  model_param_uncertainty_dataseries_list[5].yvals(unsorted=False)]),
+#                              axis=0)
+#        params_sigma = model_param_uncertainty_dataseries_list[5]*0 + params_sigma_yvals
+        params = abs(model_param_dataseries_list[6] -
+                     model_param_dataseries_list[5])
+        params_sigma = model_param_dataseries_list[5]
         return params, params_sigma

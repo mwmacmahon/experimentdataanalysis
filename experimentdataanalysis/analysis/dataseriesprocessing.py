@@ -12,6 +12,7 @@ import inspect
 
 import numpy as np
 from scipy.optimize import curve_fit
+import scipy.ndimage.filters as filters
 
 from experimentdataanalysis.analysis.dataclasses \
     import FitData, ScanData, DataSeries
@@ -117,7 +118,7 @@ def dataseries_fit(dataseries, fitfunction,
                            if ind in free_param_indices]
     partial_bounds = (partial_lower_bound, partial_upper_bound)
 
-    # fit partial function with curve_fit, use sorted (but filtered) data
+    # fit partial function with curve_fit, use sorted data
     xvals, yvals = dataseries.data(unsorted=False)
     if weights_dataseries:  # first ensure same xvals range
         weights_xvals = weights_dataseries.xvals(unsorted=False)
@@ -329,15 +330,22 @@ def get_max_yval_xypair(dataseries):
 
 # %% TODO: NEEDS TEST, SPHINX DOCUMENTATION
 def process_dataseries_and_error_in_scandata(scandata,
-                                   process_fcn, process_fcn_params):
+                                             process_fcn, process_fcn_params,
+                                             only_process_these_indices=None):
     new_dataseries_list = []
     new_error_dataseries_list = []
-    for dataseries, error_dataseries in \
-            zip(scandata.dataseries_list, scandata.error_dataseries_list):
-        new_dataseries, new_error_dataseries = \
-            process_fcn(dataseries, error_dataseries, *process_fcn_params)
-        new_dataseries_list.append(new_dataseries)
-        new_error_dataseries_list.append(new_error_dataseries)
+    for index, (dataseries, error_dataseries) in enumerate(zip(
+            scandata.dataseries_list, scandata.error_dataseries_list)):
+        if only_process_these_indices is None or \
+                                        index in only_process_these_indices:
+            new_dataseries, new_error_dataseries = \
+                process_fcn(dataseries, error_dataseries, *process_fcn_params)
+            new_dataseries_list.append(new_dataseries)
+            new_error_dataseries_list.append(new_error_dataseries)
+        else:
+            new_dataseries_list.append(dataseries)
+            new_error_dataseries_list.append(error_dataseries)
+            
     return ScanData(scandata.fields,
                     [scaninfo.copy() for scaninfo in scandata.scaninfo_list],
                     new_dataseries_list,
@@ -346,32 +354,107 @@ def process_dataseries_and_error_in_scandata(scandata,
 
 
 # %%
-def get_positive_time_delay_scandata(scandata, zero_delay_offset=0):
+def get_positive_time_delay_scandata(scandata, zero_delay_offset=0,
+                                     neg_time_weight_multiplier=1.0):
     def get_positive_time_delay_dataseries(dataseries, error_dataseries,
-                                           dataseries_zero_delay_offset):
+                                           dataseries_zero_delay_offset,
+                                           dataseries_weight_multiplier):
         oldxvals, yvals = dataseries.data(raw=True)
+        neg_time_indices = []
         newxvals = oldxvals.copy()
         for i, x in enumerate(newxvals):
             if x < dataseries_zero_delay_offset:
                 newxvals[i] = x + LASER_REPRATE
+                neg_time_indices.append(i)
 
         new_dataseries = DataSeries(newxvals, yvals)
         if error_dataseries is not None:
-            error_yvals = error_dataseries.yvals(raw=True)
-            new_error_dataseries = DataSeries(newxvals, error_yvals)
+            old_error_yvals = error_dataseries.yvals(raw=True)
+            new_error_yvals = old_error_yvals.copy()
+            for i in neg_time_indices:  # recall actual weight is error**-2
+                new_error_yvals[i] *= np.sqrt(1.0/dataseries_weight_multiplier)
+            new_error_dataseries = DataSeries(newxvals, new_error_yvals)
         else:
             new_error_dataseries = None
 
         return new_dataseries, new_error_dataseries
 
     process_fcn = get_positive_time_delay_dataseries
-    process_fcn_params = [zero_delay_offset]
+    process_fcn_params = [zero_delay_offset, neg_time_weight_multiplier]
     return process_dataseries_and_error_in_scandata(scandata,
                                    process_fcn, process_fcn_params)
 
 
+# %%
+def get_continuous_phase_scandata(scandata):
+    def get_continuous_phase_dataseries(dataseries, error_dataseries):
+        sortedyvals = dataseries.yvals(unsorted=False)
+        sortedyvals_offset = np.unwrap(sortedyvals) - sortedyvals
+        new_dataseries = dataseries + sortedyvals_offset  # acts on sorted
+        new_error_dataseries = error_dataseries
+        return new_dataseries, new_error_dataseries
+
+    process_fcn = get_continuous_phase_dataseries
+    process_fcn_params = []
+    indices_to_process = [index
+                          for index, field in enumerate(scandata.fields)
+                          if 'phase' in field]
+    return process_dataseries_and_error_in_scandata(scandata, process_fcn,
+                                                    process_fcn_params,
+                                                    indices_to_process)
+                                        
+
+# %%
+def get_gaussian_smoothed_scandata(scandata, field_indices_to_process,
+                                   gaussian_width, edge_handling='reflect',
+                                   subtract_smoothed_data_from_original=False):
+    """
+    returns data smoothed over with a gaussian integral, unless the flag
+    subtract_smoothed_gaussian is set to True, in which case it returns the
+    original data with the smoothed gaussian subtracted
+
+    warning: expects and assumes evenly spaced xvalues, not necessarily in
+    order though. gets scaling of data from first two xvalues. this means
+    DO NOT USE AFTER ADDING 13NS TO NEGATIVE DELAY TIMES.
+    """
+    def get_gaussian_smoothed_dataseries(dataseries, error_dataseries,
+                                         gaussian_width, edge_handling,
+                                         subtract_smoothed_data):
+        sortedxvals, sortedyvals = dataseries.data(unsorted=False)
+        xdiffs = np.abs(sortedxvals[1:] - sortedxvals[:-1])
+        x_scale_factor = np.mean(xdiffs)
+        if max(xdiffs) > 1.5*x_scale_factor:
+            raise ValueError("get_gaussian_smoothed_dataseries: requires a " +
+                             "dataseries with roughly even x-spacing " +
+                             "(including no discontinuities in spacing)")
+        sigma = gaussian_width/x_scale_factor
+        smoothedyvals = filters.gaussian_filter1d(sortedyvals, sigma,
+                                                  mode=edge_handling)
+        # note (DataSeries +- numpy array) acts on _sorted_ DataSeries
+        if subtract_smoothed_data:
+            new_dataseries = dataseries - smoothedyvals
+        else:
+            new_dataseries = 0*dataseries + smoothedyvals
+        new_error_dataseries = error_dataseries
+        return new_dataseries, new_error_dataseries
+
+    process_fcn = get_gaussian_smoothed_dataseries
+    process_fcn_params = [gaussian_width, edge_handling,
+                          subtract_smoothed_data_from_original]
+    return process_dataseries_and_error_in_scandata(scandata, process_fcn,
+                                                    process_fcn_params,
+                                                    field_indices_to_process)
+
+
 # %% high pass filter?
 def get_high_pass_filtered_scandata(scandata, min_freq_cutoff=0):
+    """
+    warning: assumes data is in sorted order, will resort otherwise
+    TODO: fix this
+    """
+    print("Warning: get_high_pass_filtered_scandata currently does not " +
+          "respect dataseries ordering, consider using " +
+          "get_gaussian_smoothed_scandata with a large gaussian width instead")
     def get_high_pass_filtered_dataseries(dataseries, error_dataseries,
                                           dataseries_min_freq_cutoff):
         # extract data and handle error_dataseries & if odd # elements

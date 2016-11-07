@@ -6,6 +6,7 @@ Created on Mon Jan 25 14:07:59 2016
 """
 
 import numpy as np
+import re  # regex commands for fixing invalid attribute names
 
 from collections import Iterable, namedtuple
 from collections.abc import Sequence
@@ -21,17 +22,228 @@ FitFunc = namedtuple("FitFunc", ["description", "fitfunction",
                                  "fitparamlist", "fitargumentlist"])
 
 
-# %%
+# %% SCANDATA
+class ScanDataReservedAlias():
+    def __init__(self):
+        self.alias = None  # set to be x, y, yerr, etc. by metaclass
+        self.storage_alias = None  # same, but _x, _y, etc. Normally unused.
+
+    def __get__(self, scandata_instance, scandata_class):
+        if scandata_instance is None: return self
+        fetch_fcn = self.get_other  # default behavior for unknown alias
+        if self.alias == 'x': fetch_fcn = self.get_x
+        if self.alias == 'y': fetch_fcn = self.get_y
+        if self.alias == 'yerr': fetch_fcn = self.get_yerr
+        if self.alias == 'xy': fetch_fcn = self.get_xy
+        if self.alias == 'yyerr': fetch_fcn = self.get_yyerr
+        if self.alias == 'xyyerr': fetch_fcn = self.get_xyyerr
+        return fetch_fcn(scandata_instance)
+
+    def __set__(self, scandata_instance, value):
+        error_msg = ("Cannot set attribute for " +
+                     "reserved alias '{}'".format(self.alias))
+        # if one of these aliases, throw error, otherwise set value normally
+        if self.alias == 'x': raise AttributeError(error_msg)
+        if self.alias == 'y': raise AttributeError(error_msg)
+        if self.alias == 'yerr': raise AttributeError(error_msg)
+        if self.alias == 'xy': raise AttributeError(error_msg)
+        if self.alias == 'yyerr': raise AttributeError(error_msg)
+        if self.alias == 'xyyerr': raise AttributeError(error_msg)
+        setattr(scandata_instance, self.storage_alias, value)
+
+    def get_x(self, scandata_instance):  # throw AttributeError if not found
+        return getattr(scandata_instance, scandata_instance.xfield)
+
+    def get_y(self, scandata_instance):  # throw AttributeError if not found
+        return getattr(scandata_instance, scandata_instance.yfield)
+
+    def get_yerr(self, scandata_instance):  # default to None if not found
+        return getattr(scandata_instance,
+                       scandata_instance.yfield + '_error', None)
+
+    def get_xy(self, scandata_instance):
+        x = self.get_x(scandata_instance)
+        y = self.get_y(scandata_instance)
+        return x, y
+
+    def get_yyerr(self, scandata_instance):
+        y = self.get_y(scandata_instance)
+        yerr = self.get_yerr(scandata_instance)
+        return y, yerr
+
+    def get_xyyerr(self, scandata_instance):
+        x = self.get_x(scandata_instance)
+        y = self.get_y(scandata_instance)
+        yerr = self.get_yerr(scandata_instance)
+        return x, y, yerr
+
+    def get_other(self, scandata_instance):  # return stored or throw error
+        return getattr(scandata_instance, self.storage_alias)
+
+
+class SupportsReservedAliases(type):  # note: run only when _class_ is defined
+    def __new__(meta, name, bases, class_dict):
+        for key, value in class_dict.items():  # for each invoked descriptor
+            if isinstance(value, ScanDataReservedAlias):
+                value.alias = key
+                value.storage_alias = '_' + key  # storage key inside ScanData
+                class_dict['reserved_names'].append(key)
+        modified_class = type.__new__(meta, name, bases, class_dict)
+        return modified_class
+
+
+def make_into_attribute_name(original_name):
+    # grabbed some regular expressions to fix names off stackoverflow:
+    new_name = original_name
+    new_name = re.sub('[^0-9a-zA-Z_]', '', new_name)  # no invalid characters
+    new_name = re.sub('^[^a-zA-Z_]+', '', new_name)  # first char _ or letter
+    if new_name == "":
+        raise ValueError("No valid attribute name can " +
+                         "be derived from '{}'".format(original_name))
+    is_changed = not (new_name==original_name)
+    return is_changed, new_name
+
+
+class ScanData(object, metaclass=SupportsReservedAliases):
+    """
+    Data object meant to store the equivalent of a table of data and retreive
+    columns (as numpy arrays) via attributes: e.g. scandata.delaytimes.
+    Reads in a list of field names and field arrays (or any iterables, but all
+    iterables must be same length and convertible to numpy arrays), and
+    arrays will be saved as an attribute under the associated field name.
+    A dictionary containing info from file header/filename or other sources
+    is also provided as scandata.info.
+
+    Note the "x" column will be the first column by default, and "y" the
+    second. These can be overwritten at instantiation or by changing the
+    attributes 'xfield' and 'yfield'. The following shortcut attributes and
+    methods can be used to get one or more fields with a single, short call:
+
+    Shortcut attributes:
+    scandata.x -> array saved under attribute name given by scandata.xfield
+    scandata.y -> array saved under attribute name given by scandata.yfield
+    scandata.yerr -> array saved under attribute name "[scandata.yfield]_error"
+    scandata.xy -> returns 2-tuple (scandata.x, scandata.y)
+    scandata.yyerr -> returns 2-tuple (scandata.y, scandata.yerr)
+    scandata.xyyerr -> returns 3-tuple (scandata.x, scandata.y, scandata.yerr)
+
+    Shortcut methods:
+    scandata.get_field_xy(field_name) -> same as scandata.x, but using
+                                         field_name instead of scandata.yfield
+    scandata.get_field_yyerr(field_name) -> same, but scandata.yyerr
+    scandata.get_field_xyyerr(field_name) -> same, but scandata.xyyerr
+
+    Other methods:
+    
+    """
+    reserved_names = ['reserved_names', 'info', 'length', 'xfield', 'yfield']
+    # un-settable descriptor attributes that return notable fields:
+    x = ScanDataReservedAlias()  # note: these are all added to above list
+    y = ScanDataReservedAlias()
+    yerr = ScanDataReservedAlias()
+    xy = ScanDataReservedAlias()  # not to be confused with get_field_xy(field)
+    yyerr = ScanDataReservedAlias()  # or with get_field_yyerr(field)
+    xyyerr = ScanDataReservedAlias()  # or with get_field_xyyerr(field)
+
+    def __init__(self, field_names, field_arrays, info_dict={},
+                 x_field_name=None, y_field_name=None):
+        self.info = info_dict.copy()  # in case initialized from another!
+        field_name_changed = False
+        if x_field_name:
+            is_changed, self.xfield = make_into_attribute_name(x_field_name)
+            field_name_changed = field_name_changed or is_changed
+        if y_field_name:
+            is_changed, self.yfield = make_into_attribute_name(y_field_name)
+            field_name_changed = field_name_changed or is_changed
+        self.fields = []
+        for raw_fieldname, field_array in zip(field_names, field_arrays):
+            is_changed, fieldname = make_into_attribute_name(raw_fieldname)
+            field_name_changed = field_name_changed or is_changed
+            if fieldname in self.__class__.reserved_names:
+                print('ScanData name conflict, renaming {} to {}'.format(
+                        fieldname, fieldname + '_data'))
+                fieldname = fieldname + '_data'
+                field_name_changed = True
+            field_array = np.array(field_array)
+            field_array.flags.writeable = False
+            if "length" not in self.__dict__:
+                self.length = len(field_array)
+                if "xfield" not in self.__dict__ : # first col is x by default
+                    self.xfield = fieldname
+            else:  # fields 2+
+                if "yfield" not in self.__dict__ : # second col is y by default
+                    self.yfield = fieldname
+                if self.length != len(field_array):
+                    errstr = "ScanData field arrays not of " + \
+                             "matching length! Lengths: "
+                    for field in self.fields:
+                        errstr += str(len(self.get(field, []))) + ", "
+                    errstr += str(self.length)
+                    raise ValueError(errstr)
+            setattr(self, fieldname, field_array)
+            self.fields.append(fieldname)
+
+        # check for issues during initialization, warn or raise error as needed
+        if len(self.fields) < 2:  # not enough columns for x, y!
+            raise ValueError("ScanData requires at least two fields!")
+        if self.xfield not in self.fields:  # never found x field!
+            print("ScanData: field {} not found, x field set to {}".format(
+                    self.xfield, self.fields[0]))
+            self.xfield = self.fields[0]
+        if self.yfield not in self.fields:  # never found y field!
+            print("ScanData: field {} not found, y field set to {}".format(
+                    self.yfield, self.fields[1]))
+            self.yfield = self.fields[1]
+        if field_name_changed:
+            print("ScanData: one or more field names changed, " +
+                  "new field names: {}".format(self.fields))
+
+    def get_field_xy(self, field_name):
+        x = self.x
+        y = getattr(self, field_name)
+        return x, y
+
+    def get_field_yyerr(self, field_name):
+        y = getattr(self, field_name)
+        yerr = getattr(self, field_name + '_error', None)
+        return y, yerr
+
+    def get_field_xyyerr(self, field_name):
+        x = self.x
+        y = getattr(self, field_name)
+        yerr = getattr(self, field_name + '_error', None)
+        return x, y, yerr
+
+    def copy(self):
+        # TODO: make info/key-value copies deep copies?
+        new_fields = self.fields[:]
+        new_fields += [field_name + '_error'
+                       for field_name in self.fields]
+        new_field_arrays = [np.array(getattr(self, field_name))
+                            for field_name in self.fields]
+        new_field_arrays += [np.array(getattr(self, field_name + '_error'))
+                             for field_name in self.fields
+                             if field_name + '_error' in self.__dict__]
+        new_info = self.info.copy()
+        new_scandata = self.__class__(new_fields, new_field_arrays,
+                                      new_info, self.xfield, self.yfield)
+        for key, value in self.__dict__.items():  # other stuff in dicts
+            if key not in self.fields:
+                if key not in self.__class__.reserved_names:
+                    setattr(new_scandata, key, value)
+        return new_scandata
+
+# old:
 # default way of storing each csv file's data for active use
 # "scaninfo" is a dict containing scan parameters, e.g. "Voltage: 5"
 # note "dataseries" and "fitdata" are PLURAL - a tuple of entries is
 # expected, and fields[i], dataseries[i], and fitdata[i] are correlated
-ScanData = namedtuple("ScanData", ["fields",
-                                   "scaninfo_list",
-                                   "dataseries_list",
-                                   "error_dataseries_list",
-                                   "fitdata_list"])
-# old:
+#ScanData = namedtuple("ScanData", ["fields",
+#                                   "scaninfo_list",
+#                                   "dataseries_list",
+#                                   "error_dataseries_list",
+#                                   "fitdata_list"])
+# older:
 # ScanData = namedtuple("ScanData", ["filepath", "scaninfo", "fields",
 #                                    "dataseries", "fitdata"])
 

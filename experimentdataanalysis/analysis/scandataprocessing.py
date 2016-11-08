@@ -1,0 +1,589 @@
+# -*- coding: utf-8 -*-
+"""
+Created on Wed May  4 17:35:06 2016
+
+The module that handles actual data fitting. Makes heavy use of the
+FitData construct from dataclasses.py
+
+@author: vsih-lab
+"""
+
+import inspect
+
+import numpy as np
+from scipy.optimize import curve_fit
+import scipy.ndimage.filters as filters
+
+from experimentdataanalysis.analysis.dataclasses \
+    import FitData, ScanData
+from experimentdataanalysis.analysis.generalutilities \
+    import multiprocessable_map
+
+LASER_REPRATE = 13160  # ps period
+
+
+# %% NEEDS TEST, SPHINX DOCUMENTATION
+def scandata_fit(scandata, field_name, fitfunction, free_params,
+                 initial_params, param_bounds, max_fcn_evals=20000,
+                 excluded_intervals=None, ignore_weights=False):
+    """
+    Uses generic_curve_fit to fit a ScanData field with the given function
+    and parameters
+
+    The resulting FitData is stored in the ScanData's info dict under the
+    key 'fitdata_[field_name]'. 'None' is stored for failed fits.
+    The FitData (or None) is also returned.
+    """
+    xvals, yvals, yerrvals = scandata.get_field_xyyerr(field_name)
+    fitdata = generic_curve_fit(xvals, yvals, yerrvals, fitfunction,
+                                free_params, initial_params,
+                                param_bounds, max_fcn_evals,
+                                excluded_intervals, ignore_weights)
+    scandata.info['fitdata_' + field_name] = fitdata
+    return scandata
+
+
+# %% NEEDS TEST, SPHINX DOCUMENTATION
+def scandata_list_fit(scandata_list, field_name, fitfunction,
+                      free_params, initial_params, param_bounds,
+                      max_fcn_evals=20000, excluded_intervals=None,
+                      ignore_weights=False, multiprocessing=False):
+    """
+    Takes a list (or other iterable) of ScanData and performs a fit on all
+    of them.
+
+    Optionally, each parameter after scandata_list (except multiprocessing)
+    can be replaced with a list of equal length to scandata_list. This will
+    fit each ScanData with the corresponding parameters from the other lists
+    instead of using the same parameters for each fit.
+
+    FitData resulting from fits are stored in the info dict of each ScanData
+    under the key 'fitdata_[field_name]'. 'None' is stored for failed fits.
+    These FitData (and Nones) are also returned as a list.
+    """
+    scandata_list = list(scandata_list)  # ensure an actual list
+    
+    try:  # all different fit params
+        xyyerr_lists = \
+            list(zip(*[scandata.get_field_xyyerr(field)
+                       for scandata, field in zip(scandata_list, field_name)]))
+        assert len(xyyerr_lists[0]) == len(scandata_list)  # zip error check
+        input_args_list = list(zip(*xyyerr_lists,
+                                   fitfunction, free_params, initial_params,
+                                   param_bounds, max_fcn_evals,
+                                   excluded_intervals, ignore_weights))
+        assert len(input_args_list) == len(scandata_list)  # zip error check
+        field_name_list = field_name
+    except (TypeError, AssertionError):  # all same fit params
+        input_args_list = [[*scandata.get_field_xyyerr(field_name),
+                            fitfunction, free_params, initial_params,
+                            param_bounds, max_fcn_evals,
+                            excluded_intervals, ignore_weights]
+                           for scandata in scandata_list]
+        field_name_list = [field_name] * len(scandata_list)
+    fitdata_list = multiprocessable_map(generic_curve_fit, input_args_list,
+                                        multiprocessing)
+    for scandata, fitdata, field in \
+                            zip(scandata_list, fitdata_list, field_name_list):
+        scandata.info['fitdata_' + field] = fitdata
+    return fitdata_list
+
+
+# %% NEEDS TEST, SPHINX DOCUMENTATION
+def generic_curve_fit(xvals, yvals, yerrvals, fitfunction, free_params,
+                      initial_params, param_bounds, max_fcn_evals=20000,
+                      excluded_intervals=None, ignore_weights=False):
+    """
+    Takes a ScanData and fits one field as a function of an arbitrary single-
+    valued scalar function whose first parameter is assumed to correspond
+    to "x" values and whose output is assumed to correspond to "y" values.
+
+    Positional arguments:
+    :scandata: ScanData object containing data points to fit.
+    :field_name: Name of field to fit, e.g. "lockin2x"
+    :function (x,...)->y: function mapping a numpy array x to numpy array y
+    :free_params: list/tuple describing whether each non-x parameter should
+    be free, should have True/False for each parameter.
+    :initial_params: list/tuple of parameter starting guesses, should have
+    a value for all non-x parameters
+    :param_bounds: list/tuple containing parameter upper and lower bounds,
+    needs a 2-tuple for all free non-x parameters (and anything for
+    fixed parameters)
+
+    Optional arguments:
+    :excluded_intervals: list/tuple containing pairs (x_start, x_end)
+        corresponding to x-intervals in which data should not be used for fit
+
+    Return type:
+    :rtype: fitparams, fitparamstds - lists of fitted parameters and their
+    uncertainties, where fixed parameters are given an uncertainty (std) of 0
+    """
+    # don't want to risk changing the arrays in-place!
+    original_xvals = xvals
+    original_yvals = yvals
+    xvals = np.array(xvals)
+    yvals = np.array(yvals)
+    if yerrvals is not None:
+        yerrvals = np.array(yerrvals)
+
+    # should check validiy of all arguments, inc. nonzero free params, etc.
+    # also convert "lower bound = upper bound" params to fixed.
+    if len(xvals) != len(yvals):
+        raise ValueError("len(xvals) != len(yvals)")
+    if yerrvals is not None and not ignore_weights:  
+        if len(yerrvals) != len(yvals):
+            raise ValueError("len(yvals) != len(yerr)")
+        else:
+            use_errors = True
+    else:
+        use_errors = False
+
+    fcn_sig = inspect.signature(fitfunction)
+    num_nonx_args = len(fcn_sig.parameters) - 1
+    free_param_indices = \
+        check_fit_parameter_consistency(num_nonx_args, free_params,
+                                        initial_params, param_bounds)
+
+    # should create a partial function with _only_ free parameters
+    # and a function to get full parameter list from only partial list
+    def get_full_param_list(free_arg_list, alternate_fixed_arg_list=None):
+        if len(free_arg_list) != len(free_param_indices):
+            raise TypeError("fit_function_to_dataseries: non-matching "
+                            "length of parameters given.")
+        free_ind = 0
+        all_params = []
+        for ind in range(num_nonx_args):
+            if ind in free_param_indices:
+                all_params.append(free_arg_list[free_ind])
+                free_ind += 1
+            else:
+                if alternate_fixed_arg_list is not None:
+                    all_params.append(alternate_fixed_arg_list[ind])
+                else:
+                    all_params.append(initial_params[ind])
+        return all_params
+
+    def partialfcn(x, *free_args):
+        all_args = [x] + get_full_param_list(free_args)
+        return fitfunction(*all_args)
+
+    # convert initial_params, param_bounds to versions omitting fixed params
+    # for use in partial function
+    partial_initial_params = [val for ind, val in enumerate(initial_params)
+                              if ind in free_param_indices]
+    partial_lower_bound = [val for ind, (val, _) in enumerate(param_bounds)
+                           if ind in free_param_indices]
+    partial_upper_bound = [val for ind, (_, val) in enumerate(param_bounds)
+                           if ind in free_param_indices]
+    partial_bounds = (partial_lower_bound, partial_upper_bound)
+
+    if excluded_intervals is not None:
+        try:
+            excluded_indices = []
+            for x_start, x_end in excluded_intervals:
+                is_excluded = np.logical_and(xvals > x_start, xvals < x_end)
+                new_excluded_indices = list(np.argwhere(is_excluded).flatten())
+                excluded_indices += new_excluded_indices
+            included_indices = [index for index in range(len(xvals))
+                                if index not in excluded_indices]
+            xvals = xvals[included_indices]
+            yvals = yvals[included_indices]
+            if use_errors:
+                yerrvals = yerrvals[included_indices]
+        except ValueError:
+            print("Warning: curve_fit given invalid exclusion bounds. " +
+                  "Exclusion bounds must be an iterable containing 2-tuples " +
+                  "of form (x_start, x_end)")
+    with np.errstate(all='ignore'):
+        try:
+            rawfitparams, rawcovariances = curve_fit(partialfcn, xvals, yvals,
+                                                 p0=partial_initial_params,
+                                                 sigma=yerrvals,
+                                                 absolute_sigma=use_errors,
+                                                 bounds=partial_bounds,
+                                                 method='trf',
+                                                 max_nfev=max_fcn_evals)
+            rawfitstds = np.sqrt(np.diag(rawcovariances))
+        except RuntimeError:
+            print("Warning: curve_fit failed to converge...")
+            return None
+
+    # convert fit outputs to reintroduce fixed parameters
+    fitparams = get_full_param_list(rawfitparams)
+    fitparamstds = get_full_param_list(rawfitstds, [0]*num_nonx_args)
+
+    # convert results to FitData object and return it
+    fityvals = fitfunction(original_xvals, *fitparams)
+    meansquarederror = (1./len(original_xvals))* \
+                        sum((y_fit - y_real)**2 for y_fit, y_real in
+                            zip(fityvals, original_yvals))
+    return FitData(fitparams, fitparamstds,
+                   "fitparamstring", fityvals, meansquarederror)
+
+
+# %% NEEDS TEST, SPHINX DOCUMENTATION
+def check_fit_parameter_consistency(num_nonx_args, free_params,
+                                    initial_params, param_bounds):
+    """
+    Checks the validity of the parameters sent to dataseries_fit.
+    Any problems cause an exception to be thrown, and any jury-rigged
+    fixed parameters (lower bound = upper bound = starting guess) are removed
+    from the free parameter list. This filtered list is returned.
+
+    Positional arguments:
+    :free_params: list/tuple describing whether each non-x parameter should
+    be free, should have True/False for each parameter.
+    :initial_params: list/tuple of parameter starting guesses, should have
+    a value for all non-x parameters
+    :param_bounds: list/tuple containing parameter upper and lower bounds,
+    needs a 2-tuple for all free non-x parameters (and anything for
+    fixed parameters)
+
+    Return type:
+    :rtype: list containing indices of free parameters of fit function
+    """
+    if (len(free_params) != num_nonx_args or
+        len(initial_params) != num_nonx_args or
+            len(param_bounds) != num_nonx_args):
+                raise TypeError("fit_function_to_dataseries: inconsistent " +
+                                "parameter counts, recall first argument " +
+                                "is x, not a parameter.")
+    free_params_bool = [bool(x) for x in free_params]
+    free_param_indices = [i for i, x in enumerate(free_params_bool)
+                          if x is True]
+    if len(free_param_indices) == 0:
+        raise TypeError("fit_function_to_dataseries: not enough free " +
+                        "parameters, recall first argument is x, " +
+                        "not a parameter.")
+    final_free_param_indices = free_param_indices[:]
+    for index in free_param_indices:
+        tupl = param_bounds[index]
+        try:
+            tupl_len = len(tupl)
+        except TypeError:
+            raise TypeError("fit_function_to_dataseries: param_bounds " +
+                            "must contain only 2-tuples for free parameters")
+        else:
+            if tupl_len != 2:
+                raise TypeError("fit_function_to_dataseries: param_bounds " +
+                                "must contain only 2-tuples for free " +
+                                "parameters")
+            if tupl[0] > tupl[1]:
+                raise TypeError("fit_function_to_dataseries: param_bounds " +
+                                "contains a lower bound above the " +
+                                "corresponding upper bound")
+            param_guess = initial_params[index]
+            if tupl[0] > param_guess or param_guess > tupl[1]:
+                raise TypeError("fit_function_to_dataseries: initial_params " +
+                                "contains a starting estimate inconsistent " +
+                                "with the corresponding param_bounds limits")
+            if tupl[0] == param_guess and param_guess == tupl[1]:
+                final_free_param_indices.remove(index)  # NOT pop()!
+    return final_free_param_indices
+
+
+# %% NEEDS TEST, SPHINX DOCUMENTATION
+def scandata_iterable_sort(scandata_iterable, field_index,
+                           primary_key, secondary_key, numeric_sort=True):
+    """
+    right now, no mixed numeric/non-numeric keys, because effort
+    """
+    # Subfunction to use as sort key
+    def scandatasortfcn_strings(scandata_2_tuple):
+        scandata, _ = scandata_2_tuple
+        scaninfo = scandata.info
+        try:
+            return (str(scaninfo[primary_key]),
+                    str(scaninfo[secondary_key]))
+        except KeyError:
+            try:
+                return (str(scaninfo[primary_key]),
+                        "")
+            except KeyError:
+                try:
+                    return ("",
+                            str(scaninfo[secondary_key]))
+                except KeyError:
+                    return ("", "")
+        except AttributeError:
+            print("scandata_iterable_sort: ScanData expected as list element.")
+            return ("", "")
+
+    # Subfunction to use as sort key
+    def scandatasortfcn_numerical(scandata_2_tuple):
+        scandata, _ = scandata_2_tuple
+        scaninfo = scandata.info
+        try:
+            return (float(scaninfo[primary_key]),
+                    float(scaninfo[secondary_key]))
+        except KeyError:
+            try:
+                return (float(scaninfo[primary_key]),
+                        99999999)
+            except KeyError:
+                try:
+                    return (99999999,
+                            float(scaninfo[secondary_key]))
+                except KeyError:
+                    return (99999999, 99999999)
+                except ValueError:
+                    print("scandata_iterable_sort: numerical_sort flag on, " +
+                          "numerical sort keys only!")
+                    return (99999999, 99999999)
+            except ValueError:
+                print("scandata_iterable_sort: numerical_sort flag on, " +
+                      "numerical sort keys only!")
+                return (99999999, 99999999)
+        except ValueError:
+            print("scandata_iterable_sort: numerical_sort flag on, " +
+                  "numerical sort keys only!")
+            return (99999999, 99999999)
+        except AttributeError:
+            print("scandata_iterable_sort: ScanData expected as list element.")
+            return (99999999, 99999999)
+
+    scandata_list = list(scandata_iterable)
+    index_ordering = range(len(scandata_list))
+    if numeric_sort:
+        key_fcn = scandatasortfcn_numerical
+    else:
+        key_fcn = scandatasortfcn_strings
+
+    scandata_list, index_ordering = zip(*sorted(
+                                        zip(scandata_list, index_ordering),
+                                        key=key_fcn))
+    return scandata_list, index_ordering
+
+
+# %%
+def aggregate_and_process_scandata_into_dict(scandata, process_fcn_list=None,
+                                             xcoord_indices_to_use=None,
+                                             xcoord_name=None):
+    """
+    Accepts a scandata, and converts each dataseries into a dict for easy
+    lookup of results by field name. Optionally takes a list of process
+    functions - where each takes the xvals, yvals & error of a given field
+    and outputs a dict of analysis results - and appends the results of those
+    functions to the aggregated data dict, with the field name added to the
+    front of each process function key, and repeats for all fields in scandata
+        (e.g. "linear_fit_slope" -> "[field name 1]_linear_fit_slope",
+                                    "[field name 2]_linear_fit_slope", ...)
+    """
+    if xcoord_indices_to_use is None:
+        xcoord_indices_to_use = list(range(len(scandata.x)))
+    if xcoord_name is None:
+        xcoord_name = "xvalues"
+
+    xvalues = scandata.x[xcoord_indices_to_use]
+
+    # construct dictionary containing 1d arrays of field values (vs xvalues):
+    aggregated_data = {'xcoord_name': xcoord_name,
+                       xcoord_name: xvalues,
+                       'field_names': list(scandata.fields).copy()}
+    aggregated_data.update(
+        zip(scandata.fields,
+            [scandata.get_field_y(field)[xcoord_indices_to_use]
+             for field in scandata.fields]))
+
+    # perform process fit to attributes
+    if process_fcn_list is not None:
+        for process_fcn in process_fcn_list:
+            for field_name in scandata.fields:
+                if '_error' not in field_name:
+                    yvalues = aggregated_data[field_name]
+                    yerrvalues = \
+                        aggregated_data.get(field_name + '_error', None)
+                    process_result = process_fcn(xvalues, yvalues, yerrvalues)
+                    for key, value in process_result.items():
+                        new_key = field_name + "_" + key
+                        aggregated_data[new_key] = value
+
+    return aggregated_data
+
+
+# %% ----------DATASERIES PROCESSING LIBRARY----------
+
+# %% TODO: NEEDS TEST, SPHINX DOCUMENTATION
+def get_max_yval_xypair(xvals, yvals):
+    """
+    """
+    xval_at_yvalmax = xvals[0]
+    yvalmax = yvals[0]
+    for xval, yval in zip(xvals, yvals):
+        if yval > yvalmax:
+            xval_at_yvalmax = xval
+            yvalmax = yval
+    return xval_at_yvalmax, yvalmax
+
+
+# %% TODO: NEEDS TEST, SPHINX DOCUMENTATION
+def get_processed_scandata(scandata, process_fcn, process_fcn_params,
+                           only_process_these_fields=None):
+    """
+    Processes every field set in scandata of form (xfield, yfield) or
+    (xfield, yfield, yfielderror) and returns a new scandata with the
+    results (a return value of None means no overwrite).
+
+    Note the xfield will be overwritten for each set
+    """
+    new_scandata = scandata.copy()  # read from old, replace in new
+    if only_process_these_fields:
+        field_list = only_process_these_fields
+    else:
+        field_list = scandata.fields
+
+    # sort out fields to run process_fcn on - skip x, yerrs
+    field_list = [field_name for field_name in field_list
+                  if '_error' not in field_name
+                  if field_name != scandata.xfield]
+    for field_name in field_list:
+        # run process_fcn, overwrite attributes with returned values
+        # (unless returned values are None)
+        x, y, yerr = scandata.get_field_xyyerr(field_name)
+        new_x, new_y, new_yerr = \
+            process_fcn(x, y, yerr, *process_fcn_params)
+        if new_x is not None:
+            setattr(new_scandata, scandata.xfield, new_x)
+        if new_y is not None:
+            setattr(new_scandata, field_name, new_y)
+        if new_yerr is not None:
+            setattr(new_scandata, field_name + '_error', new_yerr)
+
+        # delete old fits, generally now invalidated:
+        fitdata_key = 'fitdata_' + field_name
+        if fitdata_key in scandata.info:
+            new_scandata.info[fitdata_key] = None
+
+    return new_scandata
+
+
+# %%
+def get_positive_time_delay_scandata(scandata, zero_delay_offset=0,
+                                     neg_time_weight_multiplier=1.0):
+    def get_positive_time_delay_data(xvals, yvals, yerrvals,
+                                     zero_delay_offset, weight_multiplier):
+        # bump negative time data points up by the laser rep period
+        newxvals = np.array(xvals)
+        neg_time_indices = []
+        for i, x in enumerate(newxvals):
+            if x < zero_delay_offset:
+                newxvals[i] = x + LASER_REPRATE
+                neg_time_indices.append(i)
+
+        # change weights of formerly negative time data points:
+        if yerrvals is not None:
+            newyerrvals = np.array(yerrvals)  # make copy
+            for i in neg_time_indices:  # recall actual weight is error**-2
+                newyerrvals[i] *= np.sqrt(1.0/weight_multiplier)
+            return newxvals, None, newyerrvals
+        else:
+            return newxvals, None, None  # only change xvals
+
+    process_fcn = get_positive_time_delay_data
+    process_fcn_params = [zero_delay_offset, neg_time_weight_multiplier]
+    return get_processed_scandata(scandata, process_fcn, process_fcn_params)
+
+
+# %%
+def get_continuous_phase_scandata(scandata):
+    def get_continuous_phase_data(xvals, yvals, yerrvals):
+        map_to_sorted = xvals.argsort()
+        map_to_unsorted = map_to_sorted.argsort()
+        sorted_yvals = np.array(yvals[map_to_sorted])
+        sorted_yvals = np.unwrap(sorted_yvals)
+        reunsorted_yvals = np.array(sorted_yvals[map_to_unsorted])
+        return None, reunsorted_yvals, None  # only change yvals
+
+    process_fcn = get_continuous_phase_data
+    process_fcn_params = []
+    fields_to_process = [field_name for field_name in scandata.fields
+                         if 'phase' in field_name]
+    return get_processed_scandata(scandata, process_fcn,
+                                  process_fcn_params, fields_to_process)
+                                        
+
+# %%
+def get_gaussian_smoothed_scandata(scandata, fields_to_process,
+                                   gaussian_width, edge_handling='reflect',
+                                   subtract_smoothed_data_from_original=False):
+    """
+    Returns data smoothed over with a gaussian integral, unless the flag
+    subtract_smoothed_gaussian is set to True, in which case it returns the
+    original data with the smoothed gaussian subtracted.
+
+    Warning: expects and assumes evenly spaced xvalues, not necessarily in
+    order though. Gets scaling of data from average timestep, so this means
+    DO NOT USE AFTER ALREADY ADDING 13NS TO NEGATIVE DELAY TIMES.
+    """
+    def get_gaussian_smoothed_data(xvals, yvals, yerrvals, gaussian_width,
+                                   edge_handling, subtract_smoothed_data):
+        map_to_sorted = xvals.argsort()
+        map_to_unsorted = map_to_sorted.argsort()
+        sorted_xvals = np.array(xvals[map_to_sorted])
+        sorted_yvals = np.array(yvals[map_to_sorted])
+
+        xdiffs = np.abs(sorted_xvals[1:] - sorted_xvals[:-1])
+        x_scale_factor = np.mean(xdiffs)
+        if max(xdiffs) > 1.5*x_scale_factor:
+            raise ValueError("get_gaussian_smoothed_dataseries: requires a " +
+                             "dataseries with roughly even x-spacing " +
+                             "(including no discontinuities in spacing)")
+        sigma = gaussian_width/x_scale_factor
+        smoothed_sorted_yvals = filters.gaussian_filter1d(sorted_yvals, sigma,
+                                                          mode=edge_handling)
+        if subtract_smoothed_data:
+            sorted_new_yvals = sorted_yvals - smoothed_sorted_yvals
+        else:
+            sorted_new_yvals = smoothed_sorted_yvals
+
+        new_yvals = np.array(sorted_new_yvals[map_to_unsorted])
+        return None, new_yvals, None  # only change yvals
+
+    process_fcn = get_gaussian_smoothed_data
+    process_fcn_params = [gaussian_width, edge_handling,
+                          subtract_smoothed_data_from_original]
+    return get_processed_scandata(scandata, process_fcn,
+                                  process_fcn_params, fields_to_process)
+
+
+# %% high pass filter not updated for current ScanData design
+#def get_high_pass_filtered_scandata(scandata, min_freq_cutoff=0):
+#    """
+#    warning: assumes data is in sorted order, will resort otherwise
+#    TODO: fix this
+#    """
+#    print("Warning: get_high_pass_filtered_scandata currently does not " +
+#          "respect dataseries ordering, consider using " +
+#          "get_gaussian_smoothed_scandata with a large gaussian width instead")
+#    def get_high_pass_filtered_data(xvals, yvals, yerrvals, min_freq_cutoff):
+#        # extract data and handle error_dataseries & if odd # elements
+#        xvals, oldyvals = dataseries.data(raw=True)
+#        if len(xvals) % 2 > 0:
+#            xvals = xvals[1:]
+#            oldyvals = oldyvals[1:]
+#            if error_dataseries is not None:
+#                errorxvals, erroryvals = error_dataseries.data(raw=True)
+#                new_error_dataseries = DataSeries(errorxvals[1:],
+#                                                  erroryvals[1:])
+#            else:
+#                new_error_dataseries = None
+#        else:
+#            if error_dataseries is not None:
+#                new_error_dataseries = error_dataseries
+#            else:
+#                new_error_dataseries = None
+#
+#        # now actually calculate fft-filtered yvals
+#        inverse_sample_rate = xvals[1] - xvals[0]
+#        f_space_freqs = np.fft.rfftfreq(oldyvals.shape[-1],
+#                                        d=inverse_sample_rate)
+#        f_space_yvals = np.fft.rfft(oldyvals)
+#        f_space_yvals[f_space_freqs < min_freq_cutoff] = 0
+#        newyvals = np.fft.irfft(f_space_yvals)
+#        new_dataseries = DataSeries(xvals, newyvals)
+#        return new_dataseries, new_error_dataseries
+#
+#    process_fcn = get_high_pass_filtered_data
+#    process_fcn_params = [min_freq_cutoff]
+#    return get_processed_scandata(scandata, process_fcn, process_fcn_params)
+

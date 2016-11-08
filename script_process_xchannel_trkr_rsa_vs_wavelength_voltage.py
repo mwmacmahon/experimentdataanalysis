@@ -7,18 +7,16 @@ import numpy as np
 import scipy.ndimage.filters as filters
 import scipy.stats as stats
 
-from experimentdataanalysis.analysis.dataseriesprocessing \
-    import process_dataseries_and_error_in_scandata, \
-        get_positive_time_delay_scandata, \
-        get_continuous_phase_scandata, \
-        get_gaussian_smoothed_scandata
+from experimentdataanalysis.analysis.scandataprocessing \
+    import get_positive_time_delay_scandata, \
+           get_continuous_phase_scandata, \
+           get_gaussian_smoothed_scandata, \
+           aggregate_and_process_scandata_into_dict
 from experimentdataanalysis.analysis.scandatamodels \
     import RSAFieldScanModel, IndependentSinusoidalSpinLifetimeModel
 from experimentdataanalysis.analysis.scandatasetprocessing \
     import ScanDataSetsAnalyzer, sort_scandata_into_sets
-from experimentdataanalysis.analysis.multidataseriesprocessing \
-    import aggregate_and_process_scandata_into_dict
-from experimentdataanalysis.parsing.dataseriesparsing import \
+from experimentdataanalysis.parsing.scandataparsing import \
         fetch_dir_as_unfit_scandata_iterator
 
 
@@ -57,8 +55,8 @@ def get_filter_fcn_no_super_long_lifetime(threshold=5000):
 
 def get_filter_fcn_no_first_n_scans_in_series(num_ignored=1):
     def filter_fcn(scandata):
-        if 'FastScanIndex' in scandata.scaninfo_list[0]:
-            return scandata.scaninfo_list[0]['FastScanIndex'] > 1
+        if 'FastScanIndex' in scandata.info:
+            return scandata.info['FastScanIndex'] > 1
         else:
             return False
     return filter_fcn
@@ -66,91 +64,87 @@ def get_filter_fcn_no_first_n_scans_in_series(num_ignored=1):
 
 def get_filter_fcn_this_voltage_only(voltage=0):
     def filter_fcn(scandata):
-        if 'Voltage' in scandata.scaninfo_list[0]:
-            return scandata.scaninfo_list[0]['Voltage'] == voltage
+        if 'Voltage' in scandata.info:
+            return scandata.info['Voltage'] == voltage
         else:
             return False
     return filter_fcn
 
 
 # PLOTTING FUNCTION
-def plot_scandata(scandata, field_index, model=None,
+def plot_scandata(scandata, field_name, model=None,
                   label="", fmt="-bd", fit_fmt="xr:"):
-    x_vals, y_vals = scandata.dataseries_list[field_index].data()
-    error_dataseries = scandata.error_dataseries_list[field_index]
-    if error_dataseries is not None:
-        _, y_errs = error_dataseries.data()
+    x_vals, y_vals, y_errs = scandata.get_field_xyyerr(field_name)
+    if y_errs is not None:
         plt.errorbar(x_vals, y_vals, yerr=y_errs, label=label, fmt=fmt)
     else:
         plt.plot(x_vals, y_vals, fmt, label=label)
-    if scandata.fitdata_list[field_index] is not None:
-        x_vals, y_vals = \
-            scandata.fitdata_list[field_index].fitdataseries.data()
+    if scandata.get_field_fitdata(field_name) is not None:
+        y_vals = scandata.get_field_fitdata(field_name).fityvals
         if model is not None:
             x_vals = np.linspace(min(x_vals), max(x_vals), 1000)
-            params = scandata.fitdata_list[field_index].fitparams
+            params = scandata.get_field_fitdata(field_name).fitparams
             y_vals = model.fitfunction(x_vals, *params)
         plt.plot(x_vals, y_vals, fit_fmt)
 
 
-def plot_rsa_fit_scandata(field_index, fit_rsa_scandata_list):
+def plot_rsa_fit_scandata(field_name, fit_rsa_scandata_list):
     plt.figure()
     plt.hold(True)
     try:
         for scandata in fit_rsa_scandata_list[:]:
-            plot_scandata(scandata, field_index, fmt="bd")
-    except TypeError:
+            plot_scandata(scandata, field_name, fmt="bd")
+    except TypeError as err:
+        raise err
         scandata = fit_rsa_scandata_list
-        plot_scandata(scandata, field_index, fmt="bd")
+        plot_scandata(scandata, field_name, fmt="bd")
     plt.xlabel("Field (T)")
     plt.ylabel("Kerr Rotation (AU)")
     plt.text(0.065, 0.002,
              "Last fit lifetime:\n{:4.1f}ns +={:4.1f}ns".format(
-                 scandata.fitdata_list[field_index].fitparams[3]/1000,
-                 scandata.fitdata_list[field_index].fitparamstds[3]/1000))
+                 scandata.get_field_fitdata(field_name).fitparams[3]/1000,
+                 scandata.get_field_fitdata(field_name).fitparamstds[3]/1000))
     plt.text(0.065, -0.002,
              "Last fit gfactor:\n{:6.3f}/T +={:6.3f}/T".format(
-                 scandata.fitdata_list[field_index].fitparams[4],
-                 scandata.fitdata_list[field_index].fitparamstds[4]))
+                 scandata.get_field_fitdata(field_name).fitparams[4],
+                 scandata.get_field_fitdata(field_name).fitparamstds[4]))
     plt.show()
-    print(scandata.fitdata_list[field_index].fitparams)
+    print(scandata.get_field_fitdata(field_name).fitparams)
 
 
-def plot_trkr_fit_scandata(field_index, fit_trkr_scandata_list):
+def plot_trkr_fit_scandata(field_name, fit_trkr_scandata_list):
     plt.figure()
     plt.hold(True)
     try:
         for scandata in fit_trkr_scandata_list[:]:
-            plot_scandata(scandata, field_index, fmt="bd")
+            plot_scandata(scandata, field_name, fmt="bd")
     except TypeError:
         scandata = fit_trkr_scandata_list
-        plot_scandata(scandata, field_index, fmt="bd")
+        plot_scandata(scandata, field_name, fmt="bd")
     plt.xlabel("Delay (ps)")
     plt.ylabel("Kerr Rotation (AU)")
     plt.text(7100, 0.01,
              "Last fit short lifetime:\n{:4.1f}ns +={:4.1f}ns".format(
-                 scandata.fitdata_list[field_index].fitparams[3]/1000,
-                 scandata.fitdata_list[field_index].fitparamstds[3]/1000))
+                 scandata.get_field_fitdata(field_name).fitparams[3]/1000,
+                 scandata.get_field_fitdata(field_name).fitparamstds[3]/1000))
     plt.text(7100, -0.01,
              "Last fit long lifetime:\n{:4.1f}ns +={:4.1f}ns".format(
-                 scandata.fitdata_list[field_index].fitparams[4]/1000,
-                 scandata.fitdata_list[field_index].fitparamstds[4]/1000))
+                 scandata.get_field_fitdata(field_name).fitparams[4]/1000,
+                 scandata.get_field_fitdata(field_name).fitparamstds[4]/1000))
     plt.show()
-    print(scandata.fitdata_list[field_index].fitparams)
+    print(scandata.get_field_fitdata(field_name).fitparams)
 
 
-def plot_fit_param_scandata(field_indices, fit_results_scandata_list):
+def plot_fit_param_scandata(field_names, fit_results_scandata_list):
     plt.figure()
     plt.hold(True)
-    for field_index in field_indices:
+    for field_name in field_names:
         try:
             for scandata in fit_results_scandata_list[:]:
-                plot_scandata(scandata, field_index, fmt="bd",
-                              label=scandata.fields[field_index])
+                plot_scandata(scandata, field_name, fmt="bd", label=field_name)
         except TypeError:
             scandata = fit_results_scandata_list
-            plot_scandata(scandata, field_index, fmt="bd",
-                          label=scandata.fields[field_index])
+            plot_scandata(scandata, field_name, fmt="bd", label=field_name)
     # LABEL AND DISPLAY GRAPH
     plt.legend(loc='best')
     plt.show()
@@ -165,7 +159,7 @@ if __name__ == "__main__":
     #          field_offset, drift_velocity, phase, slope, offset
     rsa_field_scan_model = \
         RSAFieldScanModel(
-            field_index=0,  # lockin2x
+            field_name="lockin2x",
             max_fcn_evals=40000,
             free_params=[False, False,
                          True, True, True,
@@ -180,7 +174,7 @@ if __name__ == "__main__":
             error_thresholds=[None, None,
                               None, None, None,
                               None, None, None, None, None],
-            dim2_key="Wavelength")
+            fit_result_scan_coord="Wavelength")
 
 
     # LOAD DATA, ORGANIZE, AND FIT IN ANALYZER
@@ -193,12 +187,13 @@ if __name__ == "__main__":
                                      directorypath=dirpath,
                                      key_field="lockin2x",
                                      key_field_error_val=fixed_uncertainty))
+    original_scandata_list_rsa = scandata_list  # don't lose this...
     # ---------------
     # TEMPORARY, FOR SPEED:
 #    scandata_list = scandata_list[5:6]
     # ---------------
     scandataset_list = sort_scandata_into_sets(scandata_list, model, sort_key)
-    field_index = model.field_index  # for future use
+    field_name = model.field_name  # for future use
     analyzer = ScanDataSetsAnalyzer(scandataset_list)
 #    # smooth over data with a 40ps wide gaussian convolution filter
 #    analyzer.apply_transform_to_all_scandata(
@@ -208,7 +203,7 @@ if __name__ == "__main__":
     # subtract from data: data times a 400ps wide gaussian convolution filter                        
 #    analyzer.apply_transform_to_all_scandata(
 #                                    get_gaussian_smoothed_scandata,
-#                                    field_indices_to_process=[field_index],
+#                                    field_names_to_process=[field_name],
 #                                    gaussian_width=0.01,
 #                                    edge_handling='reflect',
 #                                    subtract_smoothed_data_from_original=True)
@@ -220,20 +215,19 @@ if __name__ == "__main__":
     # use smoothed-over difference of raw data and fits for estimate of drift,
     # since can't use smoothed-over raw data with RSA as it doesn't average to
     # zero in a smooth fashion. Modify data in-place and fit again.
-    # Note DataSeries uses sorted data for arithmetic, so we don't unsort.
     for scandataset in analyzer.scandataset_list:
         for scandata in scandataset.scandata_list:
-            xvals, yvals = scandata.dataseries_list[field_index].data()
-            fityvals = scandata.fitdata_list[field_index].fitdataseries.yvals()
+            yvals = scandata.y
+            fityvals = scandata.fitdata.fityvals
             smoothedoffset = filters.gaussian_filter1d(yvals - fityvals,
                                                        sigma=10,
-                                                       mode='reflect')                                                
-            scandata.dataseries_list[field_index] -= smoothedoffset
+                                                       mode='reflect')    
+            scandata.y = yvals - smoothedoffset
 #            plt.figure()
 #            plt.subplot(2,1,1)
 #            plt.plot(xvals, yvals, label='before drift correction')
 #            plt.subplot(2,1,2)
-#            plt.plot(xvals, scandata.dataseries_list[field_index].yvals(),
+#            plt.plot(xvals, scandata.dataseries_list[field_name].yvals(),
 #                     label='after drift correction')
     analyzer.fit_all_scandata_to_model(multiprocessing=True)
 
@@ -251,13 +245,13 @@ if __name__ == "__main__":
 
 
 # %% OVERVIEW OF RSA FITS
-    field_index = 0  # x:field, y:lockin2x
-    plot_rsa_fit_scandata(field_index, fit_rsa_scandata_list[:])
+    field_name = "lockin2x"  # x:field, y:lockin2x
+    plot_rsa_fit_scandata(field_name, fit_rsa_scandata_list[:])
     scandata_list = fit_rsa_scandata_list
 
 # %%
-    field_indices = [2]
-    plot_fit_param_scandata(field_indices, rsa_fit_results_scandata_list)
+    field_names = ["gfactor"]
+    plot_fit_param_scandata(field_names, rsa_fit_results_scandata_list)
     plt.xlabel("Wavelength (nm)")
     plt.title("RSA fit results")
     plt.show()
@@ -287,8 +281,7 @@ if __name__ == "__main__":
     # later datasets will be at 818.0 and 818.9, and finally the 818.9 data
     # set is too low quality to use its results
     indices_to_use = []
-    full_wavelength_list = \
-        rsa_fit_results_scandata_list[0].dataseries_list[0].xvals()
+    full_wavelength_list = rsa_fit_results_scandata_list[0].x
     for index, wavelength in enumerate(full_wavelength_list):
         if wavelength >= 818.0 and wavelength < 818.9:
             indices_to_use.append(index)
@@ -369,7 +362,7 @@ if __name__ == "__main__":
     #          phase1, phase2, slope, offset
     trkr_model_0V = \
         IndependentSinusoidalSpinLifetimeModel(
-            field_index=0,  # lockin2x
+            field_name="lockin2x",
             max_fcn_evals=20000,
             free_params=[False, True, True, True, False,
                          True, False, False, False,
@@ -387,7 +380,7 @@ if __name__ == "__main__":
             error_thresholds=[None, None, None, None, None,
                               None, None, None, None,
                               None, None, None, None],
-            dim2_key="Wavelength",
+            fit_result_scan_coord="Wavelength",
             excluded_intervals=[[-15, 400]],
 #            excluded_intervals=[[-15, 400], [7000, 15000]],
             BField=0.3)
@@ -410,12 +403,12 @@ if __name__ == "__main__":
     # ---------------
 
     scandataset_list = sort_scandata_into_sets(scandata_list, model, sort_key)
-    field_index = model.field_index  # for future use
+    field_name = model.field_name  # for future use
 
     # Change drift velocity based on voltage. Assumes each set has same
     # voltage for every scan!
     for scandataset in scandataset_list:
-        voltage_list = [scandata.scaninfo_list[0]['Voltage']
+        voltage_list = [scandata.info['Voltage']
                         for scandata in scandataset.scandata_list]
         set_voltage = voltage_list[0]
         if any(voltage != set_voltage for voltage in voltage_list):
@@ -440,10 +433,9 @@ if __name__ == "__main__":
     # fix improper "StageZ" 2nd coord, change units to V/cm anyway
     for scandataset in analyzer2.scandataset_list:
         for scandata in scandataset.scandata_list:
-            field = scandata.scaninfo_list[0]['Voltage']*20
-            for scaninfo in scandata.scaninfo_list:
-                scaninfo['MiddleScanType'] = 'Electric Field (V/cm)'
-                scaninfo['MiddleScanCoord'] = field
+            field = scandata.info['Voltage']*20
+            scandata.info['MiddleScanType'] = 'Electric Field (V/cm)'
+            scandata.info['MiddleScanCoord'] = field
 
 #    # smooth over data with a 40ps wide gaussian convolution filter
 #    analyzer2.apply_transform_to_all_scandata(
@@ -453,7 +445,7 @@ if __name__ == "__main__":
     # subtract from data: data times a 400ps wide gaussian convolution filter                        
     analyzer2.apply_transform_to_all_scandata(
                                     get_gaussian_smoothed_scandata,
-                                    field_indices_to_process=[field_index],
+                                    field_names_to_process=[field_name],
                                     gaussian_width=600,
                                     edge_handling='reflect',
                                     subtract_smoothed_data_from_original=True)
@@ -463,7 +455,7 @@ if __name__ == "__main__":
                                              neg_time_weight_multiplier=5.0)
 
     # scandatasets don't share models, can't multiprocess in this version:
-    analyzer2.fit_all_scandata_to_model(multiprocessing=False)
+    analyzer2.fit_all_scandata_to_model(multiprocessing=True)
 
     # APPLY FILTERS AND EXTRACT FITTED SCANDATA AND SCANDATA OF FITS
 #    analyzer2.add_filter_to_each_scandataset(
@@ -478,38 +470,38 @@ if __name__ == "__main__":
 
 
 # %% OVERVIEW OF FITS
-    field_index = 0  # x:delay, y:lockin2x
-    plot_trkr_fit_scandata(field_index, fit_trkr_scandata_list[4:8])
+    field_name = 0  # x:delay, y:lockin2x
+    plot_trkr_fit_scandata(field_name, fit_trkr_scandata_list[4:8])
     scandata_list = fit_trkr_scandata_list
 
 
 # %%
-    field_index = 1  # x:wavelength, y:short lifetime
+    field_name = 1  # x:wavelength, y:short lifetime
     plt.figure()
     plt.hold(True)
     for scandata in trkr_fit_results_scandata_list[:]:
-        if scandata.scaninfo_list[0]['Voltage'] == 0:
-            plot_scandata(scandata, field_index, fmt=":bd",
+        if scandata.info['Voltage'] == 0:
+            plot_scandata(scandata, field_name, fmt=":bd",
                           label="0 V/cm")
-        elif scandata.scaninfo_list[0]['Voltage'] == 0.75:
-            plot_scandata(scandata, field_index, fmt=":rd",
+        elif scandata.info['Voltage'] == 0.75:
+            plot_scandata(scandata, field_name, fmt=":rd",
                           label="15 V/cm")
-    if field_index == 1:  # long pulse amplitude guess from avg. RSA data
+    if field_name == 1:  # long pulse amplitude guess from avg. RSA data
         plt.plot(rsa_vs_wavelength_fit_results['wavelengths'],
                  rsa_vs_wavelength_fit_results['pulse_amplitude'],
                  'gd:', label="RSA fit in ROI")
-    elif field_index == 3:  # long lifetime
+    elif field_name == 3:  # long lifetime
         plt.plot(rsa_vs_wavelength_fit_results['wavelengths'],
                  rsa_vs_wavelength_fit_results['lifetime'],
                  'gd:', label="RSA fit in ROI")
-    elif field_index == 4:  # long oscillation period
+    elif field_name == 4:  # long oscillation period
         plt.plot(rsa_vs_wavelength_fit_results['wavelengths'],
                  rsa_vs_wavelength_fit_results['osc_period_300mT'],
                  'gd:', label="RSA fit in ROI")
 
     # LABEL AND DISPLAY GRAPH
     plt.xlabel("Wavelength (nm)")
-    plt.ylabel(scandata.fields[field_index])
+    plt.ylabel(scandata.fields[field_name])
     plt.legend(loc='best')
     plt.title("Results of fit to TRKR @300mT,\nlong lifetime & g-factor held constant from RSA")
     plt.show()
@@ -540,8 +532,7 @@ if __name__ == "__main__":
     # later datasets will be at 818.0 and 818.9, and finally the 818.9 data
     # set is too low quality to use its results
     indices_to_use = []
-    full_wavelength_list = \
-        trkr_fit_results_scandata_list[0].dataseries_list[0].xvals()
+    full_wavelength_list = trkr_fit_results_scandata_list[0].x
     for index, wavelength in enumerate(full_wavelength_list):
         if wavelength >= 818.0 and wavelength <= 818.9:
             indices_to_use.append(index)
@@ -744,7 +735,7 @@ if __name__ == "__main__":
     #          phase1, phase2, slope, offset
     trkr_model_3 = \
         IndependentSinusoidalSpinLifetimeModel(
-            field_index=0,  # lockin2x
+            field_name="lockin2x",
             max_fcn_evals=2000,
             free_params=[False, False, True, False, True,
                          False, True, False, False,
@@ -775,7 +766,7 @@ if __name__ == "__main__":
             error_thresholds=[None, None, None, None, None,
                               None, None, None, None,
                               None, None, None, None],
-            dim2_key="Electric Field (V/cm)",  # look at results of fit vs field
+            fit_result_scan_coord="Electric Field (V/cm)",  # look at results of fit vs field
             excluded_intervals=[[-15, 400]],
 #            excluded_intervals=[[-15, 400], [7000, 15000]],
             BField=0.3)
@@ -809,7 +800,7 @@ if __name__ == "__main__":
     field_list = []
     model_initial_params_list = []
     for scandataset in scandataset_list:
-        voltage_list = [scandata.scaninfo_list[0]['Voltage']
+        voltage_list = [scandata.info['Voltage']
                         for scandata in scandataset.scandata_list]
         set_voltage = voltage_list[0]
         if any(voltage != set_voltage for voltage in voltage_list):
@@ -869,7 +860,7 @@ if __name__ == "__main__":
     # fix improper "StageZ" 2nd coord, change units to V/cm anyway
     for scandataset in analyzer4.scandataset_list:
         for scandata in scandataset.scandata_list:
-            field = scandata.scaninfo_list[0]['Voltage']*20
+            field = scandata.info['Voltage']*20
             for scaninfo in scandata.scaninfo_list:
                 scaninfo['MiddleScanType'] = 'Electric Field (V/cm)'
                 scaninfo['MiddleScanCoord'] = field
@@ -879,7 +870,7 @@ if __name__ == "__main__":
     # subtract from data: data times a 400ps wide gaussian convolution filter                        
 #    analyzer4.apply_transform_to_all_scandata(
 #                                    get_gaussian_smoothed_scandata,
-#                                    field_indices_to_process=[field_index],
+#                                    field_names_to_process=[field_name],
 #                                    gaussian_width=600,
 #                                    edge_handling='reflect',
 #                                    subtract_smoothed_data_from_original=True)
@@ -914,33 +905,33 @@ if __name__ == "__main__":
 
 
 # %%
-    field_index = 0  # lockin2x
+    field_name = 0  # lockin2x
     for scandata in fit_trkr_scandata_list_3[6:7]:
-       plot_scandata(scandata, field_index, model=model, fmt="bd")
+       plot_scandata(scandata, field_name, model=model, fmt="bd")
     plt.xlabel("Delay (ps)")
     plt.ylabel("Kerr Rotation (AU)")
-    if scandata.fitdata_list[field_index] is not None:
+    if scandata.get_field_fitdata(field_name) is not None:
         plt.text(8000, 0,
                  "Last fit lifetime: {:.3f}ns\n                         +-{:.3f}ns".format(
-                     scandata.fitdata_list[field_index].fitparams[3]/1000,
-                     scandata.fitdata_list[field_index].fitparamstds[3]/1000))
+                     scandata.get_field_fitdata(field_name).fitparams[3]/1000,
+                     scandata.get_field_fitdata(field_name).fitparamstds[3]/1000))
     plt.show()
 
-    print('Voltage: {}'.format(scandata.scaninfo_list[0]['Voltage']))
-    if scandata.fitdata_list[field_index] is not None:
-        print(scandata.fitdata_list[field_index].fitparams)
+    print('Voltage: {}'.format(scandata.info['Voltage']))
+    if scandata.get_field_fitdata(field_name) is not None:
+        print(scandata.get_field_fitdata(field_name).fitparams)
 
     scandata_list = fit_trkr_scandata_list_3
 
 
 # %%
-    field_indices = [5]  # dataseries: x:field, y:short/long phase
+    field_names = [5]  # dataseries: x:field, y:short/long phase
     plt.figure()
     plt.hold(True)
-    for field_index in field_indices:
+    for field_name in field_names:
         for scandata in trkr_fit_results_scandata_list_3[:]:
-            fit_param_name = scandata.fields[field_index]
-            plot_scandata(scandata, field_index,
+            fit_param_name = scandata.fields[field_name]
+            plot_scandata(scandata, field_name,
                           fmt="d", label=fit_param_name)
         try:
             initial_vals = [initial_params[fit_param_name]
@@ -959,33 +950,33 @@ if __name__ == "__main__":
 
 
 ## %% OVERVIEW OF FITS
-#    field_index = 0  # lockin2x
+#    field_name = 0  # lockin2x
 #    for scandata in fit_trkr_scandata_list_3[:]:
-#       plot_scandata(scandata, field_index, fmt="bd")
+#       plot_scandata(scandata, field_name, fmt="bd")
 #    plt.xlabel("Delay (ps)")
 #    plt.ylabel("Kerr Rotation (AU)")
-#    if scandata.fitdata_list[field_index] is not None:
+#    if scandata.get_field_fitdata(field_name) is not None:
 #        plt.text(8000, 0,
 #                 "Last fit lifetime: {}ns\n     +={}ns".format(
-#                     scandata.fitdata_list[field_index].fitparams[3]/1000,
-#                     scandata.fitdata_list[field_index].fitparamstds[3]/1000))
+#                     scandata.get_field_fitdata(field_name).fitparams[3]/1000,
+#                     scandata.get_field_fitdata(field_name).fitparamstds[3]/1000))
 #    plt.show()
 #
-#    print('Voltage: {}'.format(scandata.scaninfo_list[0]['Voltage']))
-#    if scandata.fitdata_list[field_index] is not None:
-#        print(scandata.fitdata_list[field_index].fitparams)
+#    print('Voltage: {}'.format(scandata.info['Voltage']))
+#    if scandata.get_field_fitdata(field_name) is not None:
+#        print(scandata.get_field_fitdata(field_name).fitparams)
 #
 #    scandata_list = fit_trkr_scandata_list_2
 #
 #
 ## %%
-#    field_indices = [5]  # dataseries: x:field, y:short/long phase
+#    field_names = [5]  # dataseries: x:field, y:short/long phase
 #    plt.figure()
 #    plt.hold(True)
-#    for field_index in field_indices:
+#    for field_name in field_names:
 #        for scandata in trkr_fit_results_scandata_list_3[:]:
-#            plot_scandata(scandata, field_index, fmt="d",
-#                          label=scandata.fields[field_index])
+#            plot_scandata(scandata, field_name, fmt="d",
+#                          label=scandata.fields[field_name])
 #
 #    # LABEL AND DISPLAY GRAPH
 #    plt.xlabel("Applied Voltage (V)  |  Electric Field (V/500um)")
@@ -993,8 +984,8 @@ if __name__ == "__main__":
 #    plt.legend(loc='best')
 #    plt.show()
 #
-#    if scandata.fitdata_list[field_index] is not None:
-#        print(scandata.fitdata_list[field_index].fitparams)
+#    if scandata.get_field_fitdata(field_name) is not None:
+#        print(scandata.get_field_fitdata(field_name).fitparams)
 #
 #    scandata_list = collapsed_scandata_list
 
@@ -1015,7 +1006,7 @@ if __name__ == "__main__":
     #          phase1, phase2, slope, offset
     trkr_model_2_0V = \
         IndependentSinusoidalSpinLifetimeModel(
-            field_index=0,  # lockin2x
+            field_name="lockin2x",
             max_fcn_evals=20000,
             free_params=[False, True, True, True, False,
                          True, True, False, False,
@@ -1046,7 +1037,7 @@ if __name__ == "__main__":
             error_thresholds=[None, None, None, None, None,
                               None, None, None, None,
                               None, None, None, None],
-            dim2_key="Electric Field (V/cm)",  # look at results of fit vs field
+            fit_result_scan_coord="Electric Field (V/cm)",  # look at results of fit vs field
             excluded_intervals=[[-15, 400]],
 #            excluded_intervals=[[-15, 400], [7000, 15000]],
             BField=0.3)
@@ -1080,14 +1071,14 @@ if __name__ == "__main__":
     # ---------------
 
     scandataset_list = sort_scandata_into_sets(scandata_list, model, sort_key)
-    field_index = model.field_index  # for future use
+    field_name = model.field_name  # for future use
 
     # Change drift velocity based on voltage. Assumes each set has same
     # voltage for every scan!
     field_list = []
     model_initial_params_list = []
     for scandataset in scandataset_list:
-        voltage_list = [scandata.scaninfo_list[0]['Voltage']
+        voltage_list = [scandata.info['Voltage']
                         for scandata in scandataset.scandata_list]
         set_voltage = voltage_list[0]
         if any(voltage != set_voltage for voltage in voltage_list):
@@ -1146,7 +1137,7 @@ if __name__ == "__main__":
     # fix improper "StageZ" 2nd coord, change units to V/cm anyway
     for scandataset in analyzer3.scandataset_list:
         for scandata in scandataset.scandata_list:
-            field = scandata.scaninfo_list[0]['Voltage']*20
+            field = scandata.info['Voltage']*20
             for scaninfo in scandata.scaninfo_list:
                 scaninfo['MiddleScanType'] = 'Electric Field (V/cm)'
                 scaninfo['MiddleScanCoord'] = field
@@ -1156,7 +1147,7 @@ if __name__ == "__main__":
     # subtract from data: data times a 400ps wide gaussian convolution filter                        
 #    analyzer3.apply_transform_to_all_scandata(
 #                                    get_gaussian_smoothed_scandata,
-#                                    field_indices_to_process=[field_index],
+#                                    field_names_to_process=[field_name],
 #                                    gaussian_width=600,
 #                                    edge_handling='reflect',
 #                                    subtract_smoothed_data_from_original=True)

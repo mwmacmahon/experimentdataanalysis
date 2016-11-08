@@ -8,9 +8,11 @@ Created on Wed Feb 24 00:07:53 2016
 import os.path
 import time
 
+import numpy as np
+
 import experimentdataanalysis.parsing.csvparser as csvparser
 from experimentdataanalysis.analysis.dataclasses \
-    import FitData, ScanData, DataSeries
+    import FitData, ScanData
 
 
 # %%
@@ -99,79 +101,26 @@ def tabledata_to_unfit_scandata(filepath, headerfooterstr,
                                 rawdata, key_field=None,
                                 key_field_error_val=None):
     colnames, coldata = rawdata
-    # Assemble ScanData
-    fields = list(colnames)
+    field_names = list(colnames)
+    field_arrays = [np.array(column) for column in coldata]
     scaninfo = analyze_scan_filepath(filepath)
     scaninfo = analyze_string_for_dict_pairs(headerfooterstr, scaninfo)
-    scaninfo_list = [scaninfo.copy() for field in fields]
-    dataseries_list = list(DataSeries(zip(coldata[0], column))
-                           for column in coldata)
-    error_dataseries_list = [None for field in fields]
-    fitdata_list = [None for field in fields]
-    scandata = ScanData(fields,
-                        scaninfo_list,
-                        dataseries_list,
-                        error_dataseries_list,
-                        fitdata_list)
-    if key_field:  # if field not found, let fcn throw warning, then do nothing
-        scandata = move_scandata_key_field_to_front(scandata, key_field)
-        if key_field_error_val and key_field in scandata.fields:
-            scandata = set_scandata_error(scandata, 0, key_field_error_val)
-    return scandata
 
-
-# %%
-def move_scandata_key_field_to_front(scandata, key_field):
-    try:
-        key_field_index = scandata.fields.index(key_field)
-    except ValueError:  # invalid key_field, so no matching index found
-        key_field_index = 0
-        print("Warning: key_field {} not found in ".format(key_field) +
-              "csv file, field order from csv file will be kept.")
-    # Work out field ordering based on given key_field - key_field to front
-    rawdata_indices = list(range(len(scandata.fields)))
-    rawdata_indices.remove(key_field_index)
-    rawdata_indices = [key_field_index] + rawdata_indices
+    # if key_field given, attempt to set error array in scaninfo
+    if key_field and key_field_error_val:
+        if key_field in field_names:
+            error_array = key_field_error_val * np.ones(len(field_arrays[0]))
+            field_names.append(key_field + '_error')
+            field_arrays.append(error_array)
 
     # Assemble ScanData
-    fields = list(scandata.fields[ind]
-                  for ind in rawdata_indices)
-    scaninfo_list = list(scandata.scaninfo_list[ind].copy()
-                         for ind in rawdata_indices)
-    dataseries_list = list(scandata.dataseries_list[ind]
-                           for ind in rawdata_indices)
-    error_dataseries_list = list(scandata.error_dataseries_list[ind]
-                                 for ind in rawdata_indices)
-    fitdata_list = list(scandata.fitdata_list[ind]
-                        for ind in rawdata_indices)
-    newscandata = ScanData(fields,
-                           scaninfo_list,
-                           dataseries_list,
-                           error_dataseries_list,
-                           fitdata_list)
-    return newscandata
+    scandata = ScanData(field_names,
+                        field_arrays,
+                        scaninfo,
+                        x_field_name=None,  # first column defaults to x anyway
+                        y_field_name=key_field)
 
-
-# %%
-def set_scandata_error(scandata, field_index, uncertainty_value):
-    """
-    For a given field index, sets the scandata's error_dataseries_list
-    entry to a copy of the dataseries_list entry, but with all y-values
-    replaced by the given uncertainty_value
-    """
-    reference_series = scandata.dataseries_list[field_index]
-    xvals_list = list(reference_series.xvals(raw=True))
-    yvals_list = [uncertainty_value for x in xvals_list]
-    new_error_dataseries = DataSeries(xvals_list, yvals_list)
-
-    error_dataseries_list = list(scandata.error_dataseries_list)
-    error_dataseries_list[field_index] = new_error_dataseries
-    newscandata = ScanData(scandata.fields,
-                           scandata.scaninfo_list,
-                           scandata.dataseries_list,
-                           error_dataseries_list,
-                           scandata.fitdata_list)
-    return newscandata
+    return scandata
 
 
 # %%

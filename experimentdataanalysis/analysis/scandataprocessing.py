@@ -40,7 +40,7 @@ def scandata_fit(scandata, field_name, fitfunction, free_params,
                                 param_bounds, max_fcn_evals,
                                 excluded_intervals, ignore_weights)
     scandata.info['fitdata_' + field_name] = fitdata
-    return scandata
+    return fitdata
 
 
 # %% NEEDS TEST, SPHINX DOCUMENTATION
@@ -355,52 +355,6 @@ def scandata_iterable_sort(scandata_iterable, field_index,
     return scandata_list, index_ordering
 
 
-# %%
-def aggregate_and_process_scandata_into_dict(scandata, process_fcn_list=None,
-                                             xcoord_indices_to_use=None,
-                                             xcoord_name=None):
-    """
-    Accepts a scandata, and converts each dataseries into a dict for easy
-    lookup of results by field name. Optionally takes a list of process
-    functions - where each takes the xvals, yvals & error of a given field
-    and outputs a dict of analysis results - and appends the results of those
-    functions to the aggregated data dict, with the field name added to the
-    front of each process function key, and repeats for all fields in scandata
-        (e.g. "linear_fit_slope" -> "[field name 1]_linear_fit_slope",
-                                    "[field name 2]_linear_fit_slope", ...)
-    """
-    if xcoord_indices_to_use is None:
-        xcoord_indices_to_use = list(range(len(scandata.x)))
-    if xcoord_name is None:
-        xcoord_name = "xvalues"
-
-    xvalues = scandata.x[xcoord_indices_to_use]
-
-    # construct dictionary containing 1d arrays of field values (vs xvalues):
-    aggregated_data = {'xcoord_name': xcoord_name,
-                       xcoord_name: xvalues,
-                       'field_names': list(scandata.fields).copy()}
-    aggregated_data.update(
-        zip(scandata.fields,
-            [scandata.get_field_y(field)[xcoord_indices_to_use]
-             for field in scandata.fields]))
-
-    # perform process fit to attributes
-    if process_fcn_list is not None:
-        for process_fcn in process_fcn_list:
-            for field_name in scandata.fields:
-                if '_error' not in field_name:
-                    yvalues = aggregated_data[field_name]
-                    yerrvalues = \
-                        aggregated_data.get(field_name + '_error', None)
-                    process_result = process_fcn(xvalues, yvalues, yerrvalues)
-                    for key, value in process_result.items():
-                        new_key = field_name + "_" + key
-                        aggregated_data[new_key] = value
-
-    return aggregated_data
-
-
 # %% ----------DATASERIES PROCESSING LIBRARY----------
 
 # %% TODO: NEEDS TEST, SPHINX DOCUMENTATION
@@ -417,51 +371,71 @@ def get_max_yval_xypair(xvals, yvals):
 
 
 # %% TODO: NEEDS TEST, SPHINX DOCUMENTATION
-def get_processed_scandata(scandata, process_fcn, process_fcn_params,
+def get_processed_scandata(scandata,
+                           process_fcn_list, process_fcn_params_list=[],
                            only_process_these_fields=None):
     """
-    Processes every field set in scandata of form (xfield, yfield) or
-    (xfield, yfield, yfielderror) and returns a new scandata with the
-    results (a return value of None means no overwrite).
-
-    Note the xfield will be overwritten for each set
     """
     new_scandata = scandata.copy()  # read from old, replace in new
-    if only_process_these_fields:
-        field_list = only_process_these_fields
-    else:
-        field_list = scandata.fields
-
-    # sort out fields to run process_fcn on - skip x, yerrs
-    field_list = [field_name for field_name in field_list
-                  if '_error' not in field_name
-                  if field_name != scandata.xfield]
-    for field_name in field_list:
-        # run process_fcn, overwrite attributes with returned values
-        # (unless returned values are None)
-        x, y, yerr = scandata.get_field_xyyerr(field_name)
-        new_x, new_y, new_yerr = \
-            process_fcn(x, y, yerr, *process_fcn_params)
-        if new_x is not None:
-            setattr(new_scandata, scandata.xfield, new_x)
-        if new_y is not None:
-            setattr(new_scandata, field_name, new_y)
-        if new_yerr is not None:
-            setattr(new_scandata, field_name + '_error', new_yerr)
-
-        # delete old fits, generally now invalidated:
-        fitdata_key = 'fitdata_' + field_name
-        if fitdata_key in scandata.info:
-            new_scandata.info[fitdata_key] = None
-
+    for process_fcn, process_fcn_params in \
+                            zip(process_fcn_list, process_fcn_params_list):
+        process_fcn(new_scandata, *process_fcn_params)
     return new_scandata
 
 
 # %%
-def get_positive_time_delay_scandata(scandata, zero_delay_offset=0,
-                                     neg_time_weight_multiplier=1.0):
-    def get_positive_time_delay_data(xvals, yvals, yerrvals,
-                                     zero_delay_offset, weight_multiplier):
+def process_scandata_fields(scandata, xyyerr_fcn,
+                            xyyerr_fcn_args=[], xyyerr_fcn_kwargs={},
+                            only_process_these_fields=None):
+    """
+    Processes every field set in scandata of form (xfield, yfield) or
+    (xfield, yfield, yfielderror) in place.
+    
+    Process functions should be of form 
+        xyyerr_fcn(x, y, yerr, *args, **kwargs)
+        \-> returns (new_x, new_y, new_yerr)
+    where these return values will be used to overwrite the old x/y/yerr
+    arrays in place if given (a return value of None means don't overwrite).
+    Note the keyword argument "field_name" is always provided, so make sure
+    the xyyerr_fcn function signature contains (..., **kwargs).
+
+    Note the xfield will be overwritten for each set in sequence! Careful...
+    """
+    if only_process_these_fields is None:
+        field_list = scandata.fields
+    else:
+        field_list = only_process_these_fields
+
+    # prune x, yerr fields so that we can use the rest to make x, y, yerr sets
+    field_list = [field_name for field_name in field_list
+                  if '_error' not in field_name
+                  if field_name != scandata.xfield]
+    x_copy = np.array(scandata.x)
+    for field_name in field_list:
+        # run xyyerr_fcn, overwrite attributes with returned values
+        # (unless returned values are None)
+        y, yerr = scandata.get_field_yyerr(field_name)
+        new_x, new_y, new_yerr = \
+            xyyerr_fcn(x_copy, y, yerr, *xyyerr_fcn_args,
+                       field_name=field_name, **xyyerr_fcn_kwargs)
+        if new_x is not None:
+            scandata.x = new_x
+        if new_y is not None:
+            scandata.y = new_y
+        if new_yerr is not None:
+            scandata.yerr = new_yerr
+        # delete old fits, generally now invalidated:
+        fitdata_key = 'fitdata_' + field_name
+        if fitdata_key in scandata.info:
+            scandata.info[fitdata_key] = None
+
+
+# %%
+def make_scandata_time_delay_positive(scandata, zero_delay_offset=0,
+                                      neg_time_weight_multiplier=1.0):
+    def get_positive_time_delay_xyyerr(xvals, yvals, yerrvals,
+                                       zero_delay_offset, weight_multiplier,
+                                       *args, **kwargs):
         # bump negative time data points up by the laser rep period
         newxvals = np.array(xvals)
         neg_time_indices = []
@@ -479,14 +453,16 @@ def get_positive_time_delay_scandata(scandata, zero_delay_offset=0,
         else:
             return newxvals, None, None  # only change xvals
 
-    process_fcn = get_positive_time_delay_data
-    process_fcn_params = [zero_delay_offset, neg_time_weight_multiplier]
-    return get_processed_scandata(scandata, process_fcn, process_fcn_params)
+    xyyerr_fcn = get_positive_time_delay_xyyerr
+    xyyerr_fcn_args = [zero_delay_offset, neg_time_weight_multiplier]
+    xyyerr_fcn_kwargs = {}
+    process_scandata_fields(scandata, xyyerr_fcn, xyyerr_fcn_args,
+                            xyyerr_fcn_kwargs)
 
 
 # %%
-def get_continuous_phase_scandata(scandata):
-    def get_continuous_phase_data(xvals, yvals, yerrvals):
+def make_scandata_phase_continuous(scandata):
+    def get_continuous_phase_xyyerr(xvals, yvals, yerrvals, *args, **kwargs):
         map_to_sorted = xvals.argsort()
         map_to_unsorted = map_to_sorted.argsort()
         sorted_yvals = np.array(yvals[map_to_sorted])
@@ -494,18 +470,19 @@ def get_continuous_phase_scandata(scandata):
         reunsorted_yvals = np.array(sorted_yvals[map_to_unsorted])
         return None, reunsorted_yvals, None  # only change yvals
 
-    process_fcn = get_continuous_phase_data
-    process_fcn_params = []
+    xyyerr_fcn = get_continuous_phase_xyyerr
+    xyyerr_fcn_args = []
+    xyyerr_fcn_kwargs = {}
     fields_to_process = [field_name for field_name in scandata.fields
                          if 'phase' in field_name]
-    return get_processed_scandata(scandata, process_fcn,
-                                  process_fcn_params, fields_to_process)
+    process_scandata_fields(scandata, xyyerr_fcn, xyyerr_fcn_args,
+                            xyyerr_fcn_kwargs, fields_to_process)
                                         
 
 # %%
-def get_gaussian_smoothed_scandata(scandata, fields_to_process,
-                                   gaussian_width, edge_handling='reflect',
-                                   subtract_smoothed_data_from_original=False):
+def gaussian_smooth_scandata(scandata, fields_to_process,
+                             gaussian_width, edge_handling='reflect',
+                             subtract_smoothed_data_from_original=False):
     """
     Returns data smoothed over with a gaussian integral, unless the flag
     subtract_smoothed_gaussian is set to True, in which case it returns the
@@ -515,8 +492,9 @@ def get_gaussian_smoothed_scandata(scandata, fields_to_process,
     order though. Gets scaling of data from average timestep, so this means
     DO NOT USE AFTER ALREADY ADDING 13NS TO NEGATIVE DELAY TIMES.
     """
-    def get_gaussian_smoothed_data(xvals, yvals, yerrvals, gaussian_width,
-                                   edge_handling, subtract_smoothed_data):
+    def get_gaussian_smoothed_xyyerr(xvals, yvals, yerrvals, gaussian_width,
+                                     edge_handling, subtract_smoothed_data,
+                                     *args, **kwargs):
         map_to_sorted = xvals.argsort()
         map_to_unsorted = map_to_sorted.argsort()
         sorted_xvals = np.array(xvals[map_to_sorted])
@@ -539,51 +517,10 @@ def get_gaussian_smoothed_scandata(scandata, fields_to_process,
         new_yvals = np.array(sorted_new_yvals[map_to_unsorted])
         return None, new_yvals, None  # only change yvals
 
-    process_fcn = get_gaussian_smoothed_data
-    process_fcn_params = [gaussian_width, edge_handling,
-                          subtract_smoothed_data_from_original]
-    return get_processed_scandata(scandata, process_fcn,
-                                  process_fcn_params, fields_to_process)
-
-
-# %% high pass filter not updated for current ScanData design
-#def get_high_pass_filtered_scandata(scandata, min_freq_cutoff=0):
-#    """
-#    warning: assumes data is in sorted order, will resort otherwise
-#    TODO: fix this
-#    """
-#    print("Warning: get_high_pass_filtered_scandata currently does not " +
-#          "respect dataseries ordering, consider using " +
-#          "get_gaussian_smoothed_scandata with a large gaussian width instead")
-#    def get_high_pass_filtered_data(xvals, yvals, yerrvals, min_freq_cutoff):
-#        # extract data and handle error_dataseries & if odd # elements
-#        xvals, oldyvals = dataseries.data(raw=True)
-#        if len(xvals) % 2 > 0:
-#            xvals = xvals[1:]
-#            oldyvals = oldyvals[1:]
-#            if error_dataseries is not None:
-#                errorxvals, erroryvals = error_dataseries.data(raw=True)
-#                new_error_dataseries = DataSeries(errorxvals[1:],
-#                                                  erroryvals[1:])
-#            else:
-#                new_error_dataseries = None
-#        else:
-#            if error_dataseries is not None:
-#                new_error_dataseries = error_dataseries
-#            else:
-#                new_error_dataseries = None
-#
-#        # now actually calculate fft-filtered yvals
-#        inverse_sample_rate = xvals[1] - xvals[0]
-#        f_space_freqs = np.fft.rfftfreq(oldyvals.shape[-1],
-#                                        d=inverse_sample_rate)
-#        f_space_yvals = np.fft.rfft(oldyvals)
-#        f_space_yvals[f_space_freqs < min_freq_cutoff] = 0
-#        newyvals = np.fft.irfft(f_space_yvals)
-#        new_dataseries = DataSeries(xvals, newyvals)
-#        return new_dataseries, new_error_dataseries
-#
-#    process_fcn = get_high_pass_filtered_data
-#    process_fcn_params = [min_freq_cutoff]
-#    return get_processed_scandata(scandata, process_fcn, process_fcn_params)
+    xyyerr_fcn = get_gaussian_smoothed_xyyerr
+    xyyerr_fcn_args = [gaussian_width, edge_handling,
+                       subtract_smoothed_data_from_original]
+    xyyerr_fcn_kwargs = {}
+    process_scandata_fields(scandata, xyyerr_fcn, xyyerr_fcn_args,
+                            xyyerr_fcn_kwargs, fields_to_process)
 

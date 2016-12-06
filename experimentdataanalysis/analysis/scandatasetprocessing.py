@@ -104,13 +104,16 @@ class ScanDataSet:
         self.model_param_array_list = None  # now invalid!
         self.model_param_uncertainty_array_list = None
 
-    def parse_fit_scandata(self):
+    def parse_fit_scandata(self, fit_result_scan_coord_override=None):
         # purge failed fits, as they will cause issues further down.
         field_name = self.model.field_name
         self.purge_failed_fit_scandata(field_name)
         # all remaining scandata should have FitData and be processable:
         # create dataseries of fit parameters & their uncertainties vs xval:
-        xfield = self.fit_result_scan_coord
+        if fit_result_scan_coord_override is None:
+            xfield = self.fit_result_scan_coord
+        else:
+            xfield = fit_result_scan_coord_override
         x_array = np.array([scandata.info[xfield]
                             for scandata in self.scandata_list])
         fitparams = []
@@ -132,8 +135,11 @@ class ScanDataSet:
     def apply_transform_to_scandata(self, transform_fcn, *args, **kwargs):
         new_scandata_list = []
         for scandata in self.scandata_list:
-            new_scandata_list.append(transform_fcn(scandata,
-                                                   *args, **kwargs))
+            return_val = transform_fcn(scandata,*args, **kwargs)
+            if return_val is None:  # if transform modifies scandata in-place
+                new_scandata_list.append(scandata)
+            else:  # if transform returns new scandata
+                new_scandata_list.append(return_val)
         self.scandata_list = new_scandata_list
 
     def add_scandata_filters(self, *scandata_filter_fcn_list):
@@ -210,7 +216,13 @@ class ScanDataSet:
         else:
             return self.model_param_uncertainty_array_list.copy()
 
-    def extract_scandata(self, new_scan_type, filtered=True):
+    def extract_scandata(self, filtered=True,
+                         fit_result_scan_coord_override=None):
+        if fit_result_scan_coord_override is not None:
+            self.parse_fit_scandata(fit_result_scan_coord_override)
+            fit_result_scan_coord = fit_result_scan_coord_override
+        else:
+            fit_result_scan_coord = self.model.fit_result_scan_coord
         # extract actual data from model, fields are model output params
         params = self.get_model_param_array_list(filtered)  # param 1 = x
         param_sigmas = \
@@ -220,24 +232,15 @@ class ScanDataSet:
             return None
         field_names, field_arrays, field_error_arrays = \
             self.model.all_model_fields(params, param_sigmas)
-        field_names = ([self.model.fit_result_scan_coord] + field_names +  # x field name
+        field_names = ([fit_result_scan_coord] + field_names +  # x field name
                        [field_name + '_error' for field_name in field_names])
         field_arrays += field_error_arrays  # already starts with x-array!
 
         # get new scaninfo to reflect new coord types:
-        if len(self.get_scandata_list(filtered)) > 0:
-            scandata_for_scaninfo = self.get_scandata_list(filtered)[0]
-        else:  # even if no scandata survive filters, still grab a scaninfo
-            scandata_for_scaninfo = self.scandata_list[0]
-        new_scaninfo = deepcopy(scandata_for_scaninfo.info)
-        new_scaninfo['FastScanType'] = \
-            new_scaninfo[self.model.fit_result_scan_coord]
-#        new_scaninfo['FastScanType'] = new_scaninfo['MiddleScanType']
-        new_scaninfo['MiddleScanType'] = new_scan_type
-        try:
-            new_scaninfo['MiddleScanCoord'] = new_scaninfo[new_scan_type]
-        except KeyError:
-            new_scaninfo['MiddleScanCoord'] = "[Unknown]"
+        new_scaninfo = {'fit_scandata_info_dicts': []}
+        for scandata in self.get_scandata_list(filtered):
+            info_copy = deepcopy(scandata.info)  # take a snapshot
+            new_scaninfo['fit_scandata_info_dicts'].append(info_copy)
         return ScanData(field_names,
                         field_arrays,
                         new_scaninfo,
@@ -370,11 +373,11 @@ class ScanDataSetsAnalyzer:
                     for scandataset in self.scandataset_list),
                    [])
 
-    def collapse_to_model_fit_scandata_list(self, new_scan_type,
-                                            filtered=True,
+    def collapse_to_model_fit_scandata_list(self, filtered=True,
+                                            fit_result_scan_coord_override=None,
                                             ignore_empty_scandatasets=True):
-        scandata_list = [scandataset.extract_scandata(new_scan_type,
-                                                      filtered)
+        scandata_list = [scandataset.extract_scandata(filtered,
+                                                      fit_result_scan_coord_override)
                          for scandataset in self.scandataset_list]
         if ignore_empty_scandatasets:
             return [scandata for scandata in scandata_list

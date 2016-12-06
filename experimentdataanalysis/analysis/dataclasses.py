@@ -95,13 +95,26 @@ class ScanDataReservedAlias():
     def get_other(self, scandata_instance):  # return stored or throw error
         return getattr(scandata_instance, self.storage_alias)
 
+    def set_array_check(self, scandata_instance, value):
+        new_array = np.array(value)
+        if new_array.shape == scandata_instance.shape:
+            return new_array
+        else:
+            raise ValueError("attemping to replace a ScanData field " +
+                             "with one of different shape " +
+                             "({} -> {})".format(scandata_instance.shape,
+                                                 new_array.shape))
+
     def set_x(self, scandata_instance, value):
+        value = self.set_array_check(scandata_instance, value)
         setattr(scandata_instance, scandata_instance.xfield, value)
 
     def set_y(self, scandata_instance, value):
+        value = self.set_array_check(scandata_instance, value)
         setattr(scandata_instance, scandata_instance.yfield, value)
 
     def set_yerr(self, scandata_instance, value):
+        value = self.set_array_check(scandata_instance, value)
         setattr(scandata_instance,
                 scandata_instance.yfield + '_error', value)
 
@@ -141,10 +154,12 @@ class ScanData(object, metaclass=SupportsReservedAliases):
     Data object meant to store the equivalent of a table of data and retreive
     columns (as numpy arrays) via attributes: e.g. scandata.delaytimes.
     Reads in a list of field names and field arrays (or any iterables, but all
-    iterables must be same length and convertible to numpy arrays), and
+    iterables must be same shape and convertible to numpy arrays), and
     arrays will be saved as an attribute under the associated field name.
     A dictionary containing info from file header/filename or other sources
     is also provided as scandata.info.
+
+    Field arrays may be multi-dimensional, but only if passed as numpy arrays.
 
     Note the "x" column will be the first column by default, and "y" the
     second. These can be overwritten at instantiation or by changing the
@@ -174,7 +189,7 @@ class ScanData(object, metaclass=SupportsReservedAliases):
     Other methods:
     
     """
-    reserved_names = ['reserved_names', 'info', 'length',
+    reserved_names = ['reserved_names', 'info', 'shape',
                       'fields', 'xfield', 'yfield']
     # un-settable descriptor attributes that return notable fields:
     x = ScanDataReservedAlias()  # note: these are all added to above list
@@ -207,19 +222,19 @@ class ScanData(object, metaclass=SupportsReservedAliases):
                 field_name_changed = True
             field_array = np.array(field_array)
             field_array.flags.writeable = False
-            if "length" not in self.__dict__:
-                self.length = len(field_array)
+            if "shape" not in self.__dict__:
+                self.shape = field_array.shape
                 if "xfield" not in self.__dict__ : # first col is x by default
                     self.xfield = fieldname
             else:  # fields 2+
                 if "yfield" not in self.__dict__ : # second col is y by default
                     self.yfield = fieldname
-                if self.length != len(field_array):
+                if self.shape != field_array.shape:
                     errstr = "ScanData field arrays not of " + \
-                             "matching length! Lengths: "
+                             "matching shape! shapes: "
                     for field in self.fields:
-                        errstr += str(len(self.get(field, []))) + ", "
-                    errstr += str(self.length)
+                        errstr += str(self.get(field).shape) + ", "
+                    errstr += str(self.shape)
                     raise ValueError(errstr)
             setattr(self, fieldname, field_array)
             self.fields.append(fieldname)
@@ -287,9 +302,6 @@ class ScanData(object, metaclass=SupportsReservedAliases):
                 if key not in self.__class__.reserved_names:
                     setattr(new_scandata, key, value)
         return new_scandata
-
-    def __len__(self):
-        return self.length
 
 
 # %% OLD SCANDATA DEFINITION

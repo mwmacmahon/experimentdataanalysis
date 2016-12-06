@@ -8,10 +8,10 @@ import scipy.ndimage.filters as filters
 import scipy.stats as stats
 
 from experimentdataanalysis.analysis.scandataprocessing \
-    import get_positive_time_delay_scandata, \
-           get_continuous_phase_scandata, \
-           get_gaussian_smoothed_scandata, \
-           aggregate_and_process_scandata_into_dict
+    import make_scandata_time_delay_positive, \
+           make_scandata_phase_continuous, \
+           gaussian_smooth_scandata, \
+           process_scandata_fields
 from experimentdataanalysis.analysis.scandatamodels \
     import RSAFieldScanModel, IndependentSinusoidalSpinLifetimeModel
 from experimentdataanalysis.analysis.scandatasetprocessing \
@@ -25,22 +25,66 @@ GFACTORCONSTANT = 0.013996  # 1/(ps*Tesla), = bohr magneton/2*pi*hbar
 
 # FIT RESULT PROCESSING
 
-def get_mean_and_std_dict(xvals, yvals, yerrorvals):
+def add_mean_and_std_info_to_scandata(scandata, indices_to_use):
+    def add_mean_and_std_info(xvals, yvals, yerrvals,
+                              indices_to_use, scandatainfo,
+                              field_name, *args, **kwargs):
+        yvals_to_use = yvals[indices_to_use]
+        mean_and_std_results = {field_name + '_mean': np.mean(yvals_to_use),
+                                field_name + '_std': np.std(yvals_to_use)}
+        scandatainfo.update(mean_and_std_results)
+        return None, None, None  # only change yvals
+
+    xyyerr_fcn = add_mean_and_std_info
+    xyyerr_fcn_args = [indices_to_use, scandata.info]
+    xyyerr_fcn_kwargs = {}
+    process_scandata_fields(scandata, xyyerr_fcn, xyyerr_fcn_args,
+                            xyyerr_fcn_kwargs)
+                                        
+
+def add_linear_fit_results_info_to_scandata(scandata, indices_to_use):
+    def add_linear_fit_results_info(xvals, yvals, yerrvals,
+                                    indices_to_use, scandatainfo,
+                                    field_name, *args, **kwargs):
+        xvals_to_use = xvals[indices_to_use]
+        yvals_to_use = yvals[indices_to_use]
+        slope, intercept, _, _, _ = stats.linregress(xvals_to_use,
+                                                     yvals_to_use)
+        key_xvals = np.array([818.0, 818.9])
+        fit_yvals = key_xvals*slope + intercept
+        linear_fit_results = {field_name + '_linear_fit_slope': slope,
+                              field_name + '_linear_fit_intercept': intercept,
+                              field_name + '_linear_fit_at_818.0nm': fit_yvals[0],
+                              field_name + '_linear_fit_at_818.9nm': fit_yvals[1]}
+        scandatainfo.update(linear_fit_results)
+        return None, None, None  # only change yvals
+
+    xyyerr_fcn = add_linear_fit_results_info
+    xyyerr_fcn_args = [indices_to_use, scandata.info]
+    xyyerr_fcn_kwargs = {}
+    process_scandata_fields(scandata, xyyerr_fcn, xyyerr_fcn_args,
+                            xyyerr_fcn_kwargs)
+
+
+def add_mean_and_std_info(scandata, field_name):
     mean_and_std_results = {'mean': np.mean(yvals),
                             'std': np.std(yvals)}
-    return mean_and_std_results
+    scandata.info.update(mean_and_std_results)
+    return scandata
 
 
-def get_linear_fit_results_dict(xvals, yvals, yerrorvals):
+def add_linear_fit_results_info(scandata, field_name):
     # warning: error not used! must prune bad fits elsewhere
+    xvals, yvals = scandata.get_field_xy(field_name)
     slope, intercept, _, _, _ = stats.linregress(xvals, yvals)
     key_xvals = np.array([818.0, 818.9])
     fit_yvals = key_xvals*slope + intercept
-    linear_fit_results = {'linear_fit_slope': slope,
-                          'linear_fit_intercept': intercept,
-                          'linear_fit_at_818.0nm': fit_yvals[0],
-                          'linear_fit_at_818.9nm': fit_yvals[1]}
-    return linear_fit_results
+    linear_fit_results = {field_name + '_linear_fit_slope': slope,
+                          field_name + '_linear_fit_intercept': intercept,
+                          field_name + '_linear_fit_at_818.0nm': fit_yvals[0],
+                          field_name + '_linear_fit_at_818.9nm': fit_yvals[1]}
+    scandata.info.update(linear_fit_results)
+    return scandata
 
 
 # FILTER FUNCTIONS
@@ -195,20 +239,8 @@ if __name__ == "__main__":
     scandataset_list = sort_scandata_into_sets(scandata_list, model, sort_key)
     field_name = model.field_name  # for future use
     analyzer = ScanDataSetsAnalyzer(scandataset_list)
-#    # smooth over data with a 40ps wide gaussian convolution filter
-#    analyzer.apply_transform_to_all_scandata(
-#                                    get_gaussian_smoothed_scandata,
-#                                    gaussian_width=40)
-    # drift subtraction:
-    # subtract from data: data times a 400ps wide gaussian convolution filter                        
-#    analyzer.apply_transform_to_all_scandata(
-#                                    get_gaussian_smoothed_scandata,
-#                                    field_names_to_process=[field_name],
-#                                    gaussian_width=0.01,
-#                                    edge_handling='reflect',
-#                                    subtract_smoothed_data_from_original=True)
     # add 13160ps to all negative delay times
-    analyzer.apply_transform_to_all_scandata(get_positive_time_delay_scandata,
+    analyzer.apply_transform_to_all_scandata(make_scandata_time_delay_positive,
                                              zero_delay_offset=-15)
     analyzer.fit_all_scandata_to_model(multiprocessing=True)
 
@@ -240,8 +272,7 @@ if __name__ == "__main__":
     fit_rsa_scandata_list = \
         analyzer.collapse_to_scandata_list(filtered=False)
     rsa_fit_results_scandata_list = \
-        analyzer.collapse_to_model_fit_scandata_list(new_scan_type="[Unknown]",
-                                                     filtered=False)
+        analyzer.collapse_to_model_fit_scandata_list(filtered=False)
 
 
 # %% OVERVIEW OF RSA FITS
@@ -250,6 +281,7 @@ if __name__ == "__main__":
     scandata_list = fit_rsa_scandata_list
 
 # %%
+#    field_names = ["lifetime"]
     field_names = ["gfactor"]
     plot_fit_param_scandata(field_names, rsa_fit_results_scandata_list)
     plt.xlabel("Wavelength (nm)")
@@ -285,30 +317,28 @@ if __name__ == "__main__":
     for index, wavelength in enumerate(full_wavelength_list):
         if wavelength >= 818.0 and wavelength < 818.9:
             indices_to_use.append(index)
-    fit_results_scandata = rsa_fit_results_scandata_list[0]  # just one entry
-    rsa_vs_wavelength_fit_results = aggregate_and_process_scandata_into_dict(
-                                fit_results_scandata,
-                                process_fcn_list=[get_mean_and_std_dict,
-                                                  get_linear_fit_results_dict],
-                                xcoord_indices_to_use=indices_to_use,
-                                xcoord_name="wavelengths")
+    rsa_vs_wavelength_fit_results = rsa_fit_results_scandata_list[0]  # just one entry
+    add_mean_and_std_info_to_scandata(rsa_vs_wavelength_fit_results,
+                                      indices_to_use)
+    add_linear_fit_results_info_to_scandata(rsa_vs_wavelength_fit_results,
+                                            indices_to_use)
 
      # plot w/ superimposed linear fit interpolated values, mean, std,
-    field_name = "lifetime"
-    plt.errorbar(rsa_vs_wavelength_fit_results['wavelengths'],
-                 rsa_vs_wavelength_fit_results[field_name],
-                 rsa_vs_wavelength_fit_results[field_name + '_error'],
+    field_name = "gfactor"
+    plt.errorbar(*rsa_vs_wavelength_fit_results.get_field_xyyerr(field_name),
                  label=field_name, fmt='bd')
-    mean = rsa_vs_wavelength_fit_results[field_name + '_mean']
-    std = rsa_vs_wavelength_fit_results[field_name + '_std']
+    mean = rsa_vs_wavelength_fit_results.info[field_name + '_mean']
+    std = rsa_vs_wavelength_fit_results.info[field_name + '_std']
     plt.plot([817.9, 819.0], np.ones((2))*mean, 'b-', label='mean value')
     plt.plot([817.9, 819.0], np.ones((2))*(mean + std), 'b:')
     plt.plot([817.9, 819.0], np.ones((2))*(mean - std), 'b:', label='+- one std')
-    plt.plot([818.0], rsa_vs_wavelength_fit_results[field_name +
-                                                    '_linear_fit_at_818.0nm'],
+    plt.plot([818.0],
+             rsa_vs_wavelength_fit_results.info[field_name +
+                                                '_linear_fit_at_818.0nm'],
              'rd', label='linear fit interpolation')
-    plt.plot([818.9], rsa_vs_wavelength_fit_results[field_name +
-                                                    '_linear_fit_at_818.9nm'],
+    plt.plot([818.9],
+             rsa_vs_wavelength_fit_results.info[field_name +
+                                                '_linear_fit_at_818.9nm'],
              'rd')
     plt.title(field_name)
     plt.xlim(817.9, 819.0)
@@ -316,20 +346,20 @@ if __name__ == "__main__":
 
     # extract parameter averages/stds, since generally same in region:
     print('Pulse amplitude (AU): {:4g} +- {:4g}'.format(
-            rsa_vs_wavelength_fit_results["pulse_amplitude_mean"],
-            rsa_vs_wavelength_fit_results["pulse_amplitude_std"]))
+            rsa_vs_wavelength_fit_results.info["pulse_amplitude_mean"],
+            rsa_vs_wavelength_fit_results.info["pulse_amplitude_std"]))
     print('Spin lifetime (ps): {:4g} +- {:4g}'.format(
-            rsa_vs_wavelength_fit_results["lifetime_mean"],
-            rsa_vs_wavelength_fit_results["lifetime_std"]))
+            rsa_vs_wavelength_fit_results.info["lifetime_mean"],
+            rsa_vs_wavelength_fit_results.info["lifetime_std"]))
     print('g-factor: {:4g} +- {:4g}'.format(
-            rsa_vs_wavelength_fit_results["gfactor_mean"],
-            rsa_vs_wavelength_fit_results["gfactor_std"]))
+            rsa_vs_wavelength_fit_results.info["gfactor_mean"],
+            rsa_vs_wavelength_fit_results.info["gfactor_std"]))
     print('Oscillation period @200mT (ps): {:4g} +- {:4g}'.format(
-            rsa_vs_wavelength_fit_results["osc_period_200mT_mean"],
-            rsa_vs_wavelength_fit_results["osc_period_200mT_std"]))
+            rsa_vs_wavelength_fit_results.info["osc_period_200mT_mean"],
+            rsa_vs_wavelength_fit_results.info["osc_period_200mT_std"]))
     print('Oscillation period @300mT (ps): {:4g} +- {:4g}'.format(
-            rsa_vs_wavelength_fit_results["osc_period_300mT_mean"],
-            rsa_vs_wavelength_fit_results["osc_period_300mT_std"]))
+            rsa_vs_wavelength_fit_results.info["osc_period_300mT_mean"],
+            rsa_vs_wavelength_fit_results.info["osc_period_300mT_std"]))
 
     # OUTPUT:
     #Pulse amplitude (AU): 0.00774479 +- 0.00110934
@@ -339,16 +369,16 @@ if __name__ == "__main__":
     #Oscillation period @300mT (ps): 552.427 +- 1.71205
     # plug pulse amplitude, lifetime, 300mT period into next model,
     # using param bounds as +- 4 standard deviations
-    long_pulseamp_init = rsa_vs_wavelength_fit_results["pulse_amplitude_mean"]
+    long_pulseamp_init = rsa_vs_wavelength_fit_results.info["pulse_amplitude_mean"]
 #    long_pulseamp_bounds = (long_pulseamp_init - 4*np.std(rsa_pulse_amplitude),
 #                            long_pulseamp_init + 4*np.std(rsa_pulse_amplitude))
     long_pulseamp_bounds = (0, 1)
-    long_lifetime_init = rsa_vs_wavelength_fit_results["lifetime_mean"]
-    rsa_lifetime_std = rsa_vs_wavelength_fit_results["lifetime_std"]
+    long_lifetime_init = rsa_vs_wavelength_fit_results.info["lifetime_mean"]
+    rsa_lifetime_std = rsa_vs_wavelength_fit_results.info["lifetime_std"]
 #    long_lifetime_bounds = (long_lifetime_init - 4*np.std(rsa_lifetime_std),
 #                            long_lifetime_init + 4*np.std(rsa_lifetime_std))
     long_lifetime_bounds = (0.5*long_lifetime_init, 1.5*long_lifetime_init)
-    long_period_init = rsa_vs_wavelength_fit_results["osc_period_300mT_mean"]
+    long_period_init = rsa_vs_wavelength_fit_results.info["osc_period_300mT_mean"]
 #    long_period_bounds = (long_period_init - 4*np.std(rsa_period_300mT),
 #                          long_period_init + 4*np.std(rsa_period_300mT))
     long_period_bounds = (500, 600)
@@ -367,15 +397,16 @@ if __name__ == "__main__":
             free_params=[False, True, True, True, False,
                          True, False, False, False,
                          True, True, True, True],
-            initial_params = [40, 0.01, long_pulseamp_init,
-                              10000, long_lifetime_init,
-                              550, long_period_init, 0, 0,
-                              2*np.pi/3, -2*np.pi/3, 0, 0],
-            param_bounds = [(1, 1000), (0, 1), long_pulseamp_bounds,
-                            (1, 1e6), long_lifetime_bounds,
-                            (500, 600), long_period_bounds,
+            initial_params = [40, long_pulseamp_init, long_pulseamp_init,
+                              long_lifetime_init, long_lifetime_init,
+                              long_period_init*.95, long_period_init,
+                              0, 0, 0*np.pi, -2*np.pi/3, 0, 0],
+            param_bounds = [(1, 1000),
+                            long_pulseamp_bounds, long_pulseamp_bounds,
+                            long_lifetime_bounds, long_lifetime_bounds,
+                            long_period_bounds, long_period_bounds,
                             (0, 0), (0, 0),
-                            (-np.pi, np.pi), (-2*np.pi, np.pi),
+                            (-np.pi, np.pi), (-2*np.pi, 0*np.pi),
                             (-1e-4, 1e-4), (-0.01, 0.01)],
             error_thresholds=[None, None, None, None, None,
                               None, None, None, None,
@@ -439,20 +470,20 @@ if __name__ == "__main__":
 
 #    # smooth over data with a 40ps wide gaussian convolution filter
 #    analyzer2.apply_transform_to_all_scandata(
-#                                    get_gaussian_smoothed_scandata,
+#                                    gaussian_smooth_scandata,
 #                                    gaussian_width=40)
     # drift subtraction:
     # subtract from data: data times a 400ps wide gaussian convolution filter                        
     analyzer2.apply_transform_to_all_scandata(
-                                    get_gaussian_smoothed_scandata,
-                                    field_names_to_process=[field_name],
+                                    gaussian_smooth_scandata,
+                                    fields_to_process=[field_name],
                                     gaussian_width=600,
                                     edge_handling='reflect',
                                     subtract_smoothed_data_from_original=True)
     # add 13160ps to all negative delay times
-    analyzer2.apply_transform_to_all_scandata(get_positive_time_delay_scandata,
-                                             zero_delay_offset=-15,
-                                             neg_time_weight_multiplier=5.0)
+    analyzer2.apply_transform_to_all_scandata(make_scandata_time_delay_positive,
+                                              zero_delay_offset=-15,
+                                              neg_time_weight_multiplier=5.0)
 
     # scandatasets don't share models, can't multiprocess in this version:
     analyzer2.fit_all_scandata_to_model(multiprocessing=True)
@@ -465,18 +496,17 @@ if __name__ == "__main__":
     fit_trkr_scandata_list = \
         analyzer2.collapse_to_scandata_list(filtered=False)
     trkr_fit_results_scandata_list = \
-        analyzer2.collapse_to_model_fit_scandata_list(new_scan_type="[Unknown]",
-                                                     filtered=False)
+        analyzer2.collapse_to_model_fit_scandata_list(filtered=False)
 
 
 # %% OVERVIEW OF FITS
-    field_name = 0  # x:delay, y:lockin2x
-    plot_trkr_fit_scandata(field_name, fit_trkr_scandata_list[4:8])
+    field_name = "lockin2x"  # x:delay, y:lockin2x
+    plot_trkr_fit_scandata(field_name, fit_trkr_scandata_list[3:4])
     scandata_list = fit_trkr_scandata_list
 
 
 # %%
-    field_name = 1  # x:wavelength, y:short lifetime
+    field_name = "lockin2x"  # x:wavelength, y:short lifetime
     plt.figure()
     plt.hold(True)
     for scandata in trkr_fit_results_scandata_list[:]:
@@ -545,10 +575,10 @@ if __name__ == "__main__":
             fit_results_dict = trkr_vs_wavelength_fit_results_15Vcm
         fit_results_scandata = trkr_fit_results_scandata_list[i]
         fit_results_dict.update(
-            aggregate_and_process_scandata_into_dict(
+            process_fit_result_scandata(
                                 fit_results_scandata,
-                                process_fcn_list=[get_mean_and_std_dict,
-                                                  get_linear_fit_results_dict],
+                                process_fcn_list=[add_mean_and_std_info,
+                                                  add_linear_fit_results_info],
                                 xcoord_indices_to_use=indices_to_use,
                                 xcoord_name="wavelengths"))
 
@@ -869,13 +899,13 @@ if __name__ == "__main__":
     # drift subtraction:
     # subtract from data: data times a 400ps wide gaussian convolution filter                        
 #    analyzer4.apply_transform_to_all_scandata(
-#                                    get_gaussian_smoothed_scandata,
+#                                    gaussian_smooth_scandata,
 #                                    field_names_to_process=[field_name],
 #                                    gaussian_width=600,
 #                                    edge_handling='reflect',
 #                                    subtract_smoothed_data_from_original=True)
     # add 13160ps to all negative delay times
-    analyzer4.apply_transform_to_all_scandata(get_positive_time_delay_scandata,
+    analyzer4.apply_transform_to_all_scandata(make_scandata_time_delay_positive,
                                              zero_delay_offset=-15,
                                              neg_time_weight_multiplier=1.0)
                         #  low multiplier, not enough data to avoid bad fits
@@ -895,12 +925,10 @@ if __name__ == "__main__":
     analyzer4.regroup_scandatasets(new_model=model,
                                    sort_key=None)
     trkr_fit_results_scandata_list_3 = \
-        analyzer4.collapse_to_model_fit_scandata_list(
-                                                    new_scan_type="[Unknown]",
-                                                    filtered=False)
+        analyzer4.collapse_to_model_fit_scandata_list(filtered=False)
 
     # collapsed list: jiggle phase to keep phase continuous via np.unwrap()
-    trkr_fit_results_scandata_list_3 = [get_continuous_phase_scandata(scandata)
+    trkr_fit_results_scandata_list_3 = [make_scandata_phase_continuous(scandata)
                                 for scandata in trkr_fit_results_scandata_list_3]
 
 
@@ -1146,13 +1174,13 @@ if __name__ == "__main__":
     # drift subtraction:
     # subtract from data: data times a 400ps wide gaussian convolution filter                        
 #    analyzer3.apply_transform_to_all_scandata(
-#                                    get_gaussian_smoothed_scandata,
+#                                    gaussian_smooth_scandata,
 #                                    field_names_to_process=[field_name],
 #                                    gaussian_width=600,
 #                                    edge_handling='reflect',
 #                                    subtract_smoothed_data_from_original=True)
     # add 13160ps to all negative delay times
-    analyzer3.apply_transform_to_all_scandata(get_positive_time_delay_scandata,
+    analyzer3.apply_transform_to_all_scandata(make_scandata_time_delay_positive,
                                              zero_delay_offset=-15,
                                              neg_time_weight_multiplier=5.0)
     
@@ -1173,11 +1201,10 @@ if __name__ == "__main__":
     analyzer3.regroup_scandatasets(new_model=model,
                                   sort_key=None)
     trkr_fit_results_scandata_list_2 = \
-        analyzer3.collapse_to_model_fit_scandata_list(new_scan_type="[Unknown]",
-                                                     filtered=False)
+        analyzer3.collapse_to_model_fit_scandata_list(filtered=False)
 
     # collapsed list: jiggle phase to keep phase continuous via np.unwrap()
-    trkr_fit_results_scandata_list_2 = [get_continuous_phase_scandata(scandata)
+    trkr_fit_results_scandata_list_2 = [make_scandata_phase_continuous(scandata)
                                for scandata in trkr_fit_results_scandata_list_2]
 
 

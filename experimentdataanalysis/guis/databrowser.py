@@ -14,9 +14,8 @@ import numpy as np
 from PyQt4 import QtCore, QtGui, uic
 
 from experimentdataanalysis.analysis.dataclasses \
-    import FitData, FitFunc, ScanData, DataSeries
-import experimentdataanalysis.analysis.dataseriesgraphing as dsgraphing
-import experimentdataanalysis.parsing.dataseriesparsing as dsparsing
+    import FitData, ScanData
+import experimentdataanalysis.parsing.scandataparsing as sdparsing
 from experimentdataanalysis.guis.guistarter import QApplicationStarter
 
 
@@ -135,7 +134,7 @@ class DataBrowserWindow(QtGui.QMainWindow):
         self.statusBar.showMessage("Loading...")
         try:
             scandata_list = \
-                list(dsparsing.fetch_dir_as_unfit_scandata_iterator())
+                list(sdparsing.fetch_dir_as_unfit_scandata_iterator())
         # TODO: catch exceptions!
         except:
             self.ignore_input = False
@@ -158,7 +157,7 @@ class DataBrowserWindow(QtGui.QMainWindow):
         self.ignore_input = True
         self.statusBar.showMessage("Loading...")
         try:
-            scandata = dsparsing.fetch_csv_as_unfit_scandata()
+            scandata = sdparsing.fetch_csv_as_unfit_scandata()
         # TODO: catch exceptions!
         except:
             self.ignore_input = False
@@ -229,7 +228,7 @@ class DataBrowserWindow(QtGui.QMainWindow):
 
         def scandatasortfcn(scandata_tempfitdata_tuple):
             scandata, _ = scandata_tempfitdata_tuple
-            scaninfo = scandata.scaninfo_list[field_index]
+            scaninfo = scandata.info
             try:
                 return (float(scaninfo[primarykey]),
                         float(scaninfo[secondarykey]))
@@ -269,106 +268,112 @@ class DataBrowserWindow(QtGui.QMainWindow):
         self.statusBar.showMessage("Ready")
 
     def callback_perform_fit(self):
-        if self.ignore_input:
-            return
-        self.ignore_input = True
-        self.statusBar.showMessage("Fitting...")
-        fit_all = self.radio_fitall.isChecked()
-        # TODO: REAL CODE
-        if fit_all:
-            self.temporary_fitdata_list = \
-                [scandata.fitdata_list[0]
-                 for scandata in self.current_scan_list]
-        else:
-            newtempfitdata = self.get_active_scandata().fitdata_list[0]
-            self.replace_active_temp_fitdata(newtempfitdata)
-        self.current_scan_list_changed_since_last_update = True
-        self.update_state()
-        self.ignore_input = False
-        self.statusBar.showMessage("Ready")
+        pass
+#        if self.ignore_input:
+#            return
+#        self.ignore_input = True
+#        self.statusBar.showMessage("Fitting...")
+#        fit_all = self.radio_fitall.isChecked()
+#        # TODO: REAL CODE
+#        if fit_all:
+#            self.temporary_fitdata_list = \
+#                [scandata.fitdata_list[0]
+#                 for scandata in self.current_scan_list]
+#        else:
+#            newtempfitdata = self.get_active_scandata().fitdata_list[0]
+#            self.replace_active_temp_fitdata(newtempfitdata)
+#        self.current_scan_list_changed_since_last_update = True
+#        self.update_state()
+#        self.ignore_input = False
+#        self.statusBar.showMessage("Ready")
 
     def callback_erase_temp_fit(self):
-        if self.ignore_input:
-            return
-        self.ignore_input = True
-        self.statusBar.showMessage("Erasing Temporary Fit(s)...")
-        fit_all = self.radio_fitall.isChecked()
-        if fit_all:
-            self.temporary_fitdata_list = \
-                [None for scandata in self.current_scan_list]
-        else:
-            self.replace_active_temp_fitdata(None)
-        self.current_scan_list_changed_since_last_update = True
-        self.update_state()
-        self.ignore_input = False
-        self.statusBar.showMessage("Ready")
+        pass
+#        if self.ignore_input:
+#            return
+#        self.ignore_input = True
+#        self.statusBar.showMessage("Erasing Temporary Fit(s)...")
+#        fit_all = self.radio_fitall.isChecked()
+#        if fit_all:
+#            self.temporary_fitdata_list = \
+#                [None for scandata in self.current_scan_list]
+#        else:
+#            self.replace_active_temp_fitdata(None)
+#        self.current_scan_list_changed_since_last_update = True
+#        self.update_state()
+#        self.ignore_input = False
+#        self.statusBar.showMessage("Ready")
 
     def callback_store_fit(self):
-        if self.ignore_input:
-            return
-        self.ignore_input = True
-        self.statusBar.showMessage("Storing Fit(s)...")
-        fit_all = self.radio_fitall.isChecked()
-        if fit_all:
-            new_scan_list = []
-            for ind, scandata in enumerate(self.current_scan_list):
-                newfitdata_list = [fitdata
-                                   for fitdata in scandata.fitdata_list]
-                newfitdata_list[0] = self.temporary_fitdata_list[ind]
-                self.temporary_fitdata_list[ind] = None
-                scandata = ScanData(scandata.fields_list,
-                                    scandata.scaninfo_list,
-                                    scandata.dataseries_list,
-                                    scandata.error_dataseries_list,
-                                    newfitdata_list)
-                new_scan_list.append(scandata)
-            self.current_scan_list = new_scan_list
-        else:
-            scandata = self.get_active_scandata()
-            newfitdata_list = [fitdata for fitdata in scandata.fitdata_list]
-            newfitdata_list[0] = self.get_active_temp_fitdata()
-            self.replace_active_temp_fitdata(None)
-            scandata = ScanData(scandata.fields_list,
-                                scandata.scaninfo_list,
-                                scandata.dataseries_list,
-                                scandata.error_dataseries_list,
-                                newfitdata_list)
-            self.replace_active_scandata(scandata)
-        self.current_scan_list_changed_since_last_update = True
-        self.update_state()
-        self.ignore_input = False
-        self.statusBar.showMessage("Ready")
+        pass
+        # TODO
+#        if self.ignore_input:
+#            return
+#        self.ignore_input = True
+#        self.statusBar.showMessage("Storing Fit(s)...")
+#        fit_all = self.radio_fitall.isChecked()
+#        if fit_all:
+#            new_scan_list = []
+#            for ind, scandata in enumerate(self.current_scan_list):
+#                newfitdata_list = [fitdata
+#                                   for fitdata in scandata.fitdata_list]
+#                newfitdata_list[0] = self.temporary_fitdata_list[ind]
+#                self.temporary_fitdata_list[ind] = None
+#                scandata = ScanData(scandata.fields_list,
+#                                    scandata.scaninfo_list,
+#                                    scandata.dataseries_list,
+#                                    scandata.error_dataseries_list,
+#                                    newfitdata_list)
+#                new_scan_list.append(scandata)
+#            self.current_scan_list = new_scan_list
+#        else:
+#            scandata = self.get_active_scandata()
+#            newfitdata_list = [fitdata for fitdata in scandata.fitdata_list]
+#            newfitdata_list[0] = self.get_active_temp_fitdata()
+#            self.replace_active_temp_fitdata(None)
+#            scandata = ScanData(scandata.fields_list,
+#                                scandata.scaninfo_list,
+#                                scandata.dataseries_list,
+#                                scandata.error_dataseries_list,
+#                                newfitdata_list)
+#            self.replace_active_scandata(scandata)
+#        self.current_scan_list_changed_since_last_update = True
+#        self.update_state()
+#        self.ignore_input = False
+#        self.statusBar.showMessage("Ready")
 
     def callback_delete_fit(self):
-        if self.ignore_input:
-            return
-        self.ignore_input = True
-        self.statusBar.showMessage("Deleting Fit(s)...")
-        fit_all = self.radio_fitall.isChecked()
-        if fit_all:
-            new_scan_list = []
-            for scandata in self.current_scan_list:
-                newfitdata_list = [None for x in range(len(scandata.fields))]
-                scandata = ScanData(scandata.fields_list,
-                                    scandata.scaninfo_list,
-                                    scandata.dataseries_list,
-                                    scandata.error_dataseries_list,
-                                    newfitdata_list)
-                new_scan_list.append(scandata)
-            self.current_scan_list = new_scan_list
-        else:
-            scandata = self.get_active_scandata()
-            newfitdata_list = [None for x in range(len(scandata.fields))]
-            scandata = ScanData(scandata.fields_list,
-                                scandata.scaninfo_list,
-                                scandata.dataseries_list,
-                                scandata.error_dataseries_list,
-                                newfitdata_list)
-            self.replace_active_scandata(scandata)
-        self.current_scan_list_changed_since_last_update = True
-        self.update_state()
-        self.ignore_input = False
-        self.statusBar.showMessage("Ready")
+        pass
+        # TODO
+#        if self.ignore_input:
+#            return
+#        self.ignore_input = True
+#        self.statusBar.showMessage("Deleting Fit(s)...")
+#        fit_all = self.radio_fitall.isChecked()
+#        if fit_all:
+#            new_scan_list = []
+#            for scandata in self.current_scan_list:
+#                newfitdata_list = [None for x in range(len(scandata.fields))]
+#                scandata = ScanData(scandata.fields_list,
+#                                    scandata.scaninfo_list,
+#                                    scandata.dataseries_list,
+#                                    scandata.error_dataseries_list,
+#                                    newfitdata_list)
+#                new_scan_list.append(scandata)
+#            self.current_scan_list = new_scan_list
+#        else:
+#            scandata = self.get_active_scandata()
+#            newfitdata_list = [None for x in range(len(scandata.fields))]
+#            scandata = ScanData(scandata.fields_list,
+#                                scandata.scaninfo_list,
+#                                scandata.dataseries_list,
+#                                scandata.error_dataseries_list,
+#                                newfitdata_list)
+#            self.replace_active_scandata(scandata)
+#        self.current_scan_list_changed_since_last_update = True
+#        self.update_state()
+#        self.ignore_input = False
+#        self.statusBar.showMessage("Ready")
 
     def update_datatype_box_target(self, scandata):
         last_datatype_ind = self.cmb_datatype.currentIndex()
@@ -396,24 +401,24 @@ class DataBrowserWindow(QtGui.QMainWindow):
 
     def add_scandata_to_list(self, scandata_to_add):
         try:
-            midtype_str = scandata_to_add.scaninfo_list[0]['MiddleScanType']
+            midtype_str = scandata_to_add.info['MiddleScanType']
         except (KeyError, IndexError):
             midtype_str = "Y"
         try:
             midval_str = \
-                str(scandata_to_add.scaninfo_list[0]['MiddleScanCoord'])
+                str(scandata_to_add.info['MiddleScanCoord'])
         except (KeyError, IndexError):
             midval_str = "?"
         try:
-            fasttype_str = scandata_to_add.scaninfo_list[0]['FastScanType']
+            fasttype_str = scandata_to_add.info['FastScanType']
         except (KeyError, IndexError):
             fasttype_str = "X"
         try:
-            start_str = str(scandata_to_add.dataseries_list[0].xvals()[0])
+            start_str = str(scandata_to_add.x[0])
         except (KeyError, IndexError):
             start_str = "[error]"
         try:
-            stop_str = str(scandata_to_add.dataseries_list[0].xvals()[-1])
+            stop_str = str(scandata_to_add.x[-1])
         except (KeyError, IndexError):
             stop_str = "[error]"
         scandata_string = \
@@ -465,7 +470,7 @@ class DataBrowserWindow(QtGui.QMainWindow):
             if self.current_scan_list_changed_since_last_update or \
                                                         new_current_selection:
                 self.update_datatype_box_target(current_scandata)
-            self.display_scaninfo(current_scandata.scaninfo_list[0])
+            self.display_scaninfo(current_scandata.info)
             if self.btn_plot1d.isChecked():
                 if self.current_scan_list_changed_since_last_update:
                     self.plot_scandata(current_scandata)
@@ -499,30 +504,19 @@ class DataBrowserWindow(QtGui.QMainWindow):
         if scandata is not None:
             self.statusBar.showMessage("Plotting...")
             self.canvas.wipe()
-            field_index = self.cmb_datatype.currentIndex()
+            field_name = self.cmb_datatype.currentText()
+            x, y, yerr = scandata.get_field_xyyerr(field_name)
+            fitdata = scandata.get_field_fitdata(field_name)
             axes = self.canvas.axes
-            dataseries = scandata.dataseries_list[field_index]
-            error_dataseries = scandata.error_dataseries_list[field_index]
-            fitdata = scandata.fitdata_list[field_index]
-            if error_dataseries is not None:
-                axes.errorbar(dataseries.xvals(),
-                              dataseries.yvals(),
-                              error_dataseries.yvals(),
-                              fmt='b.')
+            axes.hold(True)
+            if yerr is not None:
+                axes.errorbar(x, y, yerr, fmt='b.')
             else:
-                axes.plot(dataseries.xvals(),
-                          dataseries.yvals(), 'b.')
-            try:
-                xlabel = scandata.scaninfo_list[field_index]['FastScanType']
-                axes.set_xlabel(xlabel)
-            except KeyError:
-                pass
-            axes.set_ylabel(scandata.fields[field_index])
+                axes.plot(x, y, 'b.')
+            axes.set_xlabel(scandata.xfield)
+            axes.set_ylabel(field_name)
             if fitdata is not None:
-                axes.hold(True)
-                fitdataseries = fitdata.fitdataseries
-                axes.plot(fitdataseries.xvals(),
-                          fitdataseries.yvals(), 'r-')
+                axes.plot(x, fitdata.fityvals, 'r-')
             axes.set_aspect('auto')
             self.canvas.figure.tight_layout()
             self.canvas.draw()
@@ -539,28 +533,24 @@ class DataBrowserWindow(QtGui.QMainWindow):
                 ref_scandata = scandata_list[0]
             plotfield = self.cmb_datatype.currentText()
             if plotfield not in ref_scandata.fields:
-                plotfield = ref_scandata.fields[0]
-            # get first row of plot's length to ensure all rows match
-            ind = ref_scandata.fields.index(plotfield)
-            refdatayvals = \
-                ref_scandata.dataseries_list[ind].yvals()
-            plotdatalength = len(refdatayvals)
-            data2d = []
-            for scandata in scandata_list:
-                try:
-                    ind = scandata.fields.index(plotfield)
-                    datayvals = scandata.dataseries_list[ind].yvals(
-                                                            )
-                    if len(datayvals) == plotdatalength:
-                        data2d.append(datayvals)
-                except ValueError:  # field not present
-                    pass
-            if data2d:
+                plotfield = ref_scandata.yfield
+            # only plot scandata with same shape as current selection
+            data2d = np.vstack([scandata.get_field_y(plotfield)
+                                for scandata in scandata_list
+                                if scandata.shape == ref_scandata.shape])
+            try:
                 imageplot = self.canvas.axes.imshow(data2d,
-                                                    interpolation="none",
-#                                                    extent=[min_x, max_x,  # TODO: axis ticks
-#                                                            max_y, min_y], 
-                                                    )
+                                                    interpolation="none")
+            except TypeError:
+                print('warning: invalid data dimensions for 2D plot...')
+#            try:
+#                imageplot = self.canvas.axes.imshow(data2d,
+#                                                    interpolation="none",
+##                                                    extent=[min_x, max_x,  # TODO: axis ticks
+##                                                            max_y, min_y], 
+#                                                    )
+#            except TypeError:  # wasn't able to plot
+#                print('warning: invalid data dimensions for 2D plot...')
 #==============================================================================
 #                 # it seems labels on colorplots make the canvas very ornery
 #                 try:
@@ -575,10 +565,10 @@ class DataBrowserWindow(QtGui.QMainWindow):
 #                     pass
 #                 self.canvas.axes.title(plotfield)
 #==============================================================================
-                self.canvas.axes.set_aspect('auto')
-                self.canvas.figure.colorbar(imageplot)
-                self.canvas.figure.tight_layout()
-                self.canvas.draw()
+            self.canvas.axes.set_aspect('auto')
+            self.canvas.figure.colorbar(imageplot)
+            self.canvas.figure.tight_layout()
+            self.canvas.draw()
             self.statusBar.showMessage("Ready")
 
     @classmethod

@@ -234,7 +234,8 @@ def find_TRKR_vs_position(electric_field,  # V/cm
 if __name__ == "__main__":
     channel_xvals = np.linspace(-50, 250, 200)
     electric_field = 15  # V/cm
-    external_b_fields = [0.15, 0.225, 0.3]
+    external_b_fields = [0.3]
+#    external_b_fields = [0.15, 0.225, 0.3]
 #    external_b_fields = [0.1, 0.125, 0.15, 0.175,
 #                         0.2, 0.225, 0.25, 0.275, 0.3]
 #    external_b_field = 0.3  # Tesla
@@ -252,7 +253,7 @@ if __name__ == "__main__":
                          laser_power=pump_laser_power,
                          laser_width=pump_laser_width,
                          initial_orientation=0*np.pi/3,  # angle, -pi/2 to pi/2
-                         initial_polarization=0.5,
+                         initial_polarization=0.25,
                          initial_position=0.0,
                          spin_lifetime=20000.0,
                          gfactor=.44,
@@ -267,7 +268,7 @@ if __name__ == "__main__":
                          initial_orientation=-1.5*np.pi/3,  # angle, pi/2 to 3*pi/2
                          initial_polarization=0.5,
                          initial_position=0.0,
-                         spin_lifetime=20000.0,
+                         spin_lifetime=4000.0,
                          gfactor=.43,
                          mobility=1e-4,  # (um/ps)/(V/cm). 1e-4 -> 2um/ns/Vapp
                          diffusion_const=0,

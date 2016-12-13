@@ -188,10 +188,10 @@ if __name__ == "__main__":
                                 plt.subplot(3,2,4),
                                 plt.subplot(3,2,5),
                                 plt.subplot(3,2,6)]
-    probe_position_list = [-10, 0, 20, 40]    
+    probe_position_list = [-10, 0, 20, 30]    
     measurement_window = [-500, 7000]
     time_step = 5.0  # ps
-    streak_start = 6000
+    streak_start = -500
     streak_end = 7000
     streak_duration = streak_end - streak_start
     streak_line_count = 100  # lines in streak, give or take one, limited by time step
@@ -220,19 +220,19 @@ if __name__ == "__main__":
                            spin_lifetime=20000.0,  # ps
                            gfactor=.44,
                            mobility=1e-4,  # (um/ps)/(V/cm). 1e-4 -> 2um/ns/Vapp
-                           transfer_decay_const=4e-5,
+                           transfer_decay_const=1e-8,
                            diffusion_const=0,
                            band_edge=818.4,
                            relative_phase=0*np.pi)
     species2 = SpinProfile(xmin, xmax, nboxes,
-                           carrier_density=1.0,
-                           spin_lifetime=20000.0,  # ps
-                           gfactor=.43,
+                           carrier_density=2.0,
+                           spin_lifetime=2000.0,  # ps
+                           gfactor=.436,
                            mobility=1e-4,  # (um/ps)/(V/cm). 1e-4 -> 2um/ns/Vapp
-                           transfer_decay_const=4e-5,
+                           transfer_decay_const=1e-8,
                            diffusion_const=0,
                            band_edge=819.4,
-                           relative_phase=-1.5*np.pi/3)
+                           relative_phase=-2*np.pi/3)
 
     def time_evolve_system():
         species1_transferred_complex_spin_profile = \

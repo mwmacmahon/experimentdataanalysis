@@ -1032,33 +1032,58 @@ if __name__ == "__main__":
     # params = num_pulses, pulse_amp1, pulse_amp2, lifetime1, lifetime2,
     #          osc_period1, osc_period2, drift_voltage1, drift_voltage2,
     #          phase1, phase2, slope, offset
+#    trkr_model_2_0V = \
+#        IndependentSinusoidalSpinLifetimeModel(
+#            field_name="lockin2x",
+#            max_fcn_evals=20000,
+#            free_params=[False, True, True, True, False,
+#                         True, True, False, False,
+#                         True, True, True, True],
+#            initial_params = [40,
+#                              short_pulseamp_init_818_9_0Vcm,
+#                              long_pulseamp_init_818_9_0Vcm,
+#                              short_lifetime_init_818_9_0Vcm,
+#                              long_lifetime_init_818_9_0Vcm,
+#                              short_period_init_818_9_0Vcm,
+#                              long_period_init_818_9_0Vcm,
+##                              0.015, 0.008, 4000, 20260,
+##                              555.5, 554.62,
+#                              0, 0,
+#                              0, np.pi, 0, 0],
+#            param_bounds = [(1, 1000),
+#                              short_pulseamp_bounds_818_9,
+#                              long_pulseamp_bounds_818_9,
+#                              short_lifetime_bounds_818_9,
+#                              long_lifetime_bounds_818_9,
+#                              short_period_bounds_818_9,
+#                              long_period_bounds_818_9,
+##                            (0, 0.1), (0.003, 0.1), (1, 1e4), (1e3, 1e7),
+##                            (500, 600), (500, 600),
+#                            (0, 0), (0, 0),
+#                            (-4*np.pi, 4*np.pi), (-4*np.pi, 4*np.pi),
+#                            (-1e-4, 1e-4), (-0.01, 0.01)],
+#            error_thresholds=[None, None, None, None, None,
+#                              None, None, None, None,
+#                              None, None, None, None],
+#            fit_result_scan_coord="Electric Field (V/cm)",  # look at results of fit vs field
+#            excluded_intervals=[[-15, 400]],
+##            excluded_intervals=[[-15, 400], [7000, 15000]],
+#            BField=0.3)
+
     trkr_model_2_0V = \
         IndependentSinusoidalSpinLifetimeModel(
             field_name="lockin2x",
             max_fcn_evals=20000,
             free_params=[False, True, True, True, False,
-                         True, True, False, False,
-                         True, True, True, True],
-            initial_params = [40,
-                              short_pulseamp_init_818_9_0Vcm,
-                              long_pulseamp_init_818_9_0Vcm,
-                              short_lifetime_init_818_9_0Vcm,
-                              long_lifetime_init_818_9_0Vcm,
-                              short_period_init_818_9_0Vcm,
-                              long_period_init_818_9_0Vcm,
-#                              0.015, 0.008, 4000, 20260,
-#                              555.5, 554.62,
-                              0, 0,
+                         False, False, False, False,
+                         False, False, True, True],
+            initial_params = [20,
+                              0.015, 0.008, 4000, 20260,
+                              554.62, 554.62, 0, 0,
                               0, np.pi, 0, 0],
             param_bounds = [(1, 1000),
-                              short_pulseamp_bounds_818_9,
-                              long_pulseamp_bounds_818_9,
-                              short_lifetime_bounds_818_9,
-                              long_lifetime_bounds_818_9,
-                              short_period_bounds_818_9,
-                              long_period_bounds_818_9,
-#                            (0, 0.1), (0.003, 0.1), (1, 1e4), (1e3, 1e7),
-#                            (500, 600), (500, 600),
+                            (0, 0.1), (0.003, 0.1), (1, 1e4), (1e3, 1e7),
+                            (500, 600), (500, 600),
                             (0, 0), (0, 0),
                             (-4*np.pi, 4*np.pi), (-4*np.pi, 4*np.pi),
                             (-1e-4, 1e-4), (-0.01, 0.01)],
@@ -1101,62 +1126,62 @@ if __name__ == "__main__":
     scandataset_list = sort_scandata_into_sets(scandata_list, model, sort_key)
     field_name = model.field_name  # for future use
 
-    # Change drift velocity based on voltage. Assumes each set has same
-    # voltage for every scan!
-    field_list = []
-    model_initial_params_list = []
-    for scandataset in scandataset_list:
-        voltage_list = [scandata.info['Voltage']
-                        for scandata in scandataset.scandata_list]
-        set_voltage = voltage_list[0]
-        if any(voltage != set_voltage for voltage in voltage_list):
-            print("No common voltage in ScanDataSet, " +
-                  "cannot set drift velocity.")
-        else:
-            # Drift velocity per voltage
-            drift_velocity_per_volt = 2e-3  # in um/(ps*V)
-            drift_velocity = drift_velocity_per_volt*set_voltage  # in um/ps
-            scandataset.model.free_params[7] = False  # drift_velocity1
-            scandataset.model.free_params[8] = False  # drift_velocity2
-            scandataset.model.initial_params[7] = drift_velocity
-            scandataset.model.initial_params[8] = drift_velocity
-
-            # Other parameters: set starting guess as linear
-            # interpolation between 0V/cm and 15V/cm value
-            for index in range(1, 7):
-                if index == 1:
-                    value_at_0Vcm = short_pulseamp_init_818_9_0Vcm
-                    value_at_15Vcm = short_pulseamp_init_818_9_15Vcm
-                elif index == 2:
-                    value_at_0Vcm = long_pulseamp_init_818_9_0Vcm
-                    value_at_15Vcm = long_pulseamp_init_818_9_15Vcm
-                elif index == 3:
-                    value_at_0Vcm = short_lifetime_init_818_9_0Vcm
-                    value_at_15Vcm = short_lifetime_init_818_9_15Vcm
-                elif index == 4:
-                    value_at_0Vcm = long_lifetime_init_818_9_0Vcm
-                    value_at_15Vcm = long_lifetime_init_818_9_15Vcm
-                elif index == 5:
-                    value_at_0Vcm = short_period_init_818_9_0Vcm
-                    value_at_15Vcm = short_period_init_818_9_15Vcm
-                elif index == 6:
-                    value_at_0Vcm = long_period_init_818_9_0Vcm
-                    value_at_15Vcm = long_period_init_818_9_15Vcm
-                value_per_field = (value_at_15Vcm - value_at_0Vcm)/15
-                current_field = set_voltage * 20
-                abs_field = abs(current_field)
-                if abs_field > 15:
-                    abs_field = 15
-                new_value = value_at_0Vcm + value_per_field * abs_field
-                scandataset.model.initial_params[index] = new_value
-#                print('---')
-#                print('0V/cm value: {}'.format(value_at_0Vcm))
-#                print('15V/cm value: {}'.format(value_at_15Vcm))
-#                print('@{}V/cm, new value: {}'.format(current_field, new_value))
-                if current_field not in field_list:
-                    field_list.append(current_field)
-                    current_initial_params = scandataset.model.initial_params
-                    model_initial_params_list.append(current_initial_params)
+#    # Change drift velocity based on voltage. Assumes each set has same
+#    # voltage for every scan!
+#    field_list = []
+#    model_initial_params_list = []
+#    for scandataset in scandataset_list:
+#        voltage_list = [scandata.info['Voltage']
+#                        for scandata in scandataset.scandata_list]
+#        set_voltage = voltage_list[0]
+#        if any(voltage != set_voltage for voltage in voltage_list):
+#            print("No common voltage in ScanDataSet, " +
+#                  "cannot set drift velocity.")
+#        else:
+#            # Drift velocity per voltage
+#            drift_velocity_per_volt = 2e-3  # in um/(ps*V)
+#            drift_velocity = drift_velocity_per_volt*set_voltage  # in um/ps
+#            scandataset.model.free_params[7] = False  # drift_velocity1
+#            scandataset.model.free_params[8] = False  # drift_velocity2
+#            scandataset.model.initial_params[7] = drift_velocity
+#            scandataset.model.initial_params[8] = drift_velocity
+#
+#            # Other parameters: set starting guess as linear
+#            # interpolation between 0V/cm and 15V/cm value
+#            for index in range(1, 7):
+#                if index == 1:
+#                    value_at_0Vcm = short_pulseamp_init_818_9_0Vcm
+#                    value_at_15Vcm = short_pulseamp_init_818_9_15Vcm
+#                elif index == 2:
+#                    value_at_0Vcm = long_pulseamp_init_818_9_0Vcm
+#                    value_at_15Vcm = long_pulseamp_init_818_9_15Vcm
+#                elif index == 3:
+#                    value_at_0Vcm = short_lifetime_init_818_9_0Vcm
+#                    value_at_15Vcm = short_lifetime_init_818_9_15Vcm
+#                elif index == 4:
+#                    value_at_0Vcm = long_lifetime_init_818_9_0Vcm
+#                    value_at_15Vcm = long_lifetime_init_818_9_15Vcm
+#                elif index == 5:
+#                    value_at_0Vcm = short_period_init_818_9_0Vcm
+#                    value_at_15Vcm = short_period_init_818_9_15Vcm
+#                elif index == 6:
+#                    value_at_0Vcm = long_period_init_818_9_0Vcm
+#                    value_at_15Vcm = long_period_init_818_9_15Vcm
+#                value_per_field = (value_at_15Vcm - value_at_0Vcm)/15
+#                current_field = set_voltage * 20
+#                abs_field = abs(current_field)
+#                if abs_field > 15:
+#                    abs_field = 15
+#                new_value = value_at_0Vcm + value_per_field * abs_field
+#                scandataset.model.initial_params[index] = new_value
+##                print('---')
+##                print('0V/cm value: {}'.format(value_at_0Vcm))
+##                print('15V/cm value: {}'.format(value_at_15Vcm))
+##                print('@{}V/cm, new value: {}'.format(current_field, new_value))
+#                if current_field not in field_list:
+#                    field_list.append(current_field)
+#                    current_initial_params = scandataset.model.initial_params
+#                    model_initial_params_list.append(current_initial_params)
 
     analyzer3 = ScanDataSetsAnalyzer(scandataset_list)
 
@@ -1166,10 +1191,9 @@ if __name__ == "__main__":
     for scandataset in analyzer3.scandataset_list:
         for scandata in scandataset.scandata_list:
             field = scandata.info['Voltage']*20
-            for scaninfo in scandata.scaninfo_list:
-                scaninfo['MiddleScanType'] = 'Electric Field (V/cm)'
-                scaninfo['MiddleScanCoord'] = field
-                scaninfo['Electric Field (V/cm)'] = field
+            scandata.info['MiddleScanType'] = 'Electric Field (V/cm)'
+            scandata.info['MiddleScanCoord'] = field
+            scandata.info['Electric Field (V/cm)'] = field
 
     # drift subtraction:
     # subtract from data: data times a 400ps wide gaussian convolution filter                        
@@ -1207,6 +1231,49 @@ if __name__ == "__main__":
     trkr_fit_results_scandata_list_2 = [make_scandata_phase_continuous(scandata)
                                for scandata in trkr_fit_results_scandata_list_2]
 
+# %%
+    field_name = 'lockin2x'
+    for scandata in fit_trkr_scandata_list_2[0:1]:
+       plot_scandata(scandata, field_name, model=model, fmt="bd")
+    plt.xlabel("Delay (ps)")
+    plt.ylabel("Kerr Rotation (AU)")
+    if scandata.get_field_fitdata(field_name) is not None:
+        plt.text(8000, 0,
+                 "Last fit lifetime: {:.3f}ns\n                         +-{:.3f}ns".format(
+                     scandata.get_field_fitdata(field_name).fitparams[3]/1000,
+                     scandata.get_field_fitdata(field_name).fitparamstds[3]/1000))
+    plt.show()
+
+    print('Voltage: {}'.format(scandata.info['Voltage']))
+    if scandata.get_field_fitdata(field_name) is not None:
+        print(scandata.get_field_fitdata(field_name).fitparams)
+
+    scandata_list = fit_trkr_scandata_list_2
+
+
+# %%
+    field_names = [5]  # dataseries: x:field, y:short/long phase
+    plt.figure()
+    plt.hold(True)
+    for field_name in field_names:
+        for scandata in trkr_fit_results_scandata_list_3[:]:
+            fit_param_name = scandata.fields[field_name]
+            plot_scandata(scandata, field_name,
+                          fmt="d", label=fit_param_name)
+        try:
+            initial_vals = [initial_params[fit_param_name]
+                            for initial_params in model_initial_params_list]
+            plt.plot(field_list, initial_vals, 'd:',
+                     label="{}: Initial Guesses".format(fit_param_name))
+        except KeyError:
+            print("No fit parameter by name " + fit_param_name +
+                  " found in model. Initial guess fit omitted")
+
+    # LABEL AND DISPLAY GRAPH
+    plt.xlabel("Electric Field (V/cm)")
+    plt.ylabel("")  
+    plt.legend(loc='best')
+    plt.show()
 
 
 

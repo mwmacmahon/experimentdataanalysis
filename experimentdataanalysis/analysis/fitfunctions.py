@@ -21,6 +21,7 @@ import numpy as np
 
 
 GFACTORCONSTANT = 0.013996  # 1/(ps*Tesla), = bohr magneton/2*pi*hbar
+#GFACTORCONSTANT = 1.3996e-5  # 1/(ps*mTesla), = bohr magneton/2*pi*hbar
 LASER_REPRATE = 13160  # ps period
 
 
@@ -168,6 +169,47 @@ def fitfcn_two_indep_exp_sin_decay(t, num_pulses,
                                         2*np.pi*t_pulse/osc_period1 + phase1) +
                     effective_amplitude2*np.exp(-t_pulse/lifetime2)*np.cos(
                                         2*np.pi*t_pulse/osc_period2 + phase2))
+        else:
+            return 0*t_pulse
+
+    pulsesum = sum([single_pulse_fcn(t + pulsenum*LASER_REPRATE)
+                    for pulsenum in range(num_pulses)])
+
+    wrapped_t = t.copy()  # deep copy to avoid changing original, may be slow
+    wrapped_t[t > 1e4] -= LASER_REPRATE
+#    wrapped_t = t[:]  # shallow copy, must avoid changing original!
+#    wrapped_t = np.hstack([t[t < 1e4], t[t > 1e4] - 13160])  # assumes ordered
+    linear_offset = offset + slope*wrapped_t
+    return linear_offset + pulsesum
+
+
+# %% NEEDS SPHINX DOCUMENTATION
+def fitfcn_two_opposite_exp_sin_decay(t, num_pulses,
+                                      pulse_amplitude1, pulse_amplitude2,
+                                      lifetime1, lifetime2,
+                                      osc_period,  drift_velocity,
+                                      slope, offset):
+    """
+    Expected units:
+    lifetime: ps
+    osc_period: ps
+    drift_velocity: um/ps
+    """
+    def single_pulse_fcn(t_pulse):
+        sigma1 = 17.5  # probe beam waist in um, +- 0.5um, from Marta's paper
+        sigma2 = sigma1  # assuming no diffusion
+        xdiff1 = drift_velocity*t_pulse
+        xdiff2 = drift_velocity*t_pulse
+        drift_signal_factor1 = np.exp(-xdiff1**2/(2*(sigma1**2 + sigma2**2)))
+        drift_signal_factor2 = np.exp(-xdiff2**2/(2*(sigma1**2 + sigma2**2)))
+        effective_amplitude1 = pulse_amplitude1 * drift_signal_factor1
+        effective_amplitude2 = pulse_amplitude2 * drift_signal_factor2
+        if np.any(drift_signal_factor1 > 1e-6) or \
+                np.any(drift_signal_factor2 > 1e-6):  # avoid if unnecessary
+            return (effective_amplitude1*np.exp(-t_pulse/lifetime1)*np.cos(
+                                        2*np.pi*t_pulse/osc_period) +
+                    effective_amplitude2*np.exp(-t_pulse/lifetime2)*np.cos(
+                                        2*np.pi*t_pulse/osc_period - np.pi))
         else:
             return 0*t_pulse
 

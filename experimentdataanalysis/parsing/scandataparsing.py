@@ -20,7 +20,8 @@ def fetch_dir_as_unfit_scandata_iterator(directorypath=None,
                                          key_field=None,
                                          delimiter=None,
                                          parser='tab-delimited',
-                                         key_field_error_val=None):
+                                         key_field_error_val=None,
+                                         parsing_keywordlists=None):
     """
     Takes a directory and returns an iterator, which upon each call gives
     the contents of a csv file in that directory or its subdirectories in
@@ -55,7 +56,8 @@ def fetch_dir_as_unfit_scandata_iterator(directorypath=None,
         for filepath, headerfooterstr, tabledata in csvfiles:
             scandata = tabledata_to_unfit_scandata(filepath, headerfooterstr,
                                                    tabledata, key_field,
-                                                   key_field_error_val)
+                                                   key_field_error_val,
+                                                   parsing_keywordlists)
             yield scandata
 #    elif parser == '???':
 #        if not delimiter:
@@ -72,7 +74,8 @@ def fetch_csv_as_unfit_scandata(filepath=None,
                                 key_field=None,
                                 delimiter=None,
                                 parser='tab-delimited',
-                                key_field_error_val=None):
+                                key_field_error_val=None,
+                                parsing_keywordlists=None):
     if parser == 'tab-delimited':  # default case
         if not delimiter:
             delimiter = '\t'
@@ -84,7 +87,8 @@ def fetch_csv_as_unfit_scandata(filepath=None,
                 csvparser.parse_csv_gui('C:\\Data\\', delimiter)
         scandata = tabledata_to_unfit_scandata(filepath, headerfooterstr,
                                                tabledata, key_field,
-                                               key_field_error_val)
+                                               key_field_error_val,
+                                               parsing_keywordlists)
         return scandata
 #    elif parser == '???':
 #        if not delimiter:
@@ -99,11 +103,13 @@ def fetch_csv_as_unfit_scandata(filepath=None,
 # %%
 def tabledata_to_unfit_scandata(filepath, headerfooterstr,
                                 rawdata, key_field=None,
-                                key_field_error_val=None):
+                                key_field_error_val=None,
+                                parsing_keywordlists=None):
     colnames, coldata = rawdata
     field_names = list(colnames)
     field_arrays = [np.array(column) for column in coldata]
-    scaninfo = analyze_scan_filepath(filepath)
+    scaninfo = analyze_scan_filepath(filepath,
+                                     parsing_keywordlists)
     scaninfo = analyze_string_for_dict_pairs(headerfooterstr, scaninfo)
 
     # if key_field given, attempt to set error array in scaninfo
@@ -159,6 +165,8 @@ def analyze_scan_filepath(filepath, scaninfo={}, keywordlists=None):
         #    tag remainder as second string
         #        e.g. "..._30K_..." -> {"SetTemperature": 30}
         inside_this_element_keyword_list = [("Channel", "Channel"),
+                                            ("Vcm", "Electric Field"),
+                                            ("mT", "Magnetic Field (mT)"),
                                             ("K", "SetTemperature"),
                                             ("nm", "Wavelength"),
                                             ("x.dat", "MiddleScanCoord")]

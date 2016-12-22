@@ -17,7 +17,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 
-GFACTORCONSTANT = 0.013996  # 1/(ps*Tesla), = bohr magneton/2*pi*hbar
+GFACTORCONSTANT = 1.3996e-5  # 1/(ps*mTesla), = bohr magneton/2*pi*hbar
 LASER_REPRATE = 13160  # ps period
 
 
@@ -274,12 +274,12 @@ if __name__ == "__main__":
                              'mobility': 1e-4,  # (um/ps)/(V/cm). 1e-4: 2um/ns/Vapp
                              'spin_lifetime': 2000}
     
-    laser_kwargs = {'laser_width': 20.0,  # um, radius
+    laser_kwargs = {'laser_width': 17.5,  # um, radius
                     'laser_power': 1.0,  # AU
                     'laser_wavelength': 818.9}  # nm
     
     experiment_state_kwargs = {'applied_E_fields': 15,  # V/cm
-                               'external_B_fields': 0.3}  # T
+                               'external_B_fields': 300}  # mT
     
     n_pulses = 10
     laser_pos = 0.0
@@ -376,7 +376,7 @@ if True:
     plt.subplot(2,1,2)
     probe_profile = vanilla_experiment.get_probe_profile(
         tvals, probe_position, **laser_kwargs, **experiment_state_kwargs)
-    plt.plot(tvals, probe_profile, 'd')
+    plt.plot(tvals, probe_profile, 'd')     
     plt.title('Spin profile w/ probe convolution and Kerr physics')
 
 
@@ -402,6 +402,60 @@ if False:
     plt.plot(external_B_fields, probe_profile, 'd')
     plt.xlim([min(external_B_fields), max(external_B_fields)])
     plt.title('Spin profile w/ probe convolution and Kerr physics')
+
+
+# %% EXPORT TRKR DATA WITH NOISE
+if False:
+# %%
+    tvals = np.linspace(0, 7500, 200)  # ps
+    probe_position = 0  # um
+    probe_position_list = np.arange(-20, 101, 2)
+    applied_E_field = 15  # V/cm
+    external_B_fields = [200, 300]  # mT
+    num_fake_runs = 2
+    for run_ind in range(num_fake_runs):
+        for probe_position in probe_position_list:
+            for current_B_field in external_B_fields:
+                experiment_field_dict = {'applied_E_fields': applied_E_field,
+                                         'external_B_fields': current_B_field}
+                probe_profile = vanilla_experiment.get_probe_profile(
+                    tvals, probe_position,
+                    **laser_kwargs, **experiment_field_dict)
+                probe_noise = 0.001 * np.random.randn(tvals.size)
+        #        plt.plot(tvals, probe_profile, ':')
+        #        plt.plot(tvals, probe_profile + probe_noise, 'r')
+        #        plt.title('Spin profile w/ probe convolution and Kerr physics')
+        
+                directory = "C:\\Data\\fake_data\\fake_trkr"
+                filename = "TRKR_MirrorZ_{:.0f}_".format(probe_position) + \
+                           "15Vcm_{:.0f}mT_".format(current_B_field) + \
+                           "run{:03d}.dat".format(run_ind + 1)
+                filepath = directory + "\\" + filename
+    #            headerstr = "\n".join(10*["header header header"])
+                headerstr = '\t'.join(["scancoord","lockin2x"])
+                np.savetxt(filepath,
+                           np.vstack([tvals, probe_profile]).T,
+                           fmt='%.6e\t%.12e', delimiter='\t', newline='\n',
+                           header=headerstr, comments='')
+
+#    from scipy.interpolate import UnivariateSpline
+#    drift_spline_n_pts = 8
+#    drift_spline_padding = 8
+#    drift_spline_scale = 0.005 * np.random.randn()
+#    x = np.linspace(min(tvals), max(tvals), drift_spline_n_pts)
+#    y = np.random.randn(drift_spline_n_pts)
+#    x_padded = np.linspace(min(tvals), max(tvals),
+#                           drift_spline_n_pts + 2 * drift_spline_padding)
+#    y_padded = np.hstack([y[0] * np.ones(drift_spline_padding),
+#                          y,
+#                          y[-1] * np.ones(drift_spline_padding)])
+#    s = UnivariateSpline(x, y, s=None)
+#    s_padded = UnivariateSpline(x_padded, y_padded, s=None)
+##    plt.plot(x, y, 'bd')
+##    plt.plot(x_padded, y_padded, 'gd')
+#    plt.plot(tvals, s(tvals), 'b')
+#    plt.plot(tvals, s_padded(tvals), 'g')
+#    probe_drift = drift_spline_scale * s(tvals)
 
 
 

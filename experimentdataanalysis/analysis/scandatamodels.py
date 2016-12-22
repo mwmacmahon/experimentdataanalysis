@@ -14,6 +14,7 @@ import experimentdataanalysis.analysis.fitfunctions as fitfcns
 
 gfactorCONSTANT = 71.44773  # ps*Tesla, = 2*pi*hbar/bohr magneton
 GFACTORCONSTANT2 = 0.013996  # 1/(ps*Tesla), = bohr magneton/2*pi*hbar
+#GFACTORCONSTANT = 1.3996e-5  # 1/(ps*mTesla), = bohr magneton/2*pi*hbar
 
 
 # %% NEEDS TESTS, SPHINX DOCUMENTATION
@@ -27,8 +28,7 @@ class ScanDataModel:
     Can be inherited from to change the fit model, may only need to change
     __init__ method if first 3 fit parameters are left the same.
 
-    All models should have fcns all_model_fields, and possibly
-    get_model_filter_fcns
+    All models should have fcns all_model_fields
     """
     def __init__(self, **kwargs):
         self.model_type = "specific_model_name"
@@ -39,28 +39,12 @@ class ScanDataModel:
         self.free_params = [True]
         self.initial_params = [0]
         self.param_bounds = [(0, 0)]
-        self.error_thresholds = [None]
         self.max_fcn_evals = 20000
         self.excluded_intervals = None
         self.ignore_weights = False
         # keyword args override defaults
         for key, val in kwargs.items():
             self.__dict__[key] = val
-
-    def get_model_filter_fcns(self):
-        field_name = self.field_name
-        thresholds = self.error_thresholds
-
-        def filter_fit_error_vs_threshold(scandata):
-            errors_ok = True
-            errors = scandata.fitdata_list[field_name].fitparamstds
-            for error, threshold in zip(errors, thresholds):
-                if threshold is not None:
-                    if error > threshold:
-                        errors_ok = False
-            return errors_ok
-
-        return [filter_fit_error_vs_threshold]
 
     # DUMMY, SHOULD BE OVERWRITTEN BASED ON ATTRIBUTE FUNCTIONS
     # IDEALLY SELF-WRITTEN BASED ON ATTRIBUTE DECORATORS...
@@ -92,7 +76,6 @@ class ScanDataModel:
 #        kwargs['initial_params'] = list(self.initial_params)
 #        kwargs['param_bounds'] = [tuple(pair)
 #                                  for pair in self.param_bounds]
-#        kwargs['error_thresholds'] = list(self.error_thresholds)
 #        if self.excluded_intervals is not None:
 #            kwargs['excluded_intervals'] = [tuple(pair)
 #                                            for pair in self.excluded_intervals]
@@ -106,7 +89,6 @@ class ScanDataModel:
             self.free_params == other.free_params,
             self.initial_params == other.initial_params,
             self.param_bounds == other.param_bounds,
-            self.error_thresholds == other.error_thresholds,
             self.max_fcn_evals == other.max_fcn_evals])
 
 
@@ -121,7 +103,7 @@ class LinearFitModel(ScanDataModel):
     Can be inherited from to change the fit model, may only need to change
     __init__ method if first 3 fit parameters are left the same.
 
-    All models should have fcns all_model_fields and get_model_filter_fcns
+    All models should have fcns all_model_fields
     """
     def __init__(self, **kwargs):
         self.model_type = "fitfcn_simple_line"
@@ -132,7 +114,6 @@ class LinearFitModel(ScanDataModel):
         self.free_params = [True, True]
         self.initial_params = [0, 0]
         self.param_bounds = [(-np.inf, np.inf), (-np.inf, np.inf)]
-        self.error_thresholds = [None, None]
         self.max_fcn_evals = 20000
         self.excluded_intervals = None
         self.ignore_weights = False
@@ -182,7 +163,7 @@ class GaussianModel(ScanDataModel):
     Can be inherited from to change the fit model, may only need to change
     __init__ method if first 3 fit parameters are left the same.
 
-    All models should have fcns all_model_fields and get_model_filter_fcns
+    All models should have fcns all_model_fields
     """
     def __init__(self, **kwargs):
         self.model_type = "1d_gaussian_with_linear_offset"
@@ -194,7 +175,6 @@ class GaussianModel(ScanDataModel):
         self.initial_params = [0.02, 0, 20, 0, 0]
         self.param_bounds = [(0, 1), (-200, 200),
                              (5, 200), (-0.01, 0.01), (-0.01, 0.01)]
-        self.error_thresholds = [0.01, 15, 15, None, None]
         self.max_fcn_evals = 20000
         self.excluded_intervals = None
         self.ignore_weights = False
@@ -266,7 +246,7 @@ class RSAFieldScanModel(ScanDataModel):
     Can be inherited from to change the fit model, may only need to change
     __init__ method if first 3 fit parameters are left the same.
 
-    All models should have fcns all_model_fields and get_model_filter_fcns
+    All models should have fcns all_model_fields
     """
     def __init__(self, **kwargs):
         self.model_type = "fitfcn_rsa_field_scan"
@@ -289,9 +269,6 @@ class RSAFieldScanModel(ScanDataModel):
                              (0, 1), (10, 1e9), (0.3, 0.6),
                              (-0.1, 0.1), (-1e3, 1e3),
                              (-np.pi, np.pi), (-0.05, 0.05), (-0.01, 0.01)]
-        self.error_thresholds = [None, None,
-                                 None, None, None,
-                                 None, None, None, None, None]
         self.max_fcn_evals = 10000
         self.excluded_intervals = None
         self.ignore_weights = False
@@ -383,7 +360,7 @@ class SpinLifetimeModel(ScanDataModel):
     Can be inherited from to change the fit model, may only need to change
     __init__ method if first 3 fit parameters are left the same.
 
-    All models should have fcns all_model_fields and get_model_filter_fcns
+    All models should have fcns all_model_fields
     """
     def __init__(self, **kwargs):
         self.model_type = "fitfcn_two_exp_decay"
@@ -397,7 +374,6 @@ class SpinLifetimeModel(ScanDataModel):
         self.initial_params = [0.05, 50, 0.05, 2000, 0]
         self.param_bounds = [(0, 1), (1, 200),
                              (0, 1), (10, 1e6), (-0.01, 0.01)]
-        self.error_thresholds = [None, None, None, None, None]
         self.max_fcn_evals = 20000
         self.excluded_intervals = None
         self.ignore_weights = False
@@ -463,7 +439,7 @@ class SinusoidalSpinLifetimeModel(ScanDataModel):
     Can be inherited from to change the fit model, may only need to change
     __init__ method if first 3 fit parameters are left the same.
 
-    All models should have fcns all_model_fields and get_model_filter_fcns
+    All models should have fcns all_model_fields
     """
     def __init__(self, **kwargs):
         self.model_type = "fitfcn_two_exp_sin_decay"
@@ -481,8 +457,6 @@ class SinusoidalSpinLifetimeModel(ScanDataModel):
                              (0, 1), (10, 1e6),
                              (600, 1000), (-np.pi, np.pi),
                              (-1e-6, 1e-6), (-0.01, 0.01)]
-        self.error_thresholds = [None, None, None, None,
-                                 None, None, None, None]
         self.max_fcn_evals = 20000
         self.excluded_intervals = None
         self.ignore_weights = False
@@ -549,7 +523,7 @@ class IndependentSinusoidalSpinLifetimeModel(ScanDataModel):
     Can be inherited from to change the fit model, may only need to change
     __init__ method if first 3 fit parameters are left the same.
 
-    All models should have fcns all_model_fields and get_model_filter_fcns
+    All models should have fcns all_model_fields
     """
     def __init__(self, **kwargs):
         self.model_type = "fitfcn_two_indep_exp_sin_decay"
@@ -576,9 +550,6 @@ class IndependentSinusoidalSpinLifetimeModel(ScanDataModel):
                              (-1e3, 1e3), (-1e3, 1e3),
                              (-np.pi, np.pi), (-np.pi, np.pi),
                              (-1e-6, 1e-6), (-0.01, 0.01)]
-        self.error_thresholds = [None, None, None, None, None,
-                                 None, None, None, None,
-                                 None, None, None, None]
         self.max_fcn_evals = 10000
         self.excluded_intervals = None
         self.ignore_weights = False
@@ -721,4 +692,122 @@ class IndependentSinusoidalSpinLifetimeModel(ScanDataModel):
         params = abs(model_param_array_list[6] -
                      model_param_array_list[5])
         params_sigma = model_param_array_list[5]
+        return params, params_sigma
+
+
+# %% NEEDS TESTS, SPHINX DOCUMENTATION
+class TwoLifetimesOppositePhaseTRKRModel(ScanDataModel):
+    """
+    Stores the parameters and formulas needed to fit scandata to a
+    1D model and extract attributes. Should not store any data, although
+    it can be modified after creation (e.g. to increase max_fcn_evals
+    attribute or adjust the experimental uncertainty assumed).
+
+    Can be inherited from to change the fit model, may only need to change
+    __init__ method if first 3 fit parameters are left the same.
+
+    All models should have fcns all_model_fields
+    """
+    def __init__(self, **kwargs):
+        self.model_type = "fitfcn_two_opposite_exp_sin_decay"
+        self.fit_result_scan_coord = "Voltage"
+        self.field_name = "[data field]"  # key field, probably lockin2x
+        self.fitfunction = fitfcns.fitfcn_two_opposite_exp_sin_decay
+        self.model_params = ["num_pulses", "amplitude1", "amplitude2",
+                             "lifetime1", "lifetime2", "osc_period",
+                             "drift_velocity", "slope", "offset"]
+        # params = num_pulses, pulse_amplitude1, pulse_amplitude2,
+        #          lifetime1, lifetime2, osc_period,
+        #          drift_velocity, slope, offset
+        self.free_params = [False, True, True,
+                            True, True, True,
+                            False, True, True]
+        self.initial_params = [40, 0.04, 0.04,
+                               20000, 2000, 600,
+                               0, 0, 0]
+        self.param_bounds = [(1,1000), (0, 1), (0, 1),
+                             (1, 1e9), (1, 1e9), (200, 1200),
+                             (-1e3, 1e3), (-1e-6, 1e-6), (-0.01, 0.01)]
+        self.max_fcn_evals = 10000
+        self.excluded_intervals = None
+        self.ignore_weights = False
+        
+        # unique to this model!
+        self.BField = 0  # in mT
+
+        # keyword args override defaults
+        for key, val in kwargs.items():
+            self.__dict__[key] = val
+
+    def all_model_fields(self, model_param_array_list,
+                         model_param_uncertainty_array_list):
+        params = model_param_array_list[1:]  # 1st param is xcoords
+        param_sigmas = model_param_uncertainty_array_list
+        if len(params) == 0 or len(params) != len(param_sigmas):
+            raise ValueError("ScanDataModel: tried to extract " +
+                             "fit results without successful fit")
+            
+        # TODO: design a model field decorator fcn to make this automatic
+        fields = ["amplitude1",
+                  "amplitude2",
+                  "lifetime1",
+                  "lifetime2",
+                  "osc_period",
+                  "gfactor",
+                  "drift_velocity"]
+        array_list, uncertainty_array_list = \
+            zip(*[self.ampltiude1(params, param_sigmas),
+                  self.ampltiude2(params, param_sigmas),
+                  self.lifetime1(params, param_sigmas),
+                  self.lifetime2(params, param_sigmas),
+                  self.osc_period(params, param_sigmas),
+                  self.gfactor(params, param_sigmas),
+                  self.drift_velocity(params, param_sigmas),
+                  ])
+        array_list = model_param_array_list[0:1] + list(array_list)  # re-add x
+        uncertainty_array_list = list(uncertainty_array_list)
+        return fields, array_list, uncertainty_array_list
+
+    def amplitude1(self, model_param_array_list,
+                   model_param_uncertainty_array_list):
+        params = model_param_array_list[1]
+        params_sigma = model_param_uncertainty_array_list[1]
+        return params, params_sigma
+
+    def amplitude2(self, model_param_array_list,
+                   model_param_uncertainty_array_list):
+        params = model_param_array_list[2]
+        params_sigma = model_param_uncertainty_array_list[2]
+        return params, params_sigma
+
+    def lifetime1(self, model_param_array_list,
+                  model_param_uncertainty_array_list):
+        params = model_param_array_list[3]
+        params_sigma = model_param_uncertainty_array_list[3]
+        return params, params_sigma
+
+    def lifetime2(self, model_param_array_list,
+                  model_param_uncertainty_array_list):
+        params = model_param_array_list[4]
+        params_sigma = model_param_uncertainty_array_list[4]
+        return params, params_sigma
+
+    def osc_period(self, model_param_array_list,
+                   model_param_uncertainty_array_list):
+        params = model_param_array_list[5]
+        params_sigma = model_param_uncertainty_array_list[5]
+        return params, params_sigma
+
+    def gfactor(self, model_param_array_list,
+                model_param_uncertainty_array_list):
+        params = (model_param_array_list[5] * \
+                  GFACTORCONSTANT2*self.BField)**(-1)
+        params_sigma = params*model_param_uncertainty_array_list[5]/(
+                            model_param_array_list[5])
+        return params, params_sigma
+
+    def drift_velocity(self, model_param_array_list,
+                       model_param_uncertainty_array_list):
+        params = model_param_array_list[6]
+        params_sigma = model_param_uncertainty_array_list[6]
         return params, params_sigma

@@ -16,15 +16,17 @@ from experimentdataanalysis.analysis.scandataprocessing \
            gaussian_smooth_scandata, \
            process_scandata_fields
 from experimentdataanalysis.analysis.scandatamodels \
-    import RSAFieldScanModel, IndependentSinusoidalSpinLifetimeModel
+    import RSAFieldScanModel, TwoLifetimesOppositePhaseTRKRModel
 from experimentdataanalysis.analysis.scandatasetprocessing \
-    import ScanDataSetsAnalyzer, sort_scandata_into_sets
+    import sort_scandata_into_sets, \
+           fit_scandataset_list_to_model, \
+           collapse_scandataset_to_model_fit_scandata_list
 from experimentdataanalysis.parsing.scandataparsing import \
         fetch_dir_as_unfit_scandata_iterator
 
 
-GFACTORCONSTANT = 0.013996  # 1/(ps*Tesla), = bohr magneton/2*pi*hbar
-#GFACTORCONSTANT = 1.3996e-5  # 1/(ps*mTesla), = bohr magneton/2*pi*hbar
+#GFACTORCONSTANT = 0.013996  # 1/(ps*Tesla), = bohr magneton/2*pi*hbar
+GFACTORCONSTANT = 1.3996e-5  # 1/(ps*mTesla), = bohr magneton/2*pi*hbar
 
 
 # FIT RESULT PROCESSING
@@ -68,27 +70,6 @@ def add_linear_fit_results_info_to_scandata(scandata, indices_to_use):
     xyyerr_fcn_kwargs = {}
     process_scandata_fields(scandata, xyyerr_fcn, xyyerr_fcn_args,
                             xyyerr_fcn_kwargs)
-
-
-def add_mean_and_std_info(scandata, field_name):
-    mean_and_std_results = {'mean': np.mean(yvals),
-                            'std': np.std(yvals)}
-    scandata.info.update(mean_and_std_results)
-    return scandata
-
-
-def add_linear_fit_results_info(scandata, field_name):
-    # warning: error not used! must prune bad fits elsewhere
-    xvals, yvals = scandata.get_field_xy(field_name)
-    slope, intercept, _, _, _ = stats.linregress(xvals, yvals)
-    key_xvals = np.array([818.0, 818.9])
-    fit_yvals = key_xvals*slope + intercept
-    linear_fit_results = {field_name + '_linear_fit_slope': slope,
-                          field_name + '_linear_fit_intercept': intercept,
-                          field_name + '_linear_fit_at_818.0nm': fit_yvals[0],
-                          field_name + '_linear_fit_at_818.9nm': fit_yvals[1]}
-    scandata.info.update(linear_fit_results)
-    return scandata
 
 
 # FILTER FUNCTIONS
@@ -203,34 +184,25 @@ def plot_fit_param_scandata(field_names, fit_results_scandata_list):
     # MODEL 1: Fixed long lifetime
     # params = num_pulses, pulse_amplitude1, pulse_amplitude2,
     #          lifetime1, lifetime2, osc_period,
-    #          drift_velocity, slope, offset
+    #          drift_velocity, probe_pos, slope, offset
     simple_trkr_model = \
-        IndependentSinusoidalSpinLifetimeModel(
+        TwoLifetimesOppositePhaseTRKRModel(
             field_name="lockin2x",
-            max_fcn_evals=20000,
+            max_fcn_evals=1000,
             free_params=[False, True, True,
-                         True, True, True,
-                         False, True, True],
+                         False, True, True,
+                         False, True, True, True],
             initial_params=[40, 0.04, 0.04,
                             20000, 2000, 600,
-                            0, 0, 0],
+                            0, 0, 0, 0],
             param_bounds=[(1,1000), (0, 1), (0, 1),
                           (1, 1e9), (1, 1e9), (200, 1200),
-                          (-1e3, 1e3), (-1e-6, 1e-6), (-0.01, 0.01)],
-            free_params=[False, True, True,
-                         False, True, True, True,
-                         False, False,
-                         False, False, True, True],
+                          (-1e3, 1e3), (-300, 300),
+                          (-1e-6, 1e-6), (-0.01, 0.01)],
             fit_result_scan_coord="Pump-Probe Distance (um)",
             excluded_intervals=[[-15, 400]],
 #            excluded_intervals=[[-15, 400], [7000, 15000]],
-            BField=300)
-
-    # LOAD DATA, ORGANIZE, AND FIT IN ANALYZER
-    dirpath = ("C:\\Data\\fake_data\\fake_trkr")
-    fixed_uncertainty = 1e-3  # manually set uncertainty of data set
-    model = trkr_model_0V
-    sort_key = "Magnetic Field (mT)"  # one scandataset for each field value
+            b_field=300)
 
     # filename parsing pattern: if string in element[0] is found in filepath
     # separated from other characters by '_'s, will record adjacent number
@@ -249,6 +221,14 @@ def plot_fit_param_scandata(field_names, fit_results_scandata_list):
     filepath_parsing_keyword_lists = [[],
                                       in_filepath_next_element_keyword_list,
                                       in_filepath_element_keyword_list]
+
+    # LOAD DATA, ORGANIZE, AND FIT IN ANALYZER
+    dirpath = ("C:\\Data\\fake_data\\fake_trkr")
+    fixed_uncertainty = 1e-3  # manually set uncertainty of data set
+    model = simple_trkr_model
+    field_name = model.field_name  # for future use
+
+    # Fetch scandata, start with one big scandataset
     scandata_list = \
         list(fetch_dir_as_unfit_scandata_iterator(
                     directorypath=dirpath,
@@ -256,114 +236,103 @@ def plot_fit_param_scandata(field_names, fit_results_scandata_list):
                     key_field_error_val=fixed_uncertainty,
                     parsing_keywordlists=filepath_parsing_keyword_lists))
 
-    # ---------------
-    # TEMPORARY, FOR SPEED:
-#    scandata_list = scandata_list[0:4]
-    # ---------------
+#    # FOR TESTING: CUT SIZE OF DATA DOWN
+#    original_scandata_list = scandata_list
+#    scandata_list = scandata_list[::10]
 
-    scandataset_list = sort_scandata_into_sets(scandata_list, model, sort_key)
-    field_name = model.field_name  # for future use
+    # one scandataset for each (b-field value, pump-probe-pos)
+    sort_keys = ["Magnetic Field (mT)", "Pump-Probe Distance (um)"]
+    scandataset_list = sort_scandata_into_sets(scandata_list, model, sort_keys)
 
-    # Change drift velocity based on voltage. Assumes each set has same
-    # voltage for every scan!
     for scandataset in scandataset_list:
-        e_field_list = [scandata.info['Electric Field (V/cm)']
-                        for scandata in scandataset.scandata_list]
+        # SET OSCILLATION PERIOD MODEL PARAMETER INITIAL GUESS
         b_field_list = [scandata.info['Magnetic Field (mT)']
                         for scandata in scandataset.scandata_list]
-        set_voltage = voltage_list[0]
-        b_field = b_field_list[0]
-        if any(voltage != set_voltage for voltage in voltage_list):
+        set_b_field = b_field_list[0]
+        if any(b_field != set_b_field for b_field in b_field_list):
+            print("No common magnetic field in ScanDataSet, " +
+                  "cannot set exact oscillation period in fit model.")
+        else:
+            scandataset.model.b_field = set_b_field
+            assumed_gfactor = 0.44
+            scandataset.model.initial_params[5] = \
+                (GFACTORCONSTANT * assumed_gfactor * set_b_field)**(-1)
+        # SET DRIFT VELOCITY MODEL PARAMETER FIXED VALUE
+        e_field_list = [scandata.info['Electric Field (V/cm)']
+                        for scandata in scandataset.scandata_list]
+        set_e_field = e_field_list[0]
+        if any(e_field != set_e_field for e_field in e_field_list):
             print("No common voltage in ScanDataSet, " +
-                  "cannot set drift velocity.")
+                  "cannot set exact drift velocity in fit model.")
         else:
             # Drift velocity per voltage
-            drift_velocity_per_volt = 2e-3  # in um/(ps*V)
-            drift_velocity = drift_velocity_per_volt*set_voltage  # in um/ps
-            scandataset.model.free_params[6] = False  # drift_velocity1
+            mobility_coeff = 1e-4  # in um/(ps*V/cm)
+            drift_velocity = mobility_coeff * set_e_field  # in um/ps
+            scandataset.model.free_params[6] = False  # drift_velocity
             scandataset.model.initial_params[6] = drift_velocity
-
-        if any(bval != b_field for bval in voltage_list):
-            print("No common voltage in ScanDataSet, " +
-                  "cannot set drift velocity.")
+        # SET PUMP PROBE DISTANCE MODEL PARAMETER FIXED VALUE
+        distance_list = [scandata.info['Pump-Probe Distance (um)']
+                         for scandata in scandataset.scandata_list]
+        set_distance = distance_list[0]
+        if any(distance != set_distance for distance in distance_list):
+            print("No common pump probe distance in ScanDataSet, " +
+                  "cannot set exact drift velocity in fit model.")
         else:
-            scandata.model.Bfield = b_field
-
-            scandataset.model.initial_params[7] = drift_velocity
-            scandataset.model.initial_params[8] = drift_velocity
-
-            guess_period_long = long_period_init + 2.7 * abs(set_voltage)
-            scandataset.model.free_params[6] = True  # let it fit from here
-            scandataset.model.initial_params[6] = guess_period_long
-
-    analyzer2 = ScanDataSetsAnalyzer(scandataset_list)
+            # Drift velocity per voltage
+            scandataset.model.free_params[7] = False  # probe_pos
+            scandataset.model.initial_params[7] = set_distance
 
 #    # smooth over data with a 40ps wide gaussian convolution filter
-#    analyzer2.apply_transform_to_all_scandata(
-#                                    gaussian_smooth_scandata,
-#                                    gaussian_width=40)
+#    for scandataset in scandataset_list:
+#        scandataset.apply_transform_to_scandata(gaussian_smooth_scandata,
+#                                                gaussian_width=40)
+
     # drift subtraction:
     # subtract from data: data times a 400ps wide gaussian convolution filter                        
-    analyzer2.apply_transform_to_all_scandata(
+    for scandataset in scandataset_list:
+        scandataset.apply_transform_to_scandata(
                                     gaussian_smooth_scandata,
                                     fields_to_process=[field_name],
                                     gaussian_width=600,
                                     edge_handling='reflect',
                                     subtract_smoothed_data_from_original=True)
+
     # add 13160ps to all negative delay times
-    analyzer2.apply_transform_to_all_scandata(make_scandata_time_delay_positive,
-                                              zero_delay_offset=-15,
-                                              neg_time_weight_multiplier=5.0)
+    for scandataset in scandataset_list:
+        scandataset.apply_transform_to_scandata(
+                                    make_scandata_time_delay_positive,
+                                    zero_delay_offset=-15,
+                                    neg_time_weight_multiplier=5.0)
 
     # scandatasets don't share models, can't multiprocess in this version:
-    analyzer2.fit_all_scandata_to_model(multiprocessing=True)
-
-    # APPLY FILTERS AND EXTRACT FITTED SCANDATA AND SCANDATA OF FITS
-#    analyzer2.add_filter_to_each_scandataset(
-#        get_filter_fcn_no_super_long_lifetime(threshold=999999))
-#    analyzer2.add_filter_to_each_scandataset(
-#        get_filter_fcn_no_first_n_scans_in_series(num_ignored=1))
-    fit_trkr_scandata_list = \
-        analyzer2.collapse_to_scandata_list(filtered=False)
+    fit_scandataset_list_to_model(scandataset_list, multiprocessing=False)
+    fit_trkr_scandata_list = [scandata
+                              for scandataset in scandataset_list
+                              for scandata in scandataset.scandata_list
+                              if scandata.fitdata is not None]
     trkr_fit_results_scandata_list = \
-        analyzer2.collapse_to_model_fit_scandata_list(filtered=False)
+        collapse_scandataset_to_model_fit_scandata_list(scandataset_list)
 
 
 # %% OVERVIEW OF FITS
     field_name = "lockin2x"  # x:delay, y:lockin2x
-    plot_trkr_fit_scandata(field_name, fit_trkr_scandata_list[3:4])
-    scandata_list = fit_trkr_scandata_list
+    plot_trkr_fit_scandata(field_name, fit_trkr_scandata_list[220:])
+#    scandata_list = fit_trkr_scandata_list
 
 
 # %%
-    field_name = "lockin2x"  # x:wavelength, y:short lifetime
+    field_name = "amplitude1"
     plt.figure()
     plt.hold(True)
     for scandata in trkr_fit_results_scandata_list[:]:
-        if scandata.info['Voltage'] == 0:
-            plot_scandata(scandata, field_name, fmt=":bd",
-                          label="0 V/cm")
-        elif scandata.info['Voltage'] == 0.75:
-            plot_scandata(scandata, field_name, fmt=":rd",
-                          label="15 V/cm")
-    if field_name == 1:  # long pulse amplitude guess from avg. RSA data
-        plt.plot(rsa_vs_wavelength_fit_results['wavelengths'],
-                 rsa_vs_wavelength_fit_results['pulse_amplitude'],
-                 'gd:', label="RSA fit in ROI")
-    elif field_name == 3:  # long lifetime
-        plt.plot(rsa_vs_wavelength_fit_results['wavelengths'],
-                 rsa_vs_wavelength_fit_results['lifetime'],
-                 'gd:', label="RSA fit in ROI")
-    elif field_name == 4:  # long oscillation period
-        plt.plot(rsa_vs_wavelength_fit_results['wavelengths'],
-                 rsa_vs_wavelength_fit_results['osc_period_300mT'],
-                 'gd:', label="RSA fit in ROI")
+        plot_scandata(scandata, field_name, fmt=":bd",
+                      label="")
 
     # LABEL AND DISPLAY GRAPH
-    plt.xlabel("Wavelength (nm)")
-    plt.ylabel(scandata.fields[field_name])
-    plt.legend(loc='best')
-    plt.title("Results of fit to TRKR @300mT,\nlong lifetime & g-factor held constant from RSA")
+    plt.xlabel("")
+    plt.ylabel(field_name)
+#    plt.legend(loc='best')
+    plt.title("")
     plt.show()
 
-    scandata_list = trkr_fit_results_scandata_list
+#    scandata_list = trkr_fit_results_scandata_list

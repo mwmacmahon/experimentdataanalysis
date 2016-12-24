@@ -109,7 +109,7 @@ def tabledata_to_unfit_scandata(filepath, headerfooterstr,
     field_names = list(colnames)
     field_arrays = [np.array(column) for column in coldata]
     scaninfo = analyze_scan_filepath(filepath,
-                                     parsing_keywordlists)
+                                     keywordlists=parsing_keywordlists)
     scaninfo = analyze_string_for_dict_pairs(headerfooterstr, scaninfo)
 
     # if key_field given, attempt to set error array in scaninfo
@@ -204,9 +204,11 @@ def analyze_scan_filepath(filepath, scaninfo={}, keywordlists=None):
                     value = element.replace(matchstr, "")
                     try:
                         value = float(value)
+                        scaninfo[tag] = value
                     except ValueError:
-                        value = value
-                    scaninfo[tag] = value
+                        pass  # by this rule, only take numerical values
+#                        value = value
+#                        scaninfo[tag] = value
     return scaninfo
 
 

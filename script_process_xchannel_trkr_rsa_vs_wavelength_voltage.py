@@ -20,7 +20,8 @@ from experimentdataanalysis.parsing.scandataparsing import \
         fetch_dir_as_unfit_scandata_iterator
 
 
-GFACTORCONSTANT = 0.013996  # 1/(ps*Tesla), = bohr magneton/2*pi*hbar
+#GFACTORCONSTANT = 0.013996  # 1/(ps*Tesla), = bohr magneton/2*pi*hbar
+GFACTORCONSTANT = 1.3996e-5  # 1/(ps*mTesla), = bohr magneton/2*pi*hbar
 
 
 # FIT RESULT PROCESSING
@@ -226,17 +227,19 @@ if __name__ == "__main__":
                "WavelengthDependence_RSA")
     fixed_uncertainty = 1e-3  # manually set uncertainty of data set
     model = rsa_field_scan_model
-    sort_key = None  # all scans grouped together
+    sort_keys = None  # all scans grouped together
     scandata_list = list(fetch_dir_as_unfit_scandata_iterator(
                                      directorypath=dirpath,
                                      key_field="lockin2x",
                                      key_field_error_val=fixed_uncertainty))
+    for scandata in scandata_list:
+        scandata.x = 1000.0 * scandata.x  # convert from T to mT
     original_scandata_list_rsa = scandata_list  # don't lose this...
     # ---------------
     # TEMPORARY, FOR SPEED:
 #    scandata_list = scandata_list[5:6]
     # ---------------
-    scandataset_list = sort_scandata_into_sets(scandata_list, model, sort_key)
+    scandataset_list = sort_scandata_into_sets(scandata_list, model, sort_keys)
     field_name = model.field_name  # for future use
     analyzer = ScanDataSetsAnalyzer(scandataset_list)
     # add 13160ps to all negative delay times
@@ -414,14 +417,14 @@ if __name__ == "__main__":
             fit_result_scan_coord="Wavelength",
             excluded_intervals=[[-15, 400]],
 #            excluded_intervals=[[-15, 400], [7000, 15000]],
-            BField=0.3)
+            b_field=300)
     
     # LOAD DATA, ORGANIZE, AND FIT IN ANALYZER
     dirpath = ("C:\\Data\\august_data\\160902\\" +
                "WavelengthDependence_TRKR_300mT")
     fixed_uncertainty = 1e-3  # manually set uncertainty of data set
     model = trkr_model_0V
-    sort_key = "Voltage"  # one scandataset for each voltage
+    sort_keys = ["Voltage"]  # one scandataset for each voltage
 
     scandata_list = list(fetch_dir_as_unfit_scandata_iterator(
                                      directorypath=dirpath,
@@ -433,7 +436,7 @@ if __name__ == "__main__":
 #    scandata_list = scandata_list[0:4]
     # ---------------
 
-    scandataset_list = sort_scandata_into_sets(scandata_list, model, sort_key)
+    scandataset_list = sort_scandata_into_sets(scandata_list, model, sort_keys)
     field_name = model.field_name  # for future use
 
     # Change drift velocity based on voltage. Assumes each set has same
@@ -799,7 +802,7 @@ if __name__ == "__main__":
             fit_result_scan_coord="Electric Field (V/cm)",  # look at results of fit vs field
             excluded_intervals=[[-15, 400]],
 #            excluded_intervals=[[-15, 400], [7000, 15000]],
-            BField=0.3)
+            b_field=300)
 
 
     # LOAD DATA, ORGANIZE, AND FIT IN ANALYZER
@@ -817,13 +820,13 @@ if __name__ == "__main__":
 
     fixed_uncertainty = 1e-3  # manually set uncertainty of data set
     model = trkr_model_3
-    sort_key = "Voltage"  # just one ScanDataSet
+    sort_keys = ["Voltage"]  # just one ScanDataSet
 
     scandata_list = list(fetch_dir_as_unfit_scandata_iterator(
                                      directorypath=dirpath,
                                      key_field="lockin2x",
                                      key_field_error_val=fixed_uncertainty))
-    scandataset_list = sort_scandata_into_sets(scandata_list, model, sort_key)
+    scandataset_list = sort_scandata_into_sets(scandata_list, model, sort_keys)
 
     # Change drift velocity based on voltage. Assumes each set has same
     # voltage for every scan!
@@ -923,7 +926,7 @@ if __name__ == "__main__":
 
     # regroup scandatasets into one big set to get single collapsed scandata:
     analyzer4.regroup_scandatasets(new_model=model,
-                                   sort_key=None)
+                                   sort_keys=None)
     trkr_fit_results_scandata_list_3 = \
         analyzer4.collapse_to_model_fit_scandata_list(filtered=False)
 
@@ -1068,7 +1071,7 @@ if __name__ == "__main__":
 #            fit_result_scan_coord="Electric Field (V/cm)",  # look at results of fit vs field
 #            excluded_intervals=[[-15, 400]],
 ##            excluded_intervals=[[-15, 400], [7000, 15000]],
-#            BField=0.3)
+#            b_field=300)
 
     trkr_model_2_0V = \
         IndependentSinusoidalSpinLifetimeModel(
@@ -1093,7 +1096,7 @@ if __name__ == "__main__":
             fit_result_scan_coord="Electric Field (V/cm)",  # look at results of fit vs field
             excluded_intervals=[[-15, 400]],
 #            excluded_intervals=[[-15, 400], [7000, 15000]],
-            BField=0.3)
+            b_field=300)
 
 
     # LOAD DATA, ORGANIZE, AND FIT IN ANALYZER
@@ -1111,7 +1114,7 @@ if __name__ == "__main__":
 
     fixed_uncertainty = 1e-3  # manually set uncertainty of data set
     model = trkr_model_2_0V
-    sort_key = "Voltage"  # one scandataset for each voltage
+    sort_keys = ["Voltage"]  # one scandataset for each voltage
 
     scandata_list = list(fetch_dir_as_unfit_scandata_iterator(
                                      directorypath=dirpath,
@@ -1123,7 +1126,7 @@ if __name__ == "__main__":
 #    scandata_list = scandata_list[5:6]
     # ---------------
 
-    scandataset_list = sort_scandata_into_sets(scandata_list, model, sort_key)
+    scandataset_list = sort_scandata_into_sets(scandata_list, model, sort_keys)
     field_name = model.field_name  # for future use
 
 #    # Change drift velocity based on voltage. Assumes each set has same
@@ -1223,7 +1226,7 @@ if __name__ == "__main__":
 
     # regroup scandatasets into one big set to get single collapsed scandata:
     analyzer3.regroup_scandatasets(new_model=model,
-                                  sort_key=None)
+                                   sort_keys=None)
     trkr_fit_results_scandata_list_2 = \
         analyzer3.collapse_to_model_fit_scandata_list(filtered=False)
 

@@ -218,7 +218,8 @@ def generic_curve_fit(xvals, yvals, yerrvals, fitfunction, free_params,
                         sum((y_fit - y_real)**2 for y_fit, y_real in
                             zip(fityvals, original_yvals))
     return FitData(fitparams, fitparamstds,
-                   "fitparamstring", fityvals, meansquarederror)
+                   "fitparamstring", fityvals,
+                   free_param_indices, rawcovariances, meansquarederror)
 
 
 # %% NEEDS TEST, SPHINX DOCUMENTATION
@@ -276,7 +277,8 @@ def check_fit_parameter_consistency(num_nonx_args, free_params,
             if tupl[0] > param_guess or param_guess > tupl[1]:
                 raise TypeError("fit_function_to_dataseries: initial_params " +
                                 "contains a starting estimate inconsistent " +
-                                "with the corresponding param_bounds limits")
+                                "with the corresponding param_bounds " +
+                                "limits: {} vs {}".format(param_guess, tupl))
             if tupl[0] == param_guess and param_guess == tupl[1]:
                 final_free_param_indices.remove(index)  # NOT pop()!
     return final_free_param_indices

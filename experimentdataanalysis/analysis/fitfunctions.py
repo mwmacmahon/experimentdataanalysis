@@ -20,8 +20,8 @@ drift_signal_factor = np.exp(-xdiff**2/(2*(sigma1**2 + sigma2**2)))
 import numpy as np
 
 
-GFACTORCONSTANT = 0.013996  # 1/(ps*Tesla), = bohr magneton/2*pi*hbar
-#GFACTORCONSTANT = 1.3996e-5  # 1/(ps*mTesla), = bohr magneton/2*pi*hbar
+#GFACTORCONSTANT = 0.013996  # 1/(ps*Tesla), = bohr magneton/2*pi*hbar
+GFACTORCONSTANT = 1.3996e-5  # 1/(ps*mTesla), = bohr magneton/2*pi*hbar
 LASER_REPRATE = 13160  # ps period
 
 
@@ -188,18 +188,19 @@ def fitfcn_two_opposite_exp_sin_decay(t, num_pulses,
                                       pulse_amplitude1, pulse_amplitude2,
                                       lifetime1, lifetime2,
                                       osc_period,  drift_velocity,
-                                      slope, offset):
+                                      probe_pos, slope, offset):
     """
     Expected units:
     lifetime: ps
     osc_period: ps
     drift_velocity: um/ps
+    probe_pos: um
     """
     def single_pulse_fcn(t_pulse):
         sigma1 = 17.5  # probe beam waist in um, +- 0.5um, from Marta's paper
         sigma2 = sigma1  # assuming no diffusion
-        xdiff1 = drift_velocity*t_pulse
-        xdiff2 = drift_velocity*t_pulse
+        xdiff1 = probe_pos - drift_velocity*t_pulse
+        xdiff2 = probe_pos - drift_velocity*t_pulse
         drift_signal_factor1 = np.exp(-xdiff1**2/(2*(sigma1**2 + sigma2**2)))
         drift_signal_factor2 = np.exp(-xdiff2**2/(2*(sigma1**2 + sigma2**2)))
         effective_amplitude1 = pulse_amplitude1 * drift_signal_factor1

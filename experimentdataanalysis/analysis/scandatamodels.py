@@ -12,9 +12,9 @@ import numpy as np
 import experimentdataanalysis.analysis.fitfunctions as fitfcns
 
 
-gfactorCONSTANT = 71.44773  # ps*Tesla, = 2*pi*hbar/bohr magneton
-GFACTORCONSTANT2 = 0.013996  # 1/(ps*Tesla), = bohr magneton/2*pi*hbar
-#GFACTORCONSTANT = 1.3996e-5  # 1/(ps*mTesla), = bohr magneton/2*pi*hbar
+#gfactorCONSTANT = 71.44773  # ps*Tesla, = 2*pi*hbar/bohr magneton
+#GFACTORCONSTANT2 = 0.013996  # 1/(ps*Tesla), = bohr magneton/2*pi*hbar
+GFACTORCONSTANT = 1.3996e-5  # 1/(ps*mTesla), = bohr magneton/2*pi*hbar
 
 
 # %% NEEDS TESTS, SPHINX DOCUMENTATION
@@ -324,14 +324,14 @@ class RSAFieldScanModel(ScanDataModel):
 
     def osc_period_200mT(self, model_param_array_list,
                           model_param_uncertainty_array_list):
-        params = (model_param_array_list[4]*GFACTORCONSTANT2*0.2)**(-1)
+        params = (model_param_array_list[4]*GFACTORCONSTANT*200)**(-1)
         params_sigma = params*model_param_uncertainty_array_list[4]/(
                             model_param_array_list[4])
         return params, params_sigma
 
     def osc_period_300mT(self, model_param_array_list,
                           model_param_uncertainty_array_list):
-        params = (model_param_array_list[4]*GFACTORCONSTANT2*0.3)**(-1)
+        params = (model_param_array_list[4]*GFACTORCONSTANT*300)**(-1)
         params_sigma = params*model_param_uncertainty_array_list[4]/(
                             model_param_array_list[4])
         return params, params_sigma
@@ -555,7 +555,7 @@ class IndependentSinusoidalSpinLifetimeModel(ScanDataModel):
         self.ignore_weights = False
         
         # unique to this model!
-        self.BField = 0  # in mT
+        self.b_field = 0  # in mT
 
         # keyword args override defaults
         for key, val in kwargs.items():
@@ -641,7 +641,7 @@ class IndependentSinusoidalSpinLifetimeModel(ScanDataModel):
     def short_gfactor(self, model_param_array_list,
                              model_param_uncertainty_array_list):
         params = (model_param_array_list[5] * \
-                  GFACTORCONSTANT2*self.BField)**(-1)
+                  GFACTORCONSTANT*self.b_field)**(-1)
         params_sigma = params*model_param_uncertainty_array_list[5]/(
                             model_param_array_list[5])
         return params, params_sigma
@@ -649,7 +649,7 @@ class IndependentSinusoidalSpinLifetimeModel(ScanDataModel):
     def long_gfactor(self, model_param_array_list,
                             model_param_uncertainty_array_list):
         params = (model_param_array_list[6] * \
-                  GFACTORCONSTANT2*self.BField)**(-1)
+                  GFACTORCONSTANT*self.b_field)**(-1)
         params_sigma = params*model_param_uncertainty_array_list[6]/(
                             model_param_array_list[6])
         return params, params_sigma
@@ -715,25 +715,26 @@ class TwoLifetimesOppositePhaseTRKRModel(ScanDataModel):
         self.fitfunction = fitfcns.fitfcn_two_opposite_exp_sin_decay
         self.model_params = ["num_pulses", "amplitude1", "amplitude2",
                              "lifetime1", "lifetime2", "osc_period",
-                             "drift_velocity", "slope", "offset"]
+                             "drift_velocity", "probe_pos", "slope", "offset"]
         # params = num_pulses, pulse_amplitude1, pulse_amplitude2,
         #          lifetime1, lifetime2, osc_period,
-        #          drift_velocity, slope, offset
+        #          drift_velocity, probe_pos, slope, offset
         self.free_params = [False, True, True,
                             True, True, True,
-                            False, True, True]
+                            False, False, True, True]
         self.initial_params = [40, 0.04, 0.04,
                                20000, 2000, 600,
-                               0, 0, 0]
+                               0, 0, 0, 0]
         self.param_bounds = [(1,1000), (0, 1), (0, 1),
                              (1, 1e9), (1, 1e9), (200, 1200),
-                             (-1e3, 1e3), (-1e-6, 1e-6), (-0.01, 0.01)]
+                             (-1e3, 1e3), (-500, 500),
+                             (-1e-6, 1e-6), (-0.01, 0.01)]
         self.max_fcn_evals = 10000
         self.excluded_intervals = None
         self.ignore_weights = False
         
         # unique to this model!
-        self.BField = 0  # in mT
+        self.b_field = 0  # in mT
 
         # keyword args override defaults
         for key, val in kwargs.items():
@@ -754,15 +755,17 @@ class TwoLifetimesOppositePhaseTRKRModel(ScanDataModel):
                   "lifetime2",
                   "osc_period",
                   "gfactor",
-                  "drift_velocity"]
+                  "drift_velocity",
+                  "probe_position"]
         array_list, uncertainty_array_list = \
-            zip(*[self.ampltiude1(params, param_sigmas),
-                  self.ampltiude2(params, param_sigmas),
+            zip(*[self.amplitude1(params, param_sigmas),
+                  self.amplitude2(params, param_sigmas),
                   self.lifetime1(params, param_sigmas),
                   self.lifetime2(params, param_sigmas),
                   self.osc_period(params, param_sigmas),
                   self.gfactor(params, param_sigmas),
                   self.drift_velocity(params, param_sigmas),
+                  self.probe_position(params, param_sigmas),
                   ])
         array_list = model_param_array_list[0:1] + list(array_list)  # re-add x
         uncertainty_array_list = list(uncertainty_array_list)
@@ -801,7 +804,7 @@ class TwoLifetimesOppositePhaseTRKRModel(ScanDataModel):
     def gfactor(self, model_param_array_list,
                 model_param_uncertainty_array_list):
         params = (model_param_array_list[5] * \
-                  GFACTORCONSTANT2*self.BField)**(-1)
+                  GFACTORCONSTANT*self.b_field)**(-1)
         params_sigma = params*model_param_uncertainty_array_list[5]/(
                             model_param_array_list[5])
         return params, params_sigma
@@ -811,3 +814,10 @@ class TwoLifetimesOppositePhaseTRKRModel(ScanDataModel):
         params = model_param_array_list[6]
         params_sigma = model_param_uncertainty_array_list[6]
         return params, params_sigma
+
+    def probe_position(self, model_param_array_list,
+                       model_param_uncertainty_array_list):
+        params = model_param_array_list[7]
+        params_sigma = model_param_uncertainty_array_list[7]
+        return params, params_sigma
+

@@ -17,6 +17,7 @@ from copy import deepcopy
 # returned from curvefitting.py functions
 FitData = namedtuple("FitData", ["fitparams", "fitparamstds",
                                  "fitparamstring", "fityvals",
+                                 "freeparamindices", "covariancematrix",
                                  "meansquarederror"])
 ## used to fit scandata in dataclassfitting.py functions [DEPRECATED]
 #FitFunc = namedtuple("FitFunc", ["description", "fitfunction",
@@ -229,7 +230,7 @@ class ScanData(object, metaclass=SupportsReservedAliases):
             else:  # fields 2+
                 if "yfield" not in self.__dict__ : # second col is y by default
                     self.yfield = fieldname
-                if self.shape != field_array.shape:
+                if self.shape != field_array.shape:  # all fields same shape!
                     errstr = "ScanData field arrays not of " + \
                              "matching shape! shapes: "
                     for field in self.fields:

@@ -7,7 +7,7 @@ Created on Tue Jun  7 22:47:08 2016
 
 import numpy as np
 
-from experimentdataanalysis.analysis.dataclasses import ScanData
+from experimentdataanalysis.analysis.dataclasses import FitData, ScanData
 from experimentdataanalysis.analysis.scandataprocessing \
     import scandata_fit, scandata_list_fit, scandata_iterable_sort
 from experimentdataanalysis.analysis.scandatamodels \
@@ -51,7 +51,8 @@ class ScanDataSet:
                                        primary_key, secondary_key)
             self.scandata_list = list(scandata_list_tuple)
 
-    def fit_scandata_to_model(self, multiprocessing=False):
+    def fit_scandata_to_model(self, multiprocessing=False,
+                              purge_failed_fits=True):
         # must filter out any pts with error = 0, will kill weighted fit
         self.purge_zero_error_scandata(self.model.field_name)
         scandata_list_fit(self.scandata_list,
@@ -64,7 +65,18 @@ class ScanDataSet:
                           self.model.excluded_intervals,
                           self.model.ignore_weights,
                           multiprocessing)
-        self.parse_fit_scandata()
+        for scandata in self.scandata_list:
+            fitdata = scandata.get_field_fitdata(self.model.field_name)
+            if fitdata is not None:
+                setattr(scandata, 'fitdata_' + self.model.field_name,
+                        FitData(fitdata.fitfunction, fitdata.partialfcn,
+                                fitdata.fitparams, fitdata.fitparamstds,
+                                self.model.model_params,
+                                fitdata.fityvals,
+                                fitdata.freeparamindices,
+                                fitdata.covariancematrix,
+                                fitdata.meansquarederror))
+        self.parse_fit_scandata()  # will purge scandata
 
     def purge_zero_error_scandata(self, field_name):
         def has_zero_error(scandata):
@@ -107,12 +119,14 @@ class ScanDataSet:
         # TODO: just make this a scandata
         field_name = self.model.field_name
         # if no fitdata for this field parameter, cancel parse
-        none_list = np.array([scandata.get_field_fitdata(field_name) is None
-                              for scandata in self.scandata_list])
-        if np.count_nonzero(none_list) == len(self.scandata_list):
+        fitted_scandata_list = \
+            [scandata
+             for scandata in self.scandata_list
+             if scandata.get_field_fitdata(field_name) is not None]
+        if len(fitted_scandata_list) == 0:
             return
-        # purge failed fits, as they will cause issues further down.
-        self.purge_failed_fit_scandata(field_name)
+#        # purge failed fits, as they will cause issues further down.
+#        self.purge_failed_fit_scandata(field_name)
         # all remaining scandata should have FitData and be processable:
         # create dataseries of fit parameters & their uncertainties vs xval:
         if fit_result_scan_coord_override is None:
@@ -120,16 +134,16 @@ class ScanDataSet:
         else:
             xfield = fit_result_scan_coord_override
         x_array = np.array([scandata.info[xfield]
-                            for scandata in self.scandata_list])
+                            for scandata in fitted_scandata_list])
         fitparams = []
         fitparamstds = []
         fitparams = list(zip(*(scandata.get_field_fitdata(field_name).fitparams
-                               for scandata in self.scandata_list)))
+                               for scandata in fitted_scandata_list)))
         fitparam_array_list = [np.array(fitparam_series)
                                for fitparam_series in fitparams]
         fitparamstds = \
             list(zip(*(scandata.get_field_fitdata(field_name).fitparamstds
-                       for scandata in self.scandata_list)))
+                       for scandata in fitted_scandata_list)))
         fitparamstd_array_list = [np.array(fitparamstd_series)
                                   for fitparamstd_series in fitparamstds]
 
@@ -182,9 +196,10 @@ class ScanDataSet:
 
         # get new scaninfo to reflect new coord types:
         new_scaninfo = {'fit_scandata_info_dicts': []}
-        for scandata in self.get_scandata_list():
-            info_copy = deepcopy(scandata.info)  # take a snapshot
-            new_scaninfo['fit_scandata_info_dicts'].append(info_copy)
+        for scandata in self.scandata_list:
+            if scandata.fitdata is not None:
+                info_copy = deepcopy(scandata.info)  # take a snapshot
+                new_scaninfo['fit_scandata_info_dicts'].append(info_copy)
         return ScanData(field_names,
                         field_arrays,
                         new_scaninfo,

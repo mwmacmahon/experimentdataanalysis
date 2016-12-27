@@ -421,7 +421,8 @@ if False:
                 probe_profile = vanilla_experiment.get_probe_profile(
                     tvals, probe_position,
                     **laser_kwargs, **experiment_field_dict)
-                probe_noise = 0.001 * np.random.randn(tvals.size)
+                probe_noise = 0.0005 * np.random.randn(tvals.size)
+                probe_profile += probe_noise
         #        plt.plot(tvals, probe_profile, ':')
         #        plt.plot(tvals, probe_profile + probe_noise, 'r')
         #        plt.title('Spin profile w/ probe convolution and Kerr physics')

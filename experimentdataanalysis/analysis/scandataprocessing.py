@@ -28,8 +28,7 @@ def scandata_fit(scandata, field_name, fitfunction, free_params,
                  excluded_intervals=None, ignore_weights=False):
     """
     Uses generic_curve_fit to fit a ScanData field with the given function
-    and parameters
-
+    and parameters.
     The resulting FitData is stored in the ScanData's info dict under the
     key 'fitdata_[field_name]'. 'None' is stored for failed fits.
     The FitData (or None) is also returned.
@@ -39,7 +38,7 @@ def scandata_fit(scandata, field_name, fitfunction, free_params,
                                 free_params, initial_params,
                                 param_bounds, max_fcn_evals,
                                 excluded_intervals, ignore_weights)
-    scandata.info['fitdata_' + field_name] = fitdata
+    setattr(scandata, 'fitdata_' + field_name, fitdata)
     return fitdata
 
 
@@ -85,7 +84,7 @@ def scandata_list_fit(scandata_list, field_name, fitfunction,
                                         multiprocessing)
     for scandata, fitdata, field in \
                             zip(scandata_list, fitdata_list, field_name_list):
-        scandata.info['fitdata_' + field] = fitdata
+        setattr(scandata, 'fitdata_' + field, fitdata)
     return fitdata_list
 
 
@@ -217,8 +216,8 @@ def generic_curve_fit(xvals, yvals, yerrvals, fitfunction, free_params,
     meansquarederror = (1./len(original_xvals))* \
                         sum((y_fit - y_real)**2 for y_fit, y_real in
                             zip(fityvals, original_yvals))
-    return FitData(fitparams, fitparamstds,
-                   "fitparamstring", fityvals,
+    return FitData(fitfunction, partialfcn, fitparams, fitparamstds,
+                   len(fitparams) * [''], fityvals,
                    free_param_indices, rawcovariances, meansquarederror)
 
 
@@ -429,7 +428,7 @@ def process_scandata_fields(scandata, xyyerr_fcn,
         # delete old fits, generally now invalidated:
         fitdata_key = 'fitdata_' + field_name
         if fitdata_key in scandata.info:
-            scandata.info[fitdata_key] = None
+            setattr(scandata, fitdata_key, None)
 
 
 # %%

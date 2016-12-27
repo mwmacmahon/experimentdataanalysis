@@ -102,7 +102,7 @@ def get_filter_fcn_this_voltage_only(voltage=0):
 
 # PLOTTING FUNCTION
 def plot_scandata(scandata, field_name, model=None,
-                  label="", fmt="-bd", fit_fmt="xr:"):
+                  label="", fmt="-bd", fit_fmt="xr-"):
     x_vals, y_vals, y_errs = scandata.get_field_xyyerr(field_name)
     if y_errs is not None:
         plt.errorbar(x_vals, y_vals, yerr=y_errs, label=label, fmt=fmt)
@@ -118,7 +118,7 @@ def plot_scandata(scandata, field_name, model=None,
 
 
 def plot_rsa_fit_scandata(field_name, fit_rsa_scandata_list):
-    plt.figure()
+#    plt.figure()
     plt.hold(True)
     try:
         for scandata in fit_rsa_scandata_list[:]:
@@ -141,39 +141,37 @@ def plot_rsa_fit_scandata(field_name, fit_rsa_scandata_list):
     print(scandata.get_field_fitdata(field_name).fitparams)
 
 
-def plot_trkr_fit_scandata(field_name, fit_trkr_scandata_list):
-    plt.figure()
+def plot_trkr_fit_scandata(field_name, fit_trkr_scandata_list,
+                           fmt="bd", fit_fmt="xr-"):
+#    plt.figure()
     plt.hold(True)
     try:
         for scandata in fit_trkr_scandata_list[:]:
-            plot_scandata(scandata, field_name, fmt="bd")
+            plot_scandata(scandata, field_name,
+                          fmt=fmt, fit_fmt=fit_fmt)
     except TypeError:
         scandata = fit_trkr_scandata_list
-        plot_scandata(scandata, field_name, fmt="bd")
+        plot_scandata(scandata, field_name,
+                      fmt=fmt, fit_fmt=fit_fmt)
     plt.xlabel("Delay (ps)")
     plt.ylabel("Kerr Rotation (AU)")
-    plt.text(7100, 0.01,
-             "Last fit short lifetime:\n{:4.1f}ns +={:4.1f}ns".format(
-                 scandata.get_field_fitdata(field_name).fitparams[3]/1000,
-                 scandata.get_field_fitdata(field_name).fitparamstds[3]/1000))
-    plt.text(7100, -0.01,
-             "Last fit long lifetime:\n{:4.1f}ns +={:4.1f}ns".format(
-                 scandata.get_field_fitdata(field_name).fitparams[4]/1000,
-                 scandata.get_field_fitdata(field_name).fitparamstds[4]/1000))
     plt.show()
     print(scandata.get_field_fitdata(field_name).fitparams)
 
 
-def plot_fit_param_scandata(field_names, fit_results_scandata_list):
+def plot_fit_param_scandata(field_names, fit_results_scandata_list,
+                            fmt="bd", fit_fmt="xr-"):
     plt.figure()
     plt.hold(True)
     for field_name in field_names:
         try:
             for scandata in fit_results_scandata_list[:]:
-                plot_scandata(scandata, field_name, fmt="bd", label=field_name)
+                plot_scandata(scandata, field_name, label=field_name,
+                              fmt=fmt, fit_fmt=fit_fmt)
         except TypeError:
             scandata = fit_results_scandata_list
-            plot_scandata(scandata, field_name, fmt="bd", label=field_name)
+            plot_scandata(scandata, field_name, label=field_name,
+                          fmt=fmt, fit_fmt=fit_fmt)
     # LABEL AND DISPLAY GRAPH
     plt.legend(loc='best')
     plt.show()
@@ -306,6 +304,8 @@ def plot_fit_param_scandata(field_names, fit_results_scandata_list):
 
     # scandatasets don't share models, can't multiprocess in this version:
     fit_scandataset_list_to_model(scandataset_list, multiprocessing=False)
+#    for scandataset in scandataset_list:
+#        scandataset.purge_failed_fit_scandata()
     fit_trkr_scandata_list = [scandata
                               for scandataset in scandataset_list
                               for scandata in scandataset.scandata_list
@@ -314,23 +314,98 @@ def plot_fit_param_scandata(field_names, fit_results_scandata_list):
         collapse_scandataset_to_model_fit_scandata_list(scandataset_list)
 
 
+# %% nicely shows fits are great within 1 std dev
+    for scandata in fit_trkr_scandata_list[::10]:
+        fitdata = scandata.fitdata_lockin2x
+        freeindices = np.array(fitdata.freeparamindices)
+        fitparams = np.array(fitdata.fitparams)[freeindices]
+        fitparamstds = np.array(fitdata.fitparamstds)[freeindices]
+        paramlabels = np.array(fitdata.fitparamlabels)[freeindices]
+        covmat = scandata.fitdata_lockin2x.covariancematrix
+        if not np.all(np.linalg.eigvals(covmat) >= 0):
+            print("error, covariance matrix " +
+                  "not positive semidefinite, skipping scandata")
+            continue
+
+        distribution = np.random.multivariate_normal(fitparams, covmat, 100)
+        plot2dindices = [0, 2]
+
+        axes = plt.subplot(1,2,1)
+#        num_steps = 5
+#        xmin, ymin = (fitparams - 3 * fitparamstds)[plot2dindices]
+#        xmax, ymax = (fitparams + 3 * fitparamstds)[plot2dindices]
+#        xstep = (xmax - xmin) / (num_steps - 1)
+#        ystep = (ymax - ymin) / (num_steps - 1)
+#        x, y = np.mgrid[xmin:xmax+xstep:xstep, ymin:ymax+ystep:ystep]
+#        param_mesh = np.empty(x.shape + (len(fitparams),))
+#        param_mesh[:, :] = fitparams
+#        param_mesh[:, :, plot2dindices[0]] = x
+#        param_mesh[:, :, plot2dindices[1]] = y
+#        rv = stats.multivariate_normal(fitparams, covmat, allow_singular=True)
+#        plt.contourf(x, y, rv.pdf(param_mesh), 10)
+
+        axes.add_patch(plt.Rectangle((fitparams - fitparamstds)[plot2dindices],
+                                     *(2 * fitparamstds)[plot2dindices],
+                                     fill=False))
+        plt.plot(*fitparams[plot2dindices], 'ro', markersize=20)
+        axes.plot(*distribution[:, plot2dindices].T, 'bd')
+#        plt.xlim([xmin, xmax])
+#        plt.ylim([ymin, ymax])
+        plt.xlabel(paramlabels[plot2dindices[0]])
+        plt.ylabel(paramlabels[plot2dindices[1]])
+        plt.subplot(1,2,2)
+        plt.plot(*scandata.xy, 'bo')
+        for fit_param_set in distribution[:, :]:
+            yvals = fitdata.partialfcn(scandata.x, *fit_param_set)
+            if np.max(np.abs(yvals)) < 2 * np.max(np.abs(scandata.y)):
+                plt.plot(scandata.x, yvals, 'g:')
+
+# %%
+    for scandata in fit_trkr_scandata_list[:80:10]:
+        fitdata = scandata.fitdata_lockin2x
+        freeindices = np.array(fitdata.freeparamindices)
+        fitparams = np.array(fitdata.fitparams)[freeindices]
+        fitparamstds = np.array(fitdata.fitparamstds)[freeindices]
+        paramlabels = np.array(fitdata.fitparamlabels)[freeindices]
+        covmat = scandata.fitdata_lockin2x.covariancematrix
+        if not np.all(np.linalg.eigvals(covmat) >= 0):
+            print("error, covariance matrix " +
+                  "not positive semidefinite, skipping scandata")
+            continue
+
+        plot2dindices = [0, 2]
+        distribution = np.random.multivariate_normal(fitparams, covmat, 20)
+        axes = plt.subplot(1,2,1)
+        axes.add_patch(plt.Rectangle((fitparams - fitparamstds)[plot2dindices],
+                                     *(2 * fitparamstds)[plot2dindices],
+                                     fill=False))
+#        plt.plot(*fitparams[plot2dindices], 'ro', markersize=20)
+        axes.plot(*distribution[:, plot2dindices].T, 'bd')
+        plt.xlabel(paramlabels[plot2dindices[0]])
+        plt.ylabel(paramlabels[plot2dindices[1]])
+        plt.subplot(1,2,2)
+        plt.plot(*scandata.xy, 'bo')
+        for fit_param_set in distribution[:, :]:
+            yvals = fitdata.partialfcn(scandata.x, *fit_param_set)
+            if np.max(np.abs(yvals)) < 2 * np.max(np.abs(scandata.y)):
+                plt.plot(scandata.x, yvals, 'g:')
+
 # %% OVERVIEW OF FITS
-    field_name = "lockin2x"  # x:delay, y:lockin2x
-    plot_trkr_fit_scandata(field_name, fit_trkr_scandata_list[220:])
+    plot_trkr_fit_scandata(field_name, fit_trkr_scandata_list[10:11])
 #    scandata_list = fit_trkr_scandata_list
 
 
 # %%
-    field_name = "amplitude1"
+    param_name = "amplitude1"
     plt.figure()
     plt.hold(True)
     for scandata in trkr_fit_results_scandata_list[:]:
-        plot_scandata(scandata, field_name, fmt=":bd",
+        plot_scandata(scandata, param_name, fmt=":bd",
                       label="")
 
     # LABEL AND DISPLAY GRAPH
     plt.xlabel("")
-    plt.ylabel(field_name)
+    plt.ylabel(param_name)
 #    plt.legend(loc='best')
     plt.title("")
     plt.show()

@@ -15,8 +15,9 @@ from copy import deepcopy
 
 # %%
 # returned from curvefitting.py functions
-FitData = namedtuple("FitData", ["fitparams", "fitparamstds",
-                                 "fitparamstring", "fityvals",
+FitData = namedtuple("FitData", ["fitfunction", "partialfcn",
+                                 "fitparams", "fitparamstds",
+                                 "fitparamlabels", "fityvals",
                                  "freeparamindices", "covariancematrix",
                                  "meansquarederror"])
 ## used to fit scandata in dataclassfitting.py functions [DEPRECATED]
@@ -90,19 +91,19 @@ class ScanDataReservedAlias():
         return x, y, yerr
 
     def get_fitdata(self, scandata_instance):
-        info_dict = scandata_instance.info
-        return info_dict.get('fitdata_' + scandata_instance.yfield, None)
+        return getattr(scandata_instance,
+                       'fitdata_' + scandata_instance.yfield, None)
 
     def get_other(self, scandata_instance):  # return stored or throw error
         return getattr(scandata_instance, self.storage_alias)
 
     def set_array_check(self, scandata_instance, value):
         new_array = np.array(value)
-        if new_array.shape == scandata_instance.shape:
+        if new_array.shape[0] == scandata_instance.shape[0]:
             return new_array
         else:
             raise ValueError("attemping to replace a ScanData field " +
-                             "with one of different shape " +
+                             "with one of different length (shape[0]) " +
                              "({} -> {})".format(scandata_instance.shape,
                                                  new_array.shape))
 
@@ -120,8 +121,8 @@ class ScanDataReservedAlias():
                 scandata_instance.yfield + '_error', value)
 
     def set_fitdata(self, scandata_instance, value):
-        info_dict = scandata_instance.info
-        info_dict['fitdata_' + scandata_instance.yfield] = value
+        setattr(scandata_instance,
+                'fitdata_' + scandata_instance.yfield, value)
 
     def set_other(self, scandata_instance, value):
         setattr(scandata_instance, self.storage_alias, value)
@@ -230,12 +231,16 @@ class ScanData(object, metaclass=SupportsReservedAliases):
             else:  # fields 2+
                 if "yfield" not in self.__dict__ : # second col is y by default
                     self.yfield = fieldname
-                if self.shape != field_array.shape:  # all fields same shape!
+                if self.shape[0] != field_array.shape[0]:  # fields same len
                     errstr = "ScanData field arrays not of " + \
-                             "matching shape! shapes: "
-                    for field in self.fields:
-                        errstr += str(self.get(field).shape) + ", "
-                    errstr += str(self.shape)
+                             "matching length (shape[0])! shapes: "
+                    errstr += ", ".join([str(self.shape)] +
+                                        [str(self.get_field_y(field).shape)
+                                         for field in self.fields] +
+                                         [str(field_array.shape)])
+#                    for field in self.fields:
+#                        errstr += str(self.get_field_y(field).shape) + ", "
+#                    errstr += str(self.shape)
                     raise ValueError(errstr)
             setattr(self, fieldname, field_array)
             self.fields.append(fieldname)
@@ -284,7 +289,7 @@ class ScanData(object, metaclass=SupportsReservedAliases):
         return x, y, yerr
 
     def get_field_fitdata(self, field_name):
-        return self.info.get('fitdata_' + field_name, None)
+        return getattr(self, 'fitdata_' + field_name, None)
 
     def copy(self):
         new_fields = self.fields[:]

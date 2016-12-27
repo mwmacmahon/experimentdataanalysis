@@ -35,6 +35,7 @@ class ScanDataModel:
         self.fit_result_scan_coord = "MiddleScanCoord"  # coord spanning each ScanData_SET_
         self.field_name = "[data field]"
         self.fitfunction = None
+        self.model_params = ["dummy_param"]
         # params = DUMMY
         self.free_params = [True]
         self.initial_params = [0]
@@ -110,6 +111,7 @@ class LinearFitModel(ScanDataModel):
         self.fit_result_scan_coord = "Voltage"
         self.field_name = "[data field]"
         self.fitfunction = fitfcns.fitfcn_simple_line
+        self.model_params = ["slope", "offset"]
         # params = slope, offset
         self.free_params = [True, True]
         self.initial_params = [0, 0]
@@ -170,6 +172,8 @@ class GaussianModel(ScanDataModel):
         self.fit_result_scan_coord = "MiddleScanCoord"
         self.field_name = "[data field]"  # key field, probably lockin2x
         self.fitfunction = fitfcns.fitfcn_1d_gaussian_with_linear_offset
+        self.model_params = ["amplitude", "x0", "sigma",
+                             "slope", "offset"]
         # params = amplitude, x0, sigma, slope, offset
         self.free_params = [True, True, True, True, True]
         self.initial_params = [0.02, 0, 20, 0, 0]
@@ -189,7 +193,6 @@ class GaussianModel(ScanDataModel):
         if len(params) == 0 or len(params) != len(param_sigmas):
             raise ValueError("ScanDataModel: tried to extract " +
                              "fit results without successful fit")
-            
         fields = ["gaussian_amplitude",
                   "gaussian_widths",
                   "gaussian_centers",

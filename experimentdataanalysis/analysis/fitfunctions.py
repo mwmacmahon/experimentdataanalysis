@@ -217,11 +217,13 @@ def fitfcn_two_opposite_exp_sin_decay(t, num_pulses,
     pulsesum = sum([single_pulse_fcn(t + pulsenum*LASER_REPRATE)
                     for pulsenum in range(num_pulses)])
 
-    wrapped_t = t.copy()  # deep copy to avoid changing original, may be slow
-    wrapped_t[t > 1e4] -= LASER_REPRATE
-#    wrapped_t = t[:]  # shallow copy, must avoid changing original!
-#    wrapped_t = np.hstack([t[t < 1e4], t[t > 1e4] - 13160])  # assumes ordered
-    linear_offset = offset + slope*wrapped_t
+#    wrapped_t = t.copy()  # deep copy to avoid changing original, may be slow
+#    wrapped_t[t > 1e4] -= LASER_REPRATE
+#    linear_offset = offset + slope*wrapped_t
+
+    linear_offset = offset + slope * t
+    linear_offset[t > 1e4] -= slope * LASER_REPRATE  # in case we forced pos t
+
     return linear_offset + pulsesum
 
 

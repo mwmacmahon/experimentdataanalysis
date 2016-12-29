@@ -314,6 +314,29 @@ def plot_fit_param_scandata(field_names, fit_results_scandata_list,
         collapse_scandataset_to_model_fit_scandata_list(scandataset_list)
 
 
+# %% OVERVIEW OF FITS
+    plot_trkr_fit_scandata(field_name, fit_trkr_scandata_list[25:30])
+#    scandata_list = fit_trkr_scandata_list
+
+# %%
+    param_name = "amplitude1"
+    plt.figure()
+    plt.hold(True)
+    for scandata in trkr_fit_results_scandata_list[:]:
+        plot_scandata(scandata, param_name, fmt=":bd",
+                      label="")
+
+    # LABEL AND DISPLAY GRAPH
+    plt.xlabel("")
+    plt.ylabel(param_name)
+#    plt.legend(loc='best')
+    plt.title("")
+    plt.show()
+
+#    scandata_list = trkr_fit_results_scandata_list
+
+# %% GRAND MODEL FIT COMPARISON STUFF START
+
 # %% nicely shows fits are great within 1 std dev
     for scandata in fit_trkr_scandata_list[::10]:
         fitdata = scandata.fitdata_lockin2x
@@ -390,24 +413,3 @@ def plot_fit_param_scandata(field_names, fit_results_scandata_list,
             if np.max(np.abs(yvals)) < 2 * np.max(np.abs(scandata.y)):
                 plt.plot(scandata.x, yvals, 'g:')
 
-# %% OVERVIEW OF FITS
-    plot_trkr_fit_scandata(field_name, fit_trkr_scandata_list[10:11])
-#    scandata_list = fit_trkr_scandata_list
-
-
-# %%
-    param_name = "amplitude1"
-    plt.figure()
-    plt.hold(True)
-    for scandata in trkr_fit_results_scandata_list[:]:
-        plot_scandata(scandata, param_name, fmt=":bd",
-                      label="")
-
-    # LABEL AND DISPLAY GRAPH
-    plt.xlabel("")
-    plt.ylabel(param_name)
-#    plt.legend(loc='best')
-    plt.title("")
-    plt.show()
-
-#    scandata_list = trkr_fit_results_scandata_list

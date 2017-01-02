@@ -23,6 +23,54 @@ LASER_REPRATE = 13160  # ps period
 
 
 # %% NEEDS TEST, SPHINX DOCUMENTATION
+def scandata_model_fit(scandata, model):
+    """
+    Uses generic_curve_fit to fit a ScanData field with the given model's
+    function and parameters.
+
+    The resulting FitData is stored in the ScanData's info dict under the
+    key 'fitdata_[field_name]'. 'None' is stored for failed fits.
+    The FitData (or None) is also returned.
+    """    
+    fitdata = scandata_fit(scandata, model.field_name, model.fitfunction,
+                           model.free_params, model.initial_params,
+                           model.param_bounds, model.max_fcn_evals,
+                           model.excluded_intervals, model.ignore_weights)
+    return FitData(fitdata.fitfunction, fitdata.partialfcn,
+                   fitdata.fitparams, fitdata.fitparamstds,
+                   model.model_params, fitdata.fityvals,
+                   fitdata.freeparamindices,
+                   fitdata.covariancematrix,
+                   fitdata.meansquarederror)
+
+
+# %% NEEDS TEST, SPHINX DOCUMENTATION
+def scandata_list_model_fit(scandata, model, multiprocessing=False):
+    """
+    Uses generic_curve_fit to fit a ScanData field with the given model's
+    function and parameters.
+
+    The resulting FitData is stored in the ScanData's info dict under the
+    key 'fitdata_[field_name]'. 'None' is stored for failed fits.
+    The FitData (or None) is also returned.
+    """
+    fitdata_list = scandata_list_fit(scandata, model.field_name,
+                                     model.fitfunction, model.free_params,
+                                     model.initial_params, model.param_bounds,
+                                     model.max_fcn_evals,
+                                     model.excluded_intervals,
+                                     model.ignore_weights, multiprocessing)
+    fixed_fitdata_list = [FitData(fitdata.fitfunction, fitdata.partialfcn,
+                                  fitdata.fitparams, fitdata.fitparamstds,
+                                  model.model_params, fitdata.fityvals,
+                                  fitdata.freeparamindices,
+                                  fitdata.covariancematrix,
+                                  fitdata.meansquarederror)
+                          for fitdata in fitdata_list]
+    return fixed_fitdata_list
+
+
+# %% NEEDS TEST, SPHINX DOCUMENTATION
 def scandata_fit(scandata, field_name, fitfunction, free_params,
                  initial_params, param_bounds, max_fcn_evals=20000,
                  excluded_intervals=None, ignore_weights=False):
@@ -120,15 +168,15 @@ def generic_curve_fit(xvals, yvals, yerrvals, fitfunction, free_params,
     # don't want to risk changing the arrays in-place!
     original_xvals = xvals
     original_yvals = yvals
-    xvals = np.array(xvals)
-    yvals = np.array(yvals)
+    xvals = np.array(xvals).T
+    yvals = np.array(yvals).T
     if yerrvals is not None:
-        yerrvals = np.array(yerrvals)
+        yerrvals = np.array(yerrvals).T
 
     # should check validiy of all arguments, inc. nonzero free params, etc.
     # also convert "lower bound = upper bound" params to fixed.
-    if len(xvals) != len(yvals):
-        raise ValueError("len(xvals) != len(yvals)")
+#    if len(xvals) != len(yvals):
+#        raise ValueError("len(xvals) != len(yvals)")
     if yerrvals is not None and not ignore_weights:  
         if len(yerrvals) != len(yvals):
             raise ValueError("len(yvals) != len(yerr)")
@@ -196,12 +244,12 @@ def generic_curve_fit(xvals, yvals, yerrvals, fitfunction, free_params,
     with np.errstate(all='ignore'):
         try:
             rawfitparams, rawcovariances = curve_fit(partialfcn, xvals, yvals,
-                                                 p0=partial_initial_params,
-                                                 sigma=yerrvals,
-                                                 absolute_sigma=use_errors,
-                                                 bounds=partial_bounds,
-                                                 method='trf',
-                                                 max_nfev=max_fcn_evals)
+                                                     p0=partial_initial_params,
+                                                     sigma=yerrvals,
+                                                     absolute_sigma=use_errors,
+                                                     bounds=partial_bounds,
+                                                     method='trf',
+                                                     max_nfev=max_fcn_evals)
             rawfitstds = np.sqrt(np.diag(rawcovariances))
         except RuntimeError:
             print("Warning: curve_fit failed to converge...")

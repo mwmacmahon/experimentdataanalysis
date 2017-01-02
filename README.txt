@@ -28,10 +28,18 @@ INSTALLATION:
          "git push --set-upstream origin michael_incremental_updates"
 
 -Can swap between branches via "git checkout". "git fetch" and "git status"
-     can be used liberally to keep track of changes both local and remote
+    can be used liberally to keep track of changes both local and remote
     and stay up to date. "git push origin" allows you to push your branch
     online to be shared, and "git pull origin" updates your local copy to
     stay current with the online version as long as there are no conflicts.
+
+-Note: if you have other git repositories on different accounts, you may
+    need to set repository-specific credential storage if you use the
+    Git Credentials Manager.
+
+    This can be done with the Git Bash line:
+        git config --global credential.useHttpPath 
+
 -Please read the section on version control below!
     
 

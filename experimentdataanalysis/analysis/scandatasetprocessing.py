@@ -203,8 +203,8 @@ class ScanDataSet:
         return ScanData(field_names,
                         field_arrays,
                         new_scaninfo,
-                        x_field_name=None,  # 1st field is already x-coord!
-                        y_field_name=None)  # defaults to first model param
+                        xfield=None,  # 1st field is already x-coord!
+                        yfield=None)  # defaults to first model param
 
 
 # %%

@@ -99,12 +99,12 @@ class ScanDataReservedAlias():
 
     def set_array_check(self, scandata_instance, value):
         new_array = np.array(value)
-        if new_array.shape[0] == scandata_instance.shape[0]:
+        if new_array.shape[0] == scandata_instance.length:
             return new_array
         else:
             raise ValueError("attemping to replace a ScanData field " +
                              "with one of different length (shape[0]) " +
-                             "({} -> {})".format(scandata_instance.shape,
+                             "({} -> {})".format(scandata_instance.length,
                                                  new_array.shape))
 
     def set_x(self, scandata_instance, value):
@@ -191,7 +191,7 @@ class ScanData(object, metaclass=SupportsReservedAliases):
     Other methods:
     
     """
-    reserved_names = ['reserved_names', 'info', 'shape',
+    reserved_names = ['reserved_names', 'info', 'length',
                       'fields', 'xfield', 'yfield']
     # un-settable descriptor attributes that return notable fields:
     x = ScanDataReservedAlias()  # note: these are all added to above list
@@ -204,14 +204,14 @@ class ScanData(object, metaclass=SupportsReservedAliases):
     fitdata = ScanDataReservedAlias()  # or with get_field_fitdata(field)
 
     def __init__(self, field_names, field_arrays, info_dict={},
-                 x_field_name=None, y_field_name=None):
+             xfield=None, yfield=None):
         self.info = info_dict.copy()  # in case initialized from another!
         field_name_changed = False
-        if x_field_name:
-            is_changed, self.xfield = make_into_attribute_name(x_field_name)
+        if xfield:
+            is_changed, self.xfield = make_into_attribute_name(xfield)
             field_name_changed = field_name_changed or is_changed
-        if y_field_name:
-            is_changed, self.yfield = make_into_attribute_name(y_field_name)
+        if yfield:
+            is_changed, self.yfield = make_into_attribute_name(yfield)
             field_name_changed = field_name_changed or is_changed
         self.fields = []
         for raw_fieldname, field_array in zip(field_names, field_arrays):
@@ -224,23 +224,23 @@ class ScanData(object, metaclass=SupportsReservedAliases):
                 field_name_changed = True
             field_array = np.array(field_array)
             field_array.flags.writeable = False
-            if "shape" not in self.__dict__:
-                self.shape = field_array.shape
+            if "length" not in self.__dict__:
+                self.length = field_array.shape[0]
                 if "xfield" not in self.__dict__ : # first col is x by default
                     self.xfield = fieldname
             else:  # fields 2+
                 if "yfield" not in self.__dict__ : # second col is y by default
                     self.yfield = fieldname
-                if self.shape[0] != field_array.shape[0]:  # fields same len
+                if self.length != field_array.shape[0]:  # fields same len
                     errstr = "ScanData field arrays not of " + \
                              "matching length (shape[0])! shapes: "
-                    errstr += ", ".join([str(self.shape)] +
+                    errstr += ", ".join([str(self.length)] +
                                         [str(self.get_field_y(field).shape)
                                          for field in self.fields] +
                                          [str(field_array.shape)])
 #                    for field in self.fields:
 #                        errstr += str(self.get_field_y(field).shape) + ", "
-#                    errstr += str(self.shape)
+#                    errstr += str(self.length)
                     raise ValueError(errstr)
             setattr(self, fieldname, field_array)
             self.fields.append(fieldname)
@@ -308,6 +308,10 @@ class ScanData(object, metaclass=SupportsReservedAliases):
                 if key not in self.__class__.reserved_names:
                     setattr(new_scandata, key, value)
         return new_scandata
+
+    def __len__(self):
+        return self.length
+
 
 
 # %% OLD SCANDATA DEFINITION

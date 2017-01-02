@@ -230,8 +230,8 @@ if __name__ == "__main__":
     sort_keys = None  # all scans grouped together
     scandata_list = list(fetch_dir_as_unfit_scandata_iterator(
                                      directorypath=dirpath,
-                                     key_field="lockin2x",
-                                     key_field_error_val=fixed_uncertainty))
+                                     yfield="lockin2x",
+                                     yfield_error_val=fixed_uncertainty))
     for scandata in scandata_list:
         scandata.x = 1000.0 * scandata.x  # convert from T to mT
     original_scandata_list_rsa = scandata_list  # don't lose this...
@@ -428,8 +428,8 @@ if __name__ == "__main__":
 
     scandata_list = list(fetch_dir_as_unfit_scandata_iterator(
                                      directorypath=dirpath,
-                                     key_field="lockin2x",
-                                     key_field_error_val=fixed_uncertainty))
+                                     yfield="lockin2x",
+                                     yfield_error_val=fixed_uncertainty))
 
     # ---------------
     # TEMPORARY, FOR SPEED:
@@ -824,8 +824,8 @@ if __name__ == "__main__":
 
     scandata_list = list(fetch_dir_as_unfit_scandata_iterator(
                                      directorypath=dirpath,
-                                     key_field="lockin2x",
-                                     key_field_error_val=fixed_uncertainty))
+                                     yfield="lockin2x",
+                                     yfield_error_val=fixed_uncertainty))
     scandataset_list = sort_scandata_into_sets(scandata_list, model, sort_keys)
 
     # Change drift velocity based on voltage. Assumes each set has same
@@ -1118,8 +1118,8 @@ if __name__ == "__main__":
 
     scandata_list = list(fetch_dir_as_unfit_scandata_iterator(
                                      directorypath=dirpath,
-                                     key_field="lockin2x",
-                                     key_field_error_val=fixed_uncertainty))
+                                     yfield="lockin2x",
+                                     yfield_error_val=fixed_uncertainty))
 
     # ---------------
     # TEMPORARY, FOR SPEED:

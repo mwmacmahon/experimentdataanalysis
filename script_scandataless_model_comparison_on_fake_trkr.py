@@ -10,13 +10,16 @@ import numpy as np
 import scipy.ndimage.filters as filters
 import scipy.stats as stats
 
+from experimentdataanalysis.analysis.dataclasses import ScanData
 from experimentdataanalysis.analysis.scandataprocessing \
     import make_scandata_time_delay_positive, \
            make_scandata_phase_continuous, \
            gaussian_smooth_scandata, \
-           process_scandata_fields
+           process_scandata_fields, \
+           generic_curve_fit, \
+           scandata_model_fit
 from experimentdataanalysis.analysis.scandatamodels \
-    import RSAFieldScanModel, TwoLifetimesOppositePhaseTRKRModel
+    import FeatureVectorsTwoLifetimesOppositePhaseTRKRModel
 from experimentdataanalysis.analysis.scandatasetprocessing \
     import sort_scandata_into_sets, \
            fit_scandataset_list_to_model, \
@@ -179,28 +182,30 @@ def plot_fit_param_scandata(field_names, fit_results_scandata_list,
 
 # %%  ANALYSIS OF FAKE DELAY SCANS VS B FIELD
 
-    # MODEL 1: Fixed long lifetime
-    # params = num_pulses, pulse_amplitude1, pulse_amplitude2,
-    #          lifetime1, lifetime2, osc_period,
-    #          drift_velocity, probe_pos, slope, offset
-    simple_trkr_model = \
-        TwoLifetimesOppositePhaseTRKRModel(
-            field_name="lockin2x",
-            max_fcn_evals=1000,
+    # MODEL
+    # params = num_pulses, pulse_amplitude, species_amp_ratio,
+    #          lifetime1, lifetime2, gfactor, mobility,
+    #          slope, offset
+    feature_vector_model = \
+        FeatureVectorsTwoLifetimesOppositePhaseTRKRModel(
+            field_name="measurement",
+            max_fcn_evals=10000,
             free_params=[False, True, True,
-                         False, True, True,
-                         False, True, True, True],
-            initial_params=[40, 0.04, 0.04,
-                            20000, 2000, 600,
-                            0, 0, 0, 0],
-            param_bounds=[(1,1000), (0, 1), (0, 1),
-                          (1, 1e9), (1, 1e9), (200, 1200),
-                          (-1e3, 1e3), (-300, 300),
+                         False, True, True, False,
+                         False, False],
+            initial_params=[40, 0.04, 2.0,
+                            20000, 2000, 0.44, 1e-4,
+                            0, 0],
+            param_bounds=[(1,1000), (0, 1), (-100, 100),
+                          (1, 1e9), (1, 1e9), (0.3, 0.6), (1e-6, 1),
                           (-1e-6, 1e-6), (-0.01, 0.01)],
             fit_result_scan_coord="Pump-Probe Distance (um)",
-            excluded_intervals=[[-15, 400]],
+            excluded_intervals=None,  # below options not usable on f-vectors
+#            excluded_intervals=[[-15, 400]],
 #            excluded_intervals=[[-15, 400], [7000, 15000]],
-            b_field=300)
+            b_field=300,
+            ignore_weights=True)
+    excluded_time_intervals = [[-15, 400]]  # put here instead
 
     # filename parsing pattern: if string in element[0] is found in filepath
     # separated from other characters by '_'s, will record adjacent number
@@ -223,17 +228,86 @@ def plot_fit_param_scandata(field_names, fit_results_scandata_list,
     # LOAD DATA, ORGANIZE, AND FIT IN ANALYZER
     dirpath = ("C:\\Data\\fake_data\\fake_trkr")
     fixed_uncertainty = 1e-3  # manually set uncertainty of data set
-    model = simple_trkr_model
+    model = feature_vector_model
+    # feature_vectors: (measurement, delaytime, efield, bfield,
+    #                   pump_probe_dist, wavelength, temperature)
+    fvec_fields = [('measurement', "lockin2x"),
+                   ('time', "scancoord"),
+                   ('efield', "Electric Field (V/cm)"),
+                   ('bfield', "Magnetic Field (mT)"),
+                   ('pump_probe_dist', "Pump-Probe Distance (um)"),
+                   ('wavelength', "Wavelength (nm)"),
+                   ('temperature', "SetTemperature (K)")]
+    timefield = 'scancoord'
+    yfield = 'lockin2x'
     field_name = model.field_name  # for future use
 
     # Fetch scandata, start with one big scandataset
     scandata_list = \
         list(fetch_dir_as_unfit_scandata_iterator(
                     directorypath=dirpath,
-                    yfield="lockin2x",
+                    yfield=yfield,
                     yfield_error_val=fixed_uncertainty,
                     parsing_keywordlists=filepath_parsing_keyword_lists))
+    
+    for scandata in scandata_list:
+        scandata.info['Wavelength (nm)'] = 818.9
+        scandata.info['SetTemperature (K)'] = 30.0
 
+
+# %%
+    # feature_vectors: (measurement, delaytime, efield, bfield,
+    #                   pump_probe_dist, wavelength, temperature)
+    feature_vector_array = None
+    for scandata in scandata_list:
+        indices_to_use_mask = np.logical_and.reduce(
+            np.vstack([np.logical_or(getattr(scandata, timefield) < t_min,
+                                     getattr(scandata, timefield) > t_max)
+                       for t_min, t_max in excluded_time_intervals]))
+        measurement = getattr(scandata, yfield)[indices_to_use_mask]
+        scandata_feature_vector_array = np.zeros((len(measurement),
+                                                  len(fvec_fields)))
+        scandata_feature_vector_array[:, 0] = measurement
+        for fvec_ind, (element_name, field_name) in enumerate(fvec_fields):
+            try:
+                scandata_feature_vector_array[:, fvec_ind] = \
+                    getattr(scandata, field_name)[indices_to_use_mask]
+            except AttributeError:
+                try:
+                    scandata_feature_vector_array[:, fvec_ind] = \
+                        scandata.info[field_name] * np.ones(len(measurement))
+                except KeyError:
+                    raise KeyError("unable to find " + element_name +
+                                   " in fields or info dict of scandata")
+        if feature_vector_array is not None:
+            feature_vector_array = np.vstack([feature_vector_array,
+                                              scandata_feature_vector_array])
+        else:
+            feature_vector_array = scandata_feature_vector_array
+    feature_vector_indices = np.arange(len(feature_vector_array)) + 1
+    feature_vector_scandata = ScanData(['feature_vector',
+                                        'measurement', 'index'],
+                                       [feature_vector_array,
+                                        feature_vector_array[:, 0],
+                                        feature_vector_indices])
+
+
+# %%
+#    fitdata = generic_curve_fit(feature_vector_array,
+#                                feature_vector_array[:, 0], None,
+#                                model.fitfunction,
+#                                model.free_params, model.initial_params, 
+#                                model.param_bounds, model.max_fcn_evals)
+    fitdata = scandata_model_fit(feature_vector_scandata, model)
+
+    for param_label, param in zip(fitdata.fitparamlabels, fitdata.fitparams):
+        print("{}: {}".format(param_label, param))
+
+
+
+
+
+# %%
 #    # FOR TESTING: CUT SIZE OF DATA DOWN
 #    original_scandata_list = scandata_list
 #    scandata_list = scandata_list[::10]

@@ -17,10 +17,10 @@ from experimentdataanalysis.analysis.dataclasses \
 
 # %%
 def fetch_dir_as_unfit_scandata_iterator(directorypath=None,
-                                         key_field=None,
+                                         xfield=None, yfield=None,
                                          delimiter=None,
                                          parser='tab-delimited',
-                                         key_field_error_val=None,
+                                         yfield_error_val=None,
                                          parsing_keywordlists=None):
     """
     Takes a directory and returns an iterator, which upon each call gives
@@ -39,8 +39,7 @@ def fetch_dir_as_unfit_scandata_iterator(directorypath=None,
     Keyword arguments:
     directorypath -- if given, the target directory. If not given, a
         GUI is used to select the directory. (default None)
-    key_field -- if found, the given field will be moved to index 0
-        in the list (default 'lockin2x')
+    yfield -- if found, the given field will be set as scandata's xfield
     """
     if parser == 'tab-delimited':  # default case
         if not delimiter:
@@ -55,8 +54,8 @@ def fetch_dir_as_unfit_scandata_iterator(directorypath=None,
         # file on demand each time through loop:
         for filepath, headerfooterstr, tabledata in csvfiles:
             scandata = tabledata_to_unfit_scandata(filepath, headerfooterstr,
-                                                   tabledata, key_field,
-                                                   key_field_error_val,
+                                                   tabledata, xfield, yfield,
+                                                   yfield_error_val,
                                                    parsing_keywordlists)
             yield scandata
 #    elif parser == '???':
@@ -71,10 +70,10 @@ def fetch_dir_as_unfit_scandata_iterator(directorypath=None,
 
 # %%
 def fetch_csv_as_unfit_scandata(filepath=None,
-                                key_field=None,
+                                xfield=None, yfield=None,
                                 delimiter=None,
                                 parser='tab-delimited',
-                                key_field_error_val=None,
+                                yfield_error_val=None,
                                 parsing_keywordlists=None):
     if parser == 'tab-delimited':  # default case
         if not delimiter:
@@ -86,8 +85,8 @@ def fetch_csv_as_unfit_scandata(filepath=None,
             filepath, headerfooterstr, tabledata = \
                 csvparser.parse_csv_gui('C:\\Data\\', delimiter)
         scandata = tabledata_to_unfit_scandata(filepath, headerfooterstr,
-                                               tabledata, key_field,
-                                               key_field_error_val,
+                                               tabledata, xfield, yfield,
+                                               yfield_error_val,
                                                parsing_keywordlists)
         return scandata
 #    elif parser == '???':
@@ -102,8 +101,8 @@ def fetch_csv_as_unfit_scandata(filepath=None,
 
 # %%
 def tabledata_to_unfit_scandata(filepath, headerfooterstr,
-                                rawdata, key_field=None,
-                                key_field_error_val=None,
+                                rawdata, xfield, yfield,
+                                yfield_error_val=None,
                                 parsing_keywordlists=None):
     colnames, coldata = rawdata
     field_names = list(colnames)
@@ -112,19 +111,19 @@ def tabledata_to_unfit_scandata(filepath, headerfooterstr,
                                      keywordlists=parsing_keywordlists)
     scaninfo = analyze_string_for_dict_pairs(headerfooterstr, scaninfo)
 
-    # if key_field given, attempt to set error array in scaninfo
-    if key_field and key_field_error_val:
-        if key_field in field_names:
-            error_array = key_field_error_val * np.ones(len(field_arrays[0]))
-            field_names.append(key_field + '_error')
+    # if yfield given, attempt to set error array in scaninfo
+    if yfield and yfield_error_val:
+        if yfield in field_names:
+            error_array = yfield_error_val * np.ones(len(field_arrays[0]))
+            field_names.append(yfield + '_error')
             field_arrays.append(error_array)
 
     # Assemble ScanData
     scandata = ScanData(field_names,
                         field_arrays,
                         scaninfo,
-                        x_field_name=None,  # first column defaults to x anyway
-                        y_field_name=key_field)
+                        xfield=xfield,  # first column defaults to x anyway
+                        yfield=yfield)
 
     return scandata
 

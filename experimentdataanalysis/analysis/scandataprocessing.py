@@ -535,7 +535,9 @@ def gaussian_smooth_scandata(scandata, fields_to_process,
     """
     Returns data smoothed over with a gaussian integral, unless the flag
     subtract_smoothed_gaussian is set to True, in which case it returns the
-    original data with the smoothed gaussian subtracted.
+    original data with the smoothed gaussian subtracted. Note that the
+    scandata is processed in-place; though a reference to the scandata
+    is returned identical to the one provided.
 
     Warning: expects and assumes evenly spaced xvalues, not necessarily in
     order though. Gets scaling of data from average timestep, so this means
@@ -572,4 +574,5 @@ def gaussian_smooth_scandata(scandata, fields_to_process,
     xyyerr_fcn_kwargs = {}
     process_scandata_fields(scandata, xyyerr_fcn, xyyerr_fcn_args,
                             xyyerr_fcn_kwargs, fields_to_process)
+    return scandata
 

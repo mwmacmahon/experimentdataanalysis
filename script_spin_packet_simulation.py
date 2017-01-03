@@ -410,37 +410,82 @@ if False:
     tvals = np.linspace(0, 7500, 200)  # ps
     probe_position = 0  # um
     probe_position_list = np.arange(-20, 101, 2)
-    applied_E_field = 15  # V/cm
+    applied_E_fields = [15]  # V/cm
     external_B_fields = [200, 300]  # mT
     num_fake_runs = 2
     for run_ind in range(num_fake_runs):
         for probe_position in probe_position_list:
             for current_B_field in external_B_fields:
+                for applied_E_field in applied_E_fields:
+                    experiment_field_dict = \
+                        {'applied_E_fields': applied_E_field,
+                         'external_B_fields': current_B_field}
+                    probe_profile = vanilla_experiment.get_probe_profile(
+                        tvals, probe_position,
+                        **laser_kwargs, **experiment_field_dict)
+                    probe_noise = 0.0005 * np.random.randn(tvals.size)
+                    probe_offset = .005 * (2 * (0.5 - np.random.random()))
+                    probe_slope = .005 * np.random.randn()
+                    probe_linear_offset = \
+                        probe_offset + probe_slope * np.linspace(-0.5, 0.5,
+                                                                 tvals.size)
+                    probe_profile += probe_noise + probe_linear_offset
+            #        plt.plot(tvals, probe_profile, ':')
+            #        plt.plot(tvals, probe_profile + probe_noise, 'r')
+            #        plt.title('Spin profile w/ probe convolution and Kerr physics')
+            
+                    directory = "C:\\Data\\fake_data\\fake_trkr"
+                    filename = "TRKR_MirrorZ_{:.0f}_".format(probe_position) + \
+                               "{:.0f}Vcm_".format(float(applied_E_field)) + \
+                               "{:.0f}mT_".format(float(current_B_field)) + \
+                               "30K_818.9nm_run{:03d}.dat".format(run_ind + 1)
+                    filepath = directory + "\\" + filename
+        #            headerstr = "\n".join(10*["header header header"])
+                    headerstr = '\t'.join(["scancoord","lockin2x"])
+                    np.savetxt(filepath,
+                               np.vstack([tvals, probe_profile]).T,
+                               fmt='%.6e\t%.12e', delimiter='\t', newline='\n',
+                               header=headerstr, comments='')
+
+
+# %% EXPORT RSA DATA WITH NOISE
+if False:
+# %%
+    delay = np.array(-100)  # ps
+    probe_position = 0  # um
+    probe_position_list = np.arange(-20, 101, 2)
+    applied_E_fields = [15]  # V/cm
+    external_B_fields = np.linspace(-0.04, 0.04, 201)  # mT
+    num_fake_runs = 2
+    for run_ind in range(num_fake_runs):
+        for probe_position in probe_position_list:
+            for applied_E_field in applied_E_fields:
                 experiment_field_dict = {'applied_E_fields': applied_E_field,
-                                         'external_B_fields': current_B_field}
+                                         'external_B_fields': external_B_fields}
                 probe_profile = vanilla_experiment.get_probe_profile(
-                    tvals, probe_position,
+                    delay, probe_position,
                     **laser_kwargs, **experiment_field_dict)
-                probe_noise = 0.0005 * np.random.randn(tvals.size)
+                probe_noise = 0.0005 * np.random.randn(external_B_fields.size)
                 probe_offset = .005 * (2 * (0.5 - np.random.random()))
                 probe_slope = .005 * np.random.randn()
                 probe_linear_offset = \
-                    probe_offset + probe_slope * np.linspace(-0.5, 0.5,
-                                                             tvals.size)
+                    probe_offset + probe_slope * \
+                        np.linspace(-0.5, 0.5, external_B_fields.size)
                 probe_profile += probe_noise + probe_linear_offset
         #        plt.plot(tvals, probe_profile, ':')
         #        plt.plot(tvals, probe_profile + probe_noise, 'r')
         #        plt.title('Spin profile w/ probe convolution and Kerr physics')
         
-                directory = "C:\\Data\\fake_data\\fake_trkr"
-                filename = "TRKR_MirrorZ_{:.0f}_".format(probe_position) + \
-                           "15Vcm_{:.0f}mT_".format(current_B_field) + \
-                           "run{:03d}.dat".format(run_ind + 1)
+                directory = "C:\\Data\\fake_data\\fake_rsa"
+                filename = "RSA_MirrorZ_{:.0f}_".format(probe_position) + \
+                           "{:.0f}Vcm_".format(float(applied_E_field)) + \
+                           "{:.0f}ps_".format(float(delay)) + \
+                           "30K_818.9nm_run{:03d}.dat".format(run_ind + 1)
                 filepath = directory + "\\" + filename
     #            headerstr = "\n".join(10*["header header header"])
                 headerstr = '\t'.join(["scancoord","lockin2x"])
                 np.savetxt(filepath,
-                           np.vstack([tvals, probe_profile]).T,
+                           np.vstack([external_B_fields, probe_profile]).T,
                            fmt='%.6e\t%.12e', delimiter='\t', newline='\n',
                            header=headerstr, comments='')
 

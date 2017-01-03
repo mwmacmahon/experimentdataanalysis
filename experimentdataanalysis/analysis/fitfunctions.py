@@ -267,7 +267,7 @@ def fitfcn_featurevector_two_opposite_exp_sin_decay(
     """
     Expected feature vector:
     ([unused], delaytime, efield, bfield,
-     pump_probe_dist, wavelength, temperature)
+     pump_probe_dist, wavelength, temperature, runID, index_in_run)
 
     Expected units:
     (times): ps

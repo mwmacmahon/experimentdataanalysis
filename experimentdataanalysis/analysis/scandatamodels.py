@@ -839,7 +839,9 @@ class FeatureVectorsTwoLifetimesOppositePhaseTRKRModel(ScanDataModel):
     All models should have fcns all_model_fields
     
     Expected feature vector:
-    (delaytime, efield, bfield, pump_probe_dist, wavelength, temperature)
+    (delaytime, efield, bfield,
+     pump_probe_dist, wavelength, temperature,
+     runID, index_in_run)
     """
     def __init__(self, **kwargs):
         self.model_type = "fitfcn_featurevector_two_opposite_exp_sin_decay"

@@ -167,11 +167,11 @@ def analyze_scan_filepath(filepath, scaninfo={}, keywordlists=None):
                                             ("Vcm", "Electric Field"),
                                             ("mT", "Magnetic Field (mT)"),
                                             ("K", "SetTemperature"),
-                                            ("nm", "Wavelength"),
-                                            ("x.dat", "MiddleScanCoord")]
+                                            ("nm", "Wavelength")]
     for segment in filepath.split("\\"):
         # get rid of idiosyncratic delimiters by swapping with _
         segment = segment.replace(" ", "_")
+        segment = segment.replace(".", "_")
         next_element_tags = []
         for element in segment.split("_"):
             if len(next_element_tags) > 0:

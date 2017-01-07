@@ -117,9 +117,12 @@ class CarrierPacket():
             raise NotImplementedError("have not yet written code to " +
                                       "handle a time slice spanning both " +
                                       "before AND after pulse creation.")
+        electron_temp = self.physics_dict['temperature_vs_efield_fcn'](evals)
+        spin_lifetime = \
+            self.physics_dict['spin_lifetime'] * \
+                self.physics_dict['lifetime_vs_temp_scaling_fcn'](electron_temp)
         polarization = (self.initial_polarization *
-                        np.exp(-elapsed_tvals /
-                               self.physics_dict['spin_lifetime']))
+                        np.exp(-elapsed_tvals / spin_lifetime))
         orientation = (self.initial_orientation +
                        2 * np.pi * elapsed_tvals * bvals *
                        self.physics_dict['gfactor'] * GFACTORCONSTANT)
@@ -263,16 +266,25 @@ class ExperimentChannel():
 if __name__ == "__main__":
 # %%
     species1_physics_dict = {'fudge': {'relative_amp': 1.0,
-                                       'relative_phase': 0.0},
+                                       'relative_phase': np.pi},
                              'gfactor': 0.44,
                              'mobility': 1e-4,  # (um/ps)/(V/cm). 1e-4: 2um/ns/Vapp
-                             'spin_lifetime': 20000}
+                             'spin_lifetime': 20000,
+                             'temperature_vs_efield_fcn': 
+                                 lambda E: 30 + 0.7 * np.abs(E),
+                             'lifetime_vs_temp_scaling_fcn':
+                                 lambda T: (T / 30)**-2.2,
+                             'gfactor_vs_temp_coeff'}
     
     species2_physics_dict = {'fudge': {'relative_amp': 1.8,
-                                       'relative_phase': -np.pi},
+                                       'relative_phase': 0},
                              'gfactor': 0.44,
                              'mobility': 1e-4,  # (um/ps)/(V/cm). 1e-4: 2um/ns/Vapp
-                             'spin_lifetime': 2000}
+                             'spin_lifetime': 8000,
+                             'temperature_vs_efield_fcn': 
+                                 lambda E: 30 + 0.7 * np.abs(E),
+                             'lifetime_vs_temp_scaling_fcn':
+                                 lambda T: (T / 30)**-2.2}
     
     laser_kwargs = {'laser_width': 17.5,  # um, radius
                     'laser_power': 1.0,  # AU
@@ -281,7 +293,7 @@ if __name__ == "__main__":
     experiment_state_kwargs = {'applied_E_fields': 15,  # V/cm
                                'external_B_fields': 300}  # mT
     
-    n_pulses = 10
+    n_pulses = 20
     laser_pos = 0.0
 
     vanilla_experiment = ExperimentChannel(species1_physics_dict,
@@ -408,11 +420,12 @@ if False:
 if False:
 # %%
     tvals = np.linspace(0, 7500, 200)  # ps
-    probe_position = 0  # um
-    probe_position_list = np.arange(-20, 101, 2)
+    probe_position_list = [0]  # um
+#    probe_position_list = np.arange(-20, 100+1, 2)
     applied_E_fields = [15]  # V/cm
-    external_B_fields = [200, 300]  # mT
-    num_fake_runs = 2
+    applied_E_fields = np.arange(-40, 40+1, 4)
+    external_B_fields = [300]  # mT
+    num_fake_runs = 5
     for run_ind in range(num_fake_runs):
         for probe_position in probe_position_list:
             for current_B_field in external_B_fields:
@@ -430,10 +443,13 @@ if False:
                         probe_offset + probe_slope * np.linspace(-0.5, 0.5,
                                                                  tvals.size)
                     probe_profile += probe_noise + probe_linear_offset
-            #        plt.plot(tvals, probe_profile, ':')
-            #        plt.plot(tvals, probe_profile + probe_noise, 'r')
-            #        plt.title('Spin profile w/ probe convolution and Kerr physics')
-            
+
+#                    plt.plot(tvals, probe_profile, 'bd')
+#                    plt.plot(tvals,
+#                             probe_profile + probe_noise + probe_linear_offset, 'r')
+#                    plt.title('Spin profile w/ probe convolution and Kerr physics')
+#                    raise KeyboardInterrupt
+
                     directory = "C:\\Data\\fake_data\\fake_trkr"
                     filename = "TRKR_MirrorZ_{:.0f}_".format(probe_position) + \
                                "{:.0f}Vcm_".format(float(applied_E_field)) + \
@@ -455,7 +471,7 @@ if False:
     probe_position = 0  # um
     probe_position_list = np.arange(-20, 101, 2)
     applied_E_fields = [15]  # V/cm
-    external_B_fields = np.linspace(-0.04, 0.04, 201)  # mT
+    external_B_fields = np.linspace(-40, 40, 201)  # mT
     num_fake_runs = 2
     for run_ind in range(num_fake_runs):
         for probe_position in probe_position_list:
@@ -466,16 +482,19 @@ if False:
                     delay, probe_position,
                     **laser_kwargs, **experiment_field_dict)
                 probe_noise = 0.0005 * np.random.randn(external_B_fields.size)
-                probe_offset = .005 * (2 * (0.5 - np.random.random()))
-                probe_slope = .005 * np.random.randn()
+                probe_offset = .000 * (2 * (0.5 - np.random.random()))
+                probe_slope = .000 * np.random.randn()
                 probe_linear_offset = \
                     probe_offset + probe_slope * \
                         np.linspace(-0.5, 0.5, external_B_fields.size)
                 probe_profile += probe_noise + probe_linear_offset
-        #        plt.plot(tvals, probe_profile, ':')
-        #        plt.plot(tvals, probe_profile + probe_noise, 'r')
-        #        plt.title('Spin profile w/ probe convolution and Kerr physics')
-        
+
+#                plt.plot(external_B_fields, probe_profile, '-d')
+#                plt.plot(external_B_fields,
+#                         probe_profile + probe_noise + probe_linear_offset, 'r')
+#                plt.title('Spin profile w/ probe convolution and Kerr physics')
+#                raise KeyboardInterrupt
+
                 directory = "C:\\Data\\fake_data\\fake_rsa"
                 filename = "RSA_MirrorZ_{:.0f}_".format(probe_position) + \
                            "{:.0f}Vcm_".format(float(applied_E_field)) + \

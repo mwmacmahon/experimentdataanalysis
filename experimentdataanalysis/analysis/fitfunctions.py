@@ -261,9 +261,91 @@ def fitfcn_rsa_field_scan(field, num_pulses, delay_time,
 def fitfcn_featurevector_two_opposite_exp_sin_decay(
                                         feature_vector, num_pulses,
                                         pulse_amplitude, species_amp_ratio,
+                                        lifetime1, lifetime2, gfactor, phase,
+                                        species1_efield_heating_coeff,
+                                        species2_efield_heating_coeff,
+                                        mobility, slope, offset):
+    """
+    Expected feature vector:
+    ([unused], delaytime, efield, bfield,
+     pump_probe_dist, wavelength, temperature, runID, index_in_run)
+
+    Expected units:
+    (times): ps
+    (positions): um
+    efield: V/cm
+    bfield: mT
+    wavelength: nm
+    temperature: K
+    drift_velocity: um/ps
+    slope, offset: varies
+    """
+    feature_vector = np.array(feature_vector, copy=False)
+    if len(feature_vector.shape) > 1:
+        t = feature_vector[1, :]
+        efield = feature_vector[2, :]
+        bfield = feature_vector[3, :]
+        pump_probe_dist = feature_vector[4, :]
+        wavelength = feature_vector[5, :]
+        temp = feature_vector[6, :]
+    else:
+        _, t, efield, bfield, \
+            pump_probe_dist, wavelength, temp = feature_vector
+    # lifetime vs temp model:
+    # Ben found that spin lifetime ~ T^-2.2, where T is lattice temp.
+    # Also Marta referenced a paper showing roughly linear dependence
+    # of electron temp vs field...needs to be updated much more carefully.
+    set_temp = 30  # fixed for now, add to feature vector?
+    estimated_temp1 = temp + species1_efield_heating_coeff * np.abs(efield)
+    estimated_temp2 = temp + species2_efield_heating_coeff * np.abs(efield)
+    adjusted_lifetime1 = lifetime1 / (estimated_temp1 / set_temp)**2.2
+    adjusted_lifetime2 = lifetime2 / (estimated_temp2 / set_temp)**2.2
+    pulse_amplitude1 = pulse_amplitude
+    pulse_amplitude2 = pulse_amplitude * species_amp_ratio
+    osc_ang_freq = 2 * np.pi * GFACTORCONSTANT * gfactor * bfield
+    sigma1 = 17.5  # probe beam waist in um, +- 0.5um, from Marta's paper
+    sigma2 = sigma1  # assuming no diffusion
+    def single_pulse_fcn(t_pulse):
+        xdiff1 = pump_probe_dist - mobility * efield * t_pulse
+        xdiff2 = pump_probe_dist - mobility * efield * t_pulse
+        drift_signal_factor1 = np.exp(-xdiff1**2/(2*(sigma1**2 + sigma2**2)))
+        drift_signal_factor2 = np.exp(-xdiff2**2/(2*(sigma1**2 + sigma2**2)))
+        effective_amplitude1 = pulse_amplitude1 * drift_signal_factor1
+        effective_amplitude2 = pulse_amplitude2 * drift_signal_factor2
+        if np.any(drift_signal_factor1 > 1e-6) or \
+                np.any(drift_signal_factor2 > 1e-6):  # avoid if unnecessary
+            return (
+                effective_amplitude2 * np.exp(-t_pulse / adjusted_lifetime2) -
+                effective_amplitude1 * np.exp(-t_pulse / adjusted_lifetime1)
+                ) * np.cos(osc_ang_freq * t_pulse + phase)
+        else:
+            return 0 * t_pulse
+
+    pulsesum = sum([single_pulse_fcn(t + pulsenum * LASER_REPRATE)
+                    for pulsenum in range(int(num_pulses))])
+
+#    wrapped_t = t.copy()  # deep copy to avoid changing original, may be slow
+#    wrapped_t[t > 1e4] -= LASER_REPRATE
+#    linear_offset = offset + slope*wrapped_t
+
+    linear_offset = offset + slope * t
+    if len(feature_vector.shape) > 1:
+        linear_offset[t > 1e4] -= slope * LASER_REPRATE
+    elif t > 1e4:
+        linear_offset -= slope * LASER_REPRATE
+
+#    print((linear_offset + pulsesum).shape)
+    return linear_offset + pulsesum
+
+
+# %% NEEDS SPHINX DOCUMENTATION
+def fitfcn_featurevector_two_independent_exp_sin_decay(
+                                        feature_vector, num_pulses,
+                                        pulse_amplitude, species_amp_ratio,
                                         lifetime1, lifetime2,
-                                        gfactor,  mobility,
-                                        slope, offset):
+                                        gfactor1, gfactor2,
+                                        phase1, phase2,
+                                        mobility, slope, offset):
     """
     Expected feature vector:
     ([unused], delaytime, efield, bfield,
@@ -292,7 +374,8 @@ def fitfcn_featurevector_two_opposite_exp_sin_decay(
             pump_probe_dist, wavelength, temp = feature_vector
     pulse_amplitude1 = pulse_amplitude
     pulse_amplitude2 = pulse_amplitude * species_amp_ratio
-    osc_ang_freq = 2 * np.pi * GFACTORCONSTANT * gfactor * bfield
+    osc_ang_freq1 = 2 * np.pi * GFACTORCONSTANT * gfactor1 * bfield
+    osc_ang_freq2 = 2 * np.pi * GFACTORCONSTANT * gfactor2 * bfield
     sigma1 = 17.5  # probe beam waist in um, +- 0.5um, from Marta's paper
     sigma2 = sigma1  # assuming no diffusion
     def single_pulse_fcn(t_pulse):
@@ -304,14 +387,15 @@ def fitfcn_featurevector_two_opposite_exp_sin_decay(
         effective_amplitude2 = pulse_amplitude2 * drift_signal_factor2
         if np.any(drift_signal_factor1 > 1e-6) or \
                 np.any(drift_signal_factor2 > 1e-6):  # avoid if unnecessary
-            return (effective_amplitude1 * np.exp(-t_pulse / lifetime1) -
-                    effective_amplitude2 * np.exp(-t_pulse / lifetime2)) * \
-                        np.cos(osc_ang_freq * t_pulse)
+            return effective_amplitude1 * np.exp(-t_pulse / lifetime1) * \
+                       np.cos(osc_ang_freq1 * t_pulse + phase1) + \
+                   effective_amplitude2 * np.exp(-t_pulse / lifetime2) * \
+                       np.cos(osc_ang_freq2 * t_pulse + phase2)
         else:
             return 0 * t_pulse
 
     pulsesum = sum([single_pulse_fcn(t + pulsenum * LASER_REPRATE)
-                    for pulsenum in range(num_pulses)])
+                    for pulsenum in range(int(num_pulses))])
 
 #    wrapped_t = t.copy()  # deep copy to avoid changing original, may be slow
 #    wrapped_t[t > 1e4] -= LASER_REPRATE

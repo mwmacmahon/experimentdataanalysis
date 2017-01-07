@@ -139,7 +139,7 @@ def analyze_scan_filepath(filepath, scaninfo={}, keywordlists=None):
     """
     scaninfo['Filepath'] = filepath
     scaninfo['File Last Modified'] = time.ctime(os.path.getmtime(filepath))
-    if keywordlists:
+    if keywordlists is not None:
         this_element_keyword_list, \
             next_element_keyword_list, \
             inside_this_element_keyword_list = keywordlists
@@ -164,14 +164,14 @@ def analyze_scan_filepath(filepath, scaninfo={}, keywordlists=None):
         #    tag remainder as second string
         #        e.g. "..._30K_..." -> {"SetTemperature": 30}
         inside_this_element_keyword_list = [("Channel", "Channel"),
-                                            ("Vcm", "Electric Field"),
+                                            ("Vcm", "Electric Field (V/cm)"),
                                             ("mT", "Magnetic Field (mT)"),
-                                            ("K", "SetTemperature"),
-                                            ("nm", "Wavelength")]
+                                            ("K", "Set Temperature (K)"),
+                                            ("nm", "Wavelength (nm)")]
     for segment in filepath.split("\\"):
         # get rid of idiosyncratic delimiters by swapping with _
         segment = segment.replace(" ", "_")
-        segment = segment.replace(".", "_")
+        segment = segment.replace(".dat", "_")
         next_element_tags = []
         for element in segment.split("_"):
             if len(next_element_tags) > 0:

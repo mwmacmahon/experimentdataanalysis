@@ -828,16 +828,6 @@ class TwoLifetimesOppositePhaseTRKRModel(ScanDataModel):
 # %% NEEDS TESTS, SPHINX DOCUMENTATION
 class FeatureVectorsTwoLifetimesOppositePhaseTRKRModel(ScanDataModel):
     """
-    Stores the parameters and formulas needed to fit scandata to a
-    1D model and extract attributes. Should not store any data, although
-    it can be modified after creation (e.g. to increase max_fcn_evals
-    attribute or adjust the experimental uncertainty assumed).
-
-    Can be inherited from to change the fit model, may only need to change
-    __init__ method if first 3 fit parameters are left the same.
-
-    All models should have fcns all_model_fields
-    
     Expected feature vector:
     (delaytime, efield, bfield,
      pump_probe_dist, wavelength, temperature,
@@ -851,20 +841,25 @@ class FeatureVectorsTwoLifetimesOppositePhaseTRKRModel(ScanDataModel):
             fitfcns.fitfcn_featurevector_two_opposite_exp_sin_decay
         self.model_params = \
             ["num_pulses", "pulse_amplitude", "species_amp_ratio",
-             "lifetime1", "lifetime2", "gfactor", "mobility",
-             "slope", "offset"]
+             "lifetime1", "lifetime2", "gfactor", "phase",
+             "species1_efield_heating_coeff", "species2_efield_heating_coeff",
+             "mobility","slope", "offset"]
         # params = num_pulses, pulse_amplitude, species_amp_ratio,
-        #          lifetime1, lifetime2, gfactor, mobility,
-        #          slope, offset
+        #          lifetime1, lifetime2, gfactor, phase, 
+        #          species1_efield_heating_coeff, species2_efield_heating_coeff
+        #          mobility, slope, offset
         self.free_params = [False, True, True,
-                            True, True, True, False,
-                            True, True]
+                            True, True, True, True,
+                            True, True,
+                            False, True, True]
         self.initial_params = [40, 0.04, 2.0,
-                               20000, 2000, 0.44, 1e-4,
-                               0, 0]
+                               20000, 8000, 0.44, 0.0,
+                               0.5, 0.5,
+                               1e-4, 0, 0]
         self.param_bounds = [(1,1000), (0, 1), (-100, 100),
-                             (1, 1e9), (1, 1e9), (0.3, 0.6), (1e-6, 1),
-                             (-1e-6, 1e-6), (-0.01, 0.01)]
+                             (1, 1e9), (1, 1e9), (0.3, 0.6), (-2*np.pi, 2*np.pi),
+                             (0, 4.0), (0, 4.0),
+                             (0, 1), (-1e-6, 1e-6), (-0.01, 0.01)]
         self.max_fcn_evals = 10000
         self.excluded_intervals = None
         self.ignore_weights = True
@@ -876,6 +871,9 @@ class FeatureVectorsTwoLifetimesOppositePhaseTRKRModel(ScanDataModel):
         for key, val in kwargs.items():
             self.__dict__[key] = val
 
+        self.initial_params = np.clip(self.initial_params,
+                                      *zip(*self.param_bounds))
+
     def all_model_fields(self, model_param_array_list,
                          model_param_uncertainty_array_list):
         params = model_param_array_list[1:]  # 1st param is xcoords
@@ -883,69 +881,63 @@ class FeatureVectorsTwoLifetimesOppositePhaseTRKRModel(ScanDataModel):
         if len(params) == 0 or len(params) != len(param_sigmas):
             raise ValueError("ScanDataModel: tried to extract " +
                              "fit results without successful fit")
-            
-        # TODO: design a model field decorator fcn to make this automatic
-        fields = ["amplitude1",
-                  "amplitude2",
-                  "lifetime1",
-                  "lifetime2",
-                  "gfactor",
-                  "drift_velocity",
-                  "probe_position"]
-        array_list, uncertainty_array_list = \
-            zip(*[self.amplitude1(params, param_sigmas),
-                  self.amplitude2(params, param_sigmas),
-                  self.lifetime1(params, param_sigmas),
-                  self.lifetime2(params, param_sigmas),
-                  self.gfactor(params, param_sigmas),
-                  self.drift_velocity(params, param_sigmas),
-                  self.probe_position(params, param_sigmas),
-                  ])
-        array_list = model_param_array_list[0:1] + list(array_list)  # re-add x
-        uncertainty_array_list = list(uncertainty_array_list)
-        return fields, array_list, uncertainty_array_list
+        return self.model_params, model_param_array_list, \
+                model_param_uncertainty_array_list
 
-    def amplitude1(self, model_param_array_list,
-                   model_param_uncertainty_array_list):
-        params = model_param_array_list[1]
-        params_sigma = model_param_uncertainty_array_list[1]
-        return params, params_sigma
 
-    def amplitude2(self, model_param_array_list,
-                   model_param_uncertainty_array_list):
-        params = model_param_array_list[2]
-        params_sigma = model_param_uncertainty_array_list[2]
-        return params, params_sigma
+# %% NEEDS TESTS, SPHINX DOCUMENTATION
+class FeatureVectorsIndependentSinusoidalTRKRModel(ScanDataModel):
+    """
+    Expected feature vector:
+    (delaytime, efield, bfield,
+     pump_probe_dist, wavelength, temperature,
+     runID, index_in_run)
+    """
+    def __init__(self, **kwargs):
+        self.model_type = "fitfcn_featurevector_two_independent_exp_sin_decay"
+        self.fit_result_scan_coord = "Pump-Probe Distance (um)"
+        self.field_name = "measurement"  # just 1st coord of feature vector
+        self.fitfunction = \
+            fitfcns.fitfcn_featurevector_two_independent_exp_sin_decay
+        self.model_params = \
+            ["num_pulses", "pulse_amplitude", "species_amp_ratio",
+             "lifetime1", "lifetime2", "gfactor1", "gfactor2",
+             "phase1", "phase2", "mobility", "slope", "offset"]
+        # params = num_pulses, pulse_amplitude, species_amp_ratio,
+        #          lifetime1, lifetime2, gfactor1, gfactor2,
+        #          phase1, phase2, mobility, slope, offset
+        self.free_params = [False, True, True,
+                            True, True, True, True,
+                            False, False, False, False, False]
+        self.initial_params = [40, 0.04, 2.0,
+                               18000, 17000, 0.439, 0.441,
+                               0, -2*np.pi/3, 1e-4, 0, 0]
+        self.param_bounds = [(1,1000), (0, 1), (-100, 100),
+                             (1, 1e9), (1, 1e9),
+                             (0.3, 0.6), (0.3, 0.6),
+                             (-np.pi, np.pi), (-2*np.pi, np.pi),
+                             (0, 1), (-1e-6, 1e-6), (-0.01, 0.01)]
+        self.max_fcn_evals = 10000
+        self.excluded_intervals = None
+        self.ignore_weights = True
+        
+        # unique to this model!
+        self.b_field = 0  # in mT
 
-    def lifetime1(self, model_param_array_list,
-                  model_param_uncertainty_array_list):
-        params = model_param_array_list[3]
-        params_sigma = model_param_uncertainty_array_list[3]
-        return params, params_sigma
+        # keyword args override defaults
+        for key, val in kwargs.items():
+            self.__dict__[key] = val
 
-    def lifetime2(self, model_param_array_list,
-                  model_param_uncertainty_array_list):
-        params = model_param_array_list[4]
-        params_sigma = model_param_uncertainty_array_list[4]
-        return params, params_sigma
+        self.initial_params = np.clip(self.initial_params,
+                                      *zip(*self.param_bounds))
 
-    def gfactor(self, model_param_array_list,
-                model_param_uncertainty_array_list):
-        params = (model_param_array_list[5] * \
-                  GFACTORCONSTANT*self.b_field)**(-1)
-        params_sigma = params*model_param_uncertainty_array_list[5]/(
-                            model_param_array_list[5])
-        return params, params_sigma
-
-    def drift_velocity(self, model_param_array_list,
-                       model_param_uncertainty_array_list):
-        params = model_param_array_list[6]
-        params_sigma = model_param_uncertainty_array_list[6]
-        return params, params_sigma
-
-    def probe_position(self, model_param_array_list,
-                       model_param_uncertainty_array_list):
-        params = model_param_array_list[7]
-        params_sigma = model_param_uncertainty_array_list[7]
-        return params, params_sigma
+    def all_model_fields(self, model_param_array_list,
+                         model_param_uncertainty_array_list):
+        params = model_param_array_list[1:]  # 1st param is xcoords
+        param_sigmas = model_param_uncertainty_array_list
+        if len(params) == 0 or len(params) != len(param_sigmas):
+            raise ValueError("ScanDataModel: tried to extract " +
+                             "fit results without successful fit")
+        return self.model_params, model_param_array_list, \
+                model_param_uncertainty_array_list
 

@@ -99,6 +99,7 @@ class ScanDataReservedAlias():
 
     def set_array_check(self, scandata_instance, value):
         new_array = np.array(value)
+        new_array.flags.writeable = False
         if new_array.shape[0] == scandata_instance.length:
             return new_array
         else:
@@ -119,10 +120,12 @@ class ScanDataReservedAlias():
         value = self.set_array_check(scandata_instance, value)
         setattr(scandata_instance,
                 scandata_instance.yfield + '_error', value)
+        # should this add a field?
 
     def set_fitdata(self, scandata_instance, value):
         setattr(scandata_instance,
                 'fitdata_' + scandata_instance.yfield, value)
+        # should this add a field?
 
     def set_other(self, scandata_instance, value):
         setattr(scandata_instance, self.storage_alias, value)
@@ -189,7 +192,6 @@ class ScanData(object, metaclass=SupportsReservedAliases):
     scandata.get_field_fitdata(field_name) -> same, but scandata.fitdata
 
     Other methods:
-    
     """
     reserved_names = ['reserved_names', 'info', 'length',
                       'fields', 'xfield', 'yfield']

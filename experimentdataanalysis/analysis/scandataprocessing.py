@@ -36,12 +36,15 @@ def scandata_model_fit(scandata, model):
                            model.free_params, model.initial_params,
                            model.param_bounds, model.max_fcn_evals,
                            model.excluded_intervals, model.ignore_weights)
-    return FitData(fitdata.fitfunction, fitdata.partialfcn,
-                   fitdata.fitparams, fitdata.fitparamstds,
-                   model.model_params, fitdata.fityvals,
-                   fitdata.freeparamindices,
-                   fitdata.covariancematrix,
-                   fitdata.meansquarederror)
+    if fitdata is not None:
+        return FitData(fitdata.fitfunction, fitdata.partialfcn,
+                       fitdata.fitparams, fitdata.fitparamstds,
+                       model.model_params, fitdata.fityvals,
+                       fitdata.freeparamindices,
+                       fitdata.covariancematrix,
+                       fitdata.meansquarederror)
+    else:
+        return None
 
 
 # %% NEEDS TEST, SPHINX DOCUMENTATION
@@ -60,13 +63,18 @@ def scandata_list_model_fit(scandata, model, multiprocessing=False):
                                      model.max_fcn_evals,
                                      model.excluded_intervals,
                                      model.ignore_weights, multiprocessing)
-    fixed_fitdata_list = [FitData(fitdata.fitfunction, fitdata.partialfcn,
-                                  fitdata.fitparams, fitdata.fitparamstds,
-                                  model.model_params, fitdata.fityvals,
-                                  fitdata.freeparamindices,
-                                  fitdata.covariancematrix,
-                                  fitdata.meansquarederror)
-                          for fitdata in fitdata_list]
+    fixed_fitdata_list = []
+    for fitdata in fitdata_list:
+        if fitdata is not None:
+            fixed_fitdata_list.append(
+                        FitData(fitdata.fitfunction, fitdata.partialfcn,
+                                fitdata.fitparams, fitdata.fitparamstds,
+                                model.model_params, fitdata.fityvals,
+                                fitdata.freeparamindices,
+                                fitdata.covariancematrix,
+                                fitdata.meansquarederror))
+        else:
+            fixed_fitdata_list.append(None)
     return fixed_fitdata_list
 
 
@@ -166,8 +174,8 @@ def generic_curve_fit(xvals, yvals, yerrvals, fitfunction, free_params,
     uncertainties, where fixed parameters are given an uncertainty (std) of 0
     """
     # don't want to risk changing the arrays in-place!
-    original_xvals = xvals
-    original_yvals = yvals
+    original_xvals = xvals.T
+    original_yvals = yvals.T
     xvals = np.array(xvals).T
     yvals = np.array(yvals).T
     if yerrvals is not None:
@@ -475,7 +483,7 @@ def process_scandata_fields(scandata, xyyerr_fcn,
             scandata.yerr = new_yerr
         # delete old fits, generally now invalidated:
         fitdata_key = 'fitdata_' + field_name
-        if fitdata_key in scandata.info:
+        if fitdata_key in scandata.__dict__:
             setattr(scandata, fitdata_key, None)
 
 

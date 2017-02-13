@@ -118,14 +118,20 @@ class CarrierPacket():
                                       "handle a time slice spanning both " +
                                       "before AND after pulse creation.")
         electron_temp = self.physics_dict['temperature_vs_efield_fcn'](evals)
+        effective_initial_polarization = \
+            self.initial_polarization * \
+                self.physics_dict['absorption_vs_temp_scaling_fcn'](electron_temp)
         spin_lifetime = \
             self.physics_dict['spin_lifetime'] * \
                 self.physics_dict['lifetime_vs_temp_scaling_fcn'](electron_temp)
-        polarization = (self.initial_polarization *
+        gfactor = \
+            self.physics_dict['gfactor'] + \
+                self.physics_dict['gfactor_vs_temp_offset_fcn'](electron_temp)
+        polarization = (effective_initial_polarization *
                         np.exp(-elapsed_tvals / spin_lifetime))
         orientation = (self.initial_orientation +
-                       2 * np.pi * elapsed_tvals * bvals *
-                       self.physics_dict['gfactor'] * GFACTORCONSTANT)
+                       2 * np.pi * elapsed_tvals * bvals * gfactor *
+                                                               GFACTORCONSTANT)
         orientation = ((orientation + np.pi/2) % (2*np.pi)) - np.pi/2
         position = (self.initial_position + elapsed_tvals *
                     self.physics_dict['mobility'] * evals)
@@ -267,25 +273,32 @@ if __name__ == "__main__":
 # %%
     species1_physics_dict = {'fudge': {'relative_amp': 1.0,
                                        'relative_phase': np.pi},
-                             'gfactor': 0.44,
+                             'gfactor': 0.4385,
                              'mobility': 1e-4,  # (um/ps)/(V/cm). 1e-4: 2um/ns/Vapp
-                             'spin_lifetime': 20000,
+                             'spin_lifetime': 20260,
                              'temperature_vs_efield_fcn': 
-                                 lambda E: 30 + 0.7 * np.abs(E),
+                                 lambda E: 30 + 0.03 * np.abs(E)**2.0,
+                             'absorption_vs_temp_scaling_fcn':
+                                 lambda T: (T / 30)**-0.8,
                              'lifetime_vs_temp_scaling_fcn':
-                                 lambda T: (T / 30)**-2.2,
-                             'gfactor_vs_temp_coeff'}
-    
-    species2_physics_dict = {'fudge': {'relative_amp': 1.8,
+                                 lambda T: (T / 30)**-1.2,
+                             'gfactor_vs_temp_offset_fcn':
+                                 lambda T: (T - 30) * (-3.5e-4)}
+
+    species2_physics_dict = {'fudge': {'relative_amp': 2.0,
                                        'relative_phase': 0},
-                             'gfactor': 0.44,
+                             'gfactor': 0.4385,
                              'mobility': 1e-4,  # (um/ps)/(V/cm). 1e-4: 2um/ns/Vapp
                              'spin_lifetime': 8000,
                              'temperature_vs_efield_fcn': 
-                                 lambda E: 30 + 0.7 * np.abs(E),
+                                 lambda E: 30 + 0.03 * np.abs(E)**2.0,
+                             'absorption_vs_temp_scaling_fcn':
+                                 lambda T: (T / 30)**-1.2,
                              'lifetime_vs_temp_scaling_fcn':
-                                 lambda T: (T / 30)**-2.2}
-    
+                                 lambda T: (T / 30)**-1.2,
+                             'gfactor_vs_temp_offset_fcn':
+                                 lambda T: (T - 30) * (-3.5e-4)}
+
     laser_kwargs = {'laser_width': 17.5,  # um, radius
                     'laser_power': 1.0,  # AU
                     'laser_wavelength': 818.9}  # nm
@@ -305,6 +318,54 @@ if __name__ == "__main__":
                                                  **laser_kwargs)
 
 
+# %% EXPORT TRKR DATA WITH NOISE
+if False:
+# %%
+    tvals = np.linspace(0, 7500, 200)  # ps
+    probe_position_list = [0]  # um
+#    probe_position_list = np.arange(-20, 100+1, 2)
+#    applied_E_fields = [15]  # V/cm
+    applied_E_fields = np.arange(-40, 40+1, 4)
+    external_B_fields = [300]  # mT
+    num_fake_runs = 5
+    for run_ind in range(num_fake_runs):
+        for probe_position in probe_position_list:
+            for current_B_field in external_B_fields:
+                for applied_E_field in applied_E_fields:
+                    experiment_field_dict = \
+                        {'applied_E_fields': applied_E_field,
+                         'external_B_fields': current_B_field}
+                    probe_profile = vanilla_experiment.get_probe_profile(
+                        tvals, probe_position,
+                        **laser_kwargs, **experiment_field_dict)
+                    probe_noise = 0.0005 * np.random.randn(tvals.size)
+                    probe_offset = .005 * (2 * (0.5 - np.random.random()))
+                    probe_slope = .005 * np.random.randn()
+                    probe_linear_offset = \
+                        probe_offset + probe_slope * np.linspace(-0.5, 0.5,
+                                                                 tvals.size)
+                    probe_profile += probe_noise + probe_linear_offset
+
+#                    plt.plot(tvals, probe_profile, 'bd')
+#                    plt.plot(tvals,
+#                             probe_profile + probe_noise + probe_linear_offset, 'r')
+#                    plt.title('Spin profile w/ probe convolution and Kerr physics')
+#                    raise KeyboardInterrupt
+
+                    directory = "C:\\Data\\fake_data\\fake_trkr"
+                    filename = "TRKR_MirrorZ_{:.0f}_".format(probe_position) + \
+                               "{:.0f}Vcm_".format(float(applied_E_field)) + \
+                               "{:.0f}mT_".format(float(current_B_field)) + \
+                               "30K_818.9nm_run{:03d}.dat".format(run_ind + 1)
+                    filepath = directory + "\\" + filename
+        #            headerstr = "\n".join(10*["header header header"])
+                    headerstr = '\t'.join(["scancoord","lockin2x"])
+                    np.savetxt(filepath,
+                               np.vstack([tvals, probe_profile]).T,
+                               fmt='%.6e\t%.12e', delimiter='\t', newline='\n',
+                               header=headerstr, comments='')
+
+
 # %% STREAKED POSITION VS TIME OVER MANY, MANY TIME WINDOWS
 if False:
 # %%
@@ -313,7 +374,7 @@ if False:
     ncols = 8
     n_segments = nrows * ncols
     for seg_ind in range(n_segments):
-        n_streaks = 20
+        n_streaks = 20  
         streak_length = (164 /
                          (nrows * experiment_state_kwargs['external_B_fields']))
         current_time = 0 + streak_length * seg_ind
@@ -414,54 +475,6 @@ if False:
     plt.plot(external_B_fields, probe_profile, 'd')
     plt.xlim([min(external_B_fields), max(external_B_fields)])
     plt.title('Spin profile w/ probe convolution and Kerr physics')
-
-
-# %% EXPORT TRKR DATA WITH NOISE
-if False:
-# %%
-    tvals = np.linspace(0, 7500, 200)  # ps
-    probe_position_list = [0]  # um
-#    probe_position_list = np.arange(-20, 100+1, 2)
-    applied_E_fields = [15]  # V/cm
-    applied_E_fields = np.arange(-40, 40+1, 4)
-    external_B_fields = [300]  # mT
-    num_fake_runs = 5
-    for run_ind in range(num_fake_runs):
-        for probe_position in probe_position_list:
-            for current_B_field in external_B_fields:
-                for applied_E_field in applied_E_fields:
-                    experiment_field_dict = \
-                        {'applied_E_fields': applied_E_field,
-                         'external_B_fields': current_B_field}
-                    probe_profile = vanilla_experiment.get_probe_profile(
-                        tvals, probe_position,
-                        **laser_kwargs, **experiment_field_dict)
-                    probe_noise = 0.0005 * np.random.randn(tvals.size)
-                    probe_offset = .005 * (2 * (0.5 - np.random.random()))
-                    probe_slope = .005 * np.random.randn()
-                    probe_linear_offset = \
-                        probe_offset + probe_slope * np.linspace(-0.5, 0.5,
-                                                                 tvals.size)
-                    probe_profile += probe_noise + probe_linear_offset
-
-#                    plt.plot(tvals, probe_profile, 'bd')
-#                    plt.plot(tvals,
-#                             probe_profile + probe_noise + probe_linear_offset, 'r')
-#                    plt.title('Spin profile w/ probe convolution and Kerr physics')
-#                    raise KeyboardInterrupt
-
-                    directory = "C:\\Data\\fake_data\\fake_trkr"
-                    filename = "TRKR_MirrorZ_{:.0f}_".format(probe_position) + \
-                               "{:.0f}Vcm_".format(float(applied_E_field)) + \
-                               "{:.0f}mT_".format(float(current_B_field)) + \
-                               "30K_818.9nm_run{:03d}.dat".format(run_ind + 1)
-                    filepath = directory + "\\" + filename
-        #            headerstr = "\n".join(10*["header header header"])
-                    headerstr = '\t'.join(["scancoord","lockin2x"])
-                    np.savetxt(filepath,
-                               np.vstack([tvals, probe_profile]).T,
-                               fmt='%.6e\t%.12e', delimiter='\t', newline='\n',
-                               header=headerstr, comments='')
 
 
 # %% EXPORT RSA DATA WITH NOISE

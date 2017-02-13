@@ -9,9 +9,9 @@ import numpy as np
 
 from experimentdataanalysis.analysis.dataclasses import FitData, ScanData
 from experimentdataanalysis.analysis.scandataprocessing \
-    import scandata_fit, scandata_list_fit, scandata_iterable_sort
-from experimentdataanalysis.analysis.scandatamodels \
-    import ScanDataModel
+    import ScanDataModel, \
+           scandata_list_fit, scandata_list_model_fit, \
+           scandata_iterable_sort
 
 from copy import deepcopy
 
@@ -29,6 +29,7 @@ class ScanDataSet:
         self.model = model
         self.chronological_key = "FastScanIndex"
         self.fit_result_scan_coord = model.fit_result_scan_coord
+        self.model_param_label_list = None
         self.model_param_array_list = None
         self.model_param_uncertainty_array_list = None
         self.model_param_arrays_scan_coord = None
@@ -47,38 +48,45 @@ class ScanDataSet:
             secondary_key = self.fit_result_scan_coord
             scandata_list_tuple, _ = \
                 scandata_iterable_sort(self.scandata_list,
-                                       self.model.field_name,
+                                       self.model.yfield,
                                        primary_key, secondary_key)
             self.scandata_list = list(scandata_list_tuple)
 
-    def fit_scandata_to_model(self, multiprocessing=False,
-                              purge_failed_fits=True):
+    def fit_scandata_to_model(self, multiprocessing=False):
+        fit_field = self.model.yfield
+        if fit_field is None:
+            fit_field = self.scandata_list[0].yfield
         # must filter out any pts with error = 0, will kill weighted fit
-        self.purge_zero_error_scandata(self.model.field_name)
-        scandata_list_fit(self.scandata_list,
-                          self.model.field_name,
-                          self.model.fitfunction,
-                          self.model.free_params,
-                          self.model.initial_params,
-                          self.model.param_bounds,
-                          self.model.max_fcn_evals,
-                          self.model.excluded_intervals,
-                          self.model.ignore_weights,
-                          multiprocessing)
-        for scandata in self.scandata_list:
-            fitdata = scandata.get_field_fitdata(self.model.field_name)
+        if not self.model.ignore_weights:
+            usable_scandata_list = self.get_nonzero_error_scandata(fit_field)
+        else:
+            usable_scandata_list = self.scandata_list
+        scandata_list_model_fit(usable_scandata_list, self.model,
+                                multiprocessing=multiprocessing)
+#        scandata_list_fit(self.scandata_list,
+#                          fit_field,
+#                          self.model.fitfunction,
+#                          self.model.get_fit_params_is_free_param(),
+#                          self.model.get_fit_params_initial_values(),
+#                          self.model.get_fit_params_bounds(),
+#                          self.model.max_fcn_evals,
+#                          self.model.excluded_intervals,
+#                          self.model.ignore_weights,
+#                          multiprocessing)
+        for scandata in usable_scandata_list:
+            fitdata = scandata.get_field_fitdata(fit_field)
             if fitdata is not None:
-                setattr(scandata, 'fitdata_' + self.model.field_name,
+                setattr(scandata, 'fitdata_' + fit_field,
                         FitData(fitdata.fitfunction, fitdata.partialfcn,
                                 fitdata.fitparams, fitdata.fitparamstds,
-                                self.model.model_params,
+                                self.model.get_fit_params_labels(),
                                 fitdata.fityvals,
                                 fitdata.freeparamindices,
                                 fitdata.covariancematrix,
                                 fitdata.meansquarederror))
         self.parse_fit_scandata()  # will purge scandata
 
-    def purge_zero_error_scandata(self, field_name):
+    def get_nonzero_error_scandata(self, field_name):
         def has_zero_error(scandata):
             yerrvals = scandata.get_field_yerr(field_name)
             if yerrvals is None:
@@ -88,66 +96,88 @@ class ScanDataSet:
             else:
                 return None
 
-        fail_message = ("Warning: ScanData value found with 0 uncertainty " +
-                        "in DataSeries, so ScanData was thrown out as " +
-                        "incompatible with weighted fit")
-        self.purge_scandata_list(field_name, has_zero_error, fail_message)
+        nonzero_error_scandata_list = [scandata
+                                       for scandata in self.scandata_list
+                                       if not has_zero_error(scandata)]
+        if len(nonzero_error_scandata_list) < len(self.scandata_list):
+            print("Warning: ScanData value found with 0 uncertainty " +
+                  "in DataSeries, so ScanData was thrown out as " +
+                  "incompatible with weighted fit")
+        return nonzero_error_scandata_list
 
-    def purge_failed_fit_scandata(self, field_name):
-        def has_no_fitdata(scandata):
-            return scandata.get_field_fitdata(field_name) is None
+#    def purge_zero_error_scandata(self, field_name):
+#        def has_zero_error(scandata):
+#            yerrvals = scandata.get_field_yerr(field_name)
+#            if yerrvals is None:
+#                return True
+#            elif 0 in yerrvals:
+#                return True
+#            else:
+#                return None
+#
+#        fail_message = ("Warning: ScanData value found with 0 uncertainty " +
+#                        "in DataSeries, so ScanData was thrown out as " +
+#                        "incompatible with weighted fit")
+#        self.purge_scandata_list(field_name, has_zero_error, fail_message)
+        
+#    def purge_failed_fit_scandata(self, field_name):
+#        def has_no_fitdata(scandata):
+#            return scandata.get_field_fitdata(field_name) is None
+#
+#        fail_message = ("Warning: Fit failed in ScanDataSet, erasing " +
+#                        "associated ScanData so all ScanData have " +
+#                        "associated fits during further analysis.")
+#        self.purge_scandata_list(field_name, has_no_fitdata, fail_message)
 
-        fail_message = ("Warning: Fit failed in ScanDataSet, erasing " +
-                        "associated ScanData so all ScanData have " +
-                        "associated fits during further analysis.")
-        self.purge_scandata_list(field_name, has_no_fitdata, fail_message)
-
-    def purge_scandata_list(self, test_field_name,
-                            scandata_failed_test_fcn, fail_message):
-        filtered_scandata_list = []
-        for scandata in self.scandata_list:
-            if not scandata_failed_test_fcn(scandata):
-                filtered_scandata_list.append(scandata)
-            else:
-                print(fail_message)
-                if 'Filepath' in scandata.info.keys():
-                    print("Associated filepath:")
-                    print(scandata.info['Filepath'])
-        self.scandata_list = filtered_scandata_list
+#    def purge_scandata_list(self, test_field_name,
+#                            scandata_failed_test_fcn, fail_message):
+#        filtered_scandata_list = []
+#        for scandata in self.scandata_list:
+#            if not scandata_failed_test_fcn(scandata):
+#                filtered_scandata_list.append(scandata)
+#            else:
+#                print(fail_message)
+#                if 'Filepath' in scandata.info.keys():
+#                    print("Associated filepath:")
+#                    print(scandata.info['Filepath'])
+#        self.scandata_list = filtered_scandata_list
 
     def parse_fit_scandata(self, fit_result_scan_coord_override=None):
         # TODO: just make this a scandata
-        field_name = self.model.field_name
+        yfield = self.model.yfield
+        if yfield is None:
+            yfield = self.scandata_list[0].yfield
         # if no fitdata for this field parameter, cancel parse
         fitted_scandata_list = \
             [scandata
              for scandata in self.scandata_list
-             if scandata.get_field_fitdata(field_name) is not None]
+             if scandata.get_field_fitdata(yfield) is not None]
         if len(fitted_scandata_list) == 0:
             return
-#        # purge failed fits, as they will cause issues further down.
-#        self.purge_failed_fit_scandata(field_name)
-        # all remaining scandata should have FitData and be processable:
-        # create dataseries of fit parameters & their uncertainties vs xval:
+        # all scandata in list should have FitData and be processable:
+        # create array of fit parameters & their uncertainties vs xval:
         if fit_result_scan_coord_override is None:
             xfield = self.fit_result_scan_coord
         else:
             xfield = fit_result_scan_coord_override
         x_array = np.array([scandata.info[xfield]
                             for scandata in fitted_scandata_list])
-        fitparams = []
-        fitparamstds = []
-        fitparams = list(zip(*(scandata.get_field_fitdata(field_name).fitparams
+        first_fitdata = fitted_scandata_list[0].get_field_fitdata(yfield)
+        fitparamlabels = list(first_fitdata.fitparamlabels)
+        fitparamlabel_array_list = [np.array(fitparamlabel_series)
+                                    for fitparamlabel_series in fitparamlabels]
+        fitparams = list(zip(*(scandata.get_field_fitdata(yfield).fitparams
                                for scandata in fitted_scandata_list)))
         fitparam_array_list = [np.array(fitparam_series)
                                for fitparam_series in fitparams]
         fitparamstds = \
-            list(zip(*(scandata.get_field_fitdata(field_name).fitparamstds
+            list(zip(*(scandata.get_field_fitdata(yfield).fitparamstds
                        for scandata in fitted_scandata_list)))
         fitparamstd_array_list = [np.array(fitparamstd_series)
                                   for fitparamstd_series in fitparamstds]
 
         # save these results to scandataset:
+        self.model_param_label_list = [xfield] + fitparamlabel_array_list
         self.model_param_array_list = [x_array] + fitparam_array_list
         self.model_param_uncertainty_array_list = fitparamstd_array_list
         self.model_param_arrays_scan_coord = xfield
@@ -165,6 +195,12 @@ class ScanDataSet:
     def get_scandata_list(self):
         return self.scandata_list
 
+    def get_model_param_label_list(self):
+        if self.model_param_label_list is None:
+            return []
+        else:
+            return self.model_param_label_list.copy()
+
     def get_model_param_array_list(self):
         if self.model_param_array_list is None:
             return []
@@ -180,26 +216,33 @@ class ScanDataSet:
     def extract_scandata(self, fit_result_scan_coord_override=None):
         if fit_result_scan_coord_override is not None:
             self.parse_fit_scandata(fit_result_scan_coord_override)
-        fit_result_scan_coord = self.model_param_arrays_scan_coord
         # extract actual data from model, fields are model output params
-        params = self.get_model_param_array_list()  # param 1 = x
+        # note "param 1" = xcoord of new scandata, fit_result_scan_coord
+        param_labels = self.get_model_param_label_list()  
+        params = self.get_model_param_array_list()
         param_sigmas = \
             self.get_model_param_uncertainty_array_list()
         if len(params) == 1 or len(param_sigmas) == 0:
             print('extract_scandata: no successful fits to extract!')
             return None
-        field_names, field_arrays, field_error_arrays = \
-            self.model.all_model_fields(params, param_sigmas)
-        field_names = ([fit_result_scan_coord] + field_names +  # x field name
-                       [field_name + '_error' for field_name in field_names])
-        field_arrays += field_error_arrays  # already starts with x-array!
+
+        field_names = param_labels + [param_name + '_error'  # no x-error
+                                      for param_name in param_labels[1:]]
+        field_arrays = params + param_sigmas  # already excludes x-error
 
         # get new scaninfo to reflect new coord types:
         new_scaninfo = {'fit_scandata_info_dicts': []}
-        for scandata in self.scandata_list:
-            if scandata.fitdata is not None:
-                info_copy = deepcopy(scandata.info)  # take a snapshot
-                new_scaninfo['fit_scandata_info_dicts'].append(info_copy)
+        fit_field = self.model.yfield
+        if fit_field is None:
+            fit_field = self.scandata_list[0].yfield
+        fitted_scandata_list = \
+            [scandata
+             for scandata in self.scandata_list
+             if scandata.get_field_fitdata(fit_field) is not None]
+        for scandata in fitted_scandata_list:
+            # alternative: just keep all scandata? could bloat though
+            info_copy = deepcopy(scandata.info)  # take a snapshot
+            new_scaninfo['fit_scandata_info_dicts'].append(info_copy)
         return ScanData(field_names,
                         field_arrays,
                         new_scaninfo,
@@ -235,14 +278,17 @@ def fit_scandataset_list_to_model(scandataset_list, multiprocessing=False):
         for scandataset in scandataset_list:
             model = scandataset.model
             if not model.ignore_weights:
-                scandataset.purge_zero_error_scandata(model.field_name)
-            for scandata in scandataset.scandata_list:
+                usable_scandata_list = \
+                    scandataset.get_nonzero_error_scandata(model.yfield)
+            else:
+                usable_scandata_list = scandataset.scandata_list
+            for scandata in usable_scandata_list:
                 scandata_fit_list.append([scandata,
-                                          model.field_name,
+                                          model.yfield,
                                           model.fitfunction,
-                                          model.free_params,
-                                          model.initial_params,
-                                          model.param_bounds,
+                                          model.get_fit_params_is_free_param(),
+                                          model.get_fit_params_initial_values(),
+                                          model.get_fit_params_bounds(),
                                           model.max_fcn_evals,
                                           model.excluded_intervals,
                                           model.ignore_weights])
@@ -280,12 +326,18 @@ def sort_scandata_into_sets(scandata_list, model, sort_keys=["Filepath"]):
     else:  # just grab set where all but last key already used, recursively
         first_scandataset_list = sort_scandata_into_sets(scandata_list,
                                                          model, sort_keys[:-1])
-        scandataset_list = []
+        new_scandataset_list = []
         for scandataset in first_scandataset_list:
-            scandataset_list.extend(  # subdivide _each_ set by _last_ key
+            # subdivide _each_ set by _last_ key
+            subdivided_scandataset_list = \
                 sort_scandata_into_sets_single_key(scandataset.scandata_list,
-                                                   model, sort_keys[-1]))
-        return scandataset_list
+                                                   model, sort_keys[-1])
+            old_setname = scandataset.setname
+            for new_scandataset in subdivided_scandataset_list:
+                new_scandataset.setname = \
+                    str(old_setname) + ", " + str(new_scandataset.setname)
+            new_scandataset_list.extend(subdivided_scandataset_list)
+        return new_scandataset_list
 
 
 def sort_scandata_into_sets_single_key(scandata_list, model, sort_key):
@@ -299,7 +351,9 @@ def sort_scandata_into_sets_single_key(scandata_list, model, sort_key):
         if sort_key is None:
             pass  # all scandata put into one set, ignore sorting
         else:
-            raise KeyError("sort_scandata_into_sets: invalid sort_key")
+#            print("Warning: sort key not found in ScanData, skipping...")
+#            raise KeyError("sort_scandata_into_sets: invalid sort_key")
+            pass
     except ValueError:  # sort key non-numeric, so pre-sort alphanumerically
         scandata_list, _ = scandata_iterable_sort(scandata_list, 0,
                                                   sort_key, sort_key,

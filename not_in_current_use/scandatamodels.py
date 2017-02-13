@@ -31,7 +31,7 @@ class ScanDataModel:
     All models should have fcns all_model_fields
     """
     def __init__(self, **kwargs):
-        self.model_type = "specific_model_name"
+        self.model_name = "specific_model_name"
         self.fit_result_scan_coord = "MiddleScanCoord"  # coord spanning each ScanData_SET_
         self.field_name = "[data field]"
         self.fitfunction = None
@@ -85,7 +85,7 @@ class ScanDataModel:
 
     def __eq__(self, other):
         return all([
-            self.model_type == other.model_type,
+            self.model_name == other.model_name,
             self.field_name == other.field_name,
             self.free_params == other.free_params,
             self.initial_params == other.initial_params,
@@ -107,7 +107,7 @@ class LinearFitModel(ScanDataModel):
     All models should have fcns all_model_fields
     """
     def __init__(self, **kwargs):
-        self.model_type = "fitfcn_simple_line"
+        self.model_name = "fitfcn_simple_line"
         self.fit_result_scan_coord = "Voltage"
         self.field_name = "[data field]"
         self.fitfunction = fitfcns.fitfcn_simple_line
@@ -168,7 +168,7 @@ class GaussianModel(ScanDataModel):
     All models should have fcns all_model_fields
     """
     def __init__(self, **kwargs):
-        self.model_type = "1d_gaussian_with_linear_offset"
+        self.model_name = "1d_gaussian_with_linear_offset"
         self.fit_result_scan_coord = "MiddleScanCoord"
         self.field_name = "[data field]"  # key field, probably lockin2x
         self.fitfunction = fitfcns.fitfcn_1d_gaussian_with_linear_offset
@@ -252,7 +252,7 @@ class RSAFieldScanModel(ScanDataModel):
     All models should have fcns all_model_fields
     """
     def __init__(self, **kwargs):
-        self.model_type = "fitfcn_rsa_field_scan"
+        self.model_name = "fitfcn_rsa_field_scan"
         self.fit_result_scan_coord = "MiddleScanCoord"  # should be 3rd coord, but unknown!
         self.field_name = "[data field]"  # key field, probably lockin2x
         self.fitfunction = fitfcns.fitfcn_rsa_field_scan
@@ -366,7 +366,7 @@ class SpinLifetimeModel(ScanDataModel):
     All models should have fcns all_model_fields
     """
     def __init__(self, **kwargs):
-        self.model_type = "fitfcn_two_exp_decay"
+        self.model_name = "fitfcn_two_exp_decay"
         self.fit_result_scan_coord = "MiddleScanCoord"  # should be 3rd coord, but unknown!
         self.field_name = "[data field]"  # gaussian area
         self.fitfunction = fitfcns.fitfcn_two_exp_decay
@@ -445,7 +445,7 @@ class SinusoidalSpinLifetimeModel(ScanDataModel):
     All models should have fcns all_model_fields
     """
     def __init__(self, **kwargs):
-        self.model_type = "fitfcn_two_exp_sin_decay"
+        self.model_name = "fitfcn_two_exp_sin_decay"
         self.fit_result_scan_coord = "Voltage"
         self.field_name = "[data field]"  # key field, probably lockin2x
         self.fitfunction = fitfcns.fitfcn_two_exp_sin_decay
@@ -529,7 +529,7 @@ class IndependentSinusoidalSpinLifetimeModel(ScanDataModel):
     All models should have fcns all_model_fields
     """
     def __init__(self, **kwargs):
-        self.model_type = "fitfcn_two_indep_exp_sin_decay"
+        self.model_name = "fitfcn_two_indep_exp_sin_decay"
         self.fit_result_scan_coord = "Voltage"
         self.field_name = "[data field]"  # key field, probably lockin2x
         self.fitfunction = fitfcns.fitfcn_two_indep_exp_sin_decay
@@ -712,7 +712,7 @@ class TwoLifetimesOppositePhaseTRKRModel(ScanDataModel):
     All models should have fcns all_model_fields
     """
     def __init__(self, **kwargs):
-        self.model_type = "fitfcn_two_opposite_exp_sin_decay"
+        self.model_name = "fitfcn_two_opposite_exp_sin_decay"
         self.fit_result_scan_coord = "Voltage"
         self.field_name = "[data field]"  # key field, probably lockin2x
         self.fitfunction = fitfcns.fitfcn_two_opposite_exp_sin_decay
@@ -826,97 +826,50 @@ class TwoLifetimesOppositePhaseTRKRModel(ScanDataModel):
 
 
 # %% NEEDS TESTS, SPHINX DOCUMENTATION
-class FeatureVectorsTwoLifetimesOppositePhaseTRKRModel(ScanDataModel):
+class FeatureVectorsTwoSpeciesWithHeatingTRKRModel(ScanDataModel):
     """
     Expected feature vector:
     (delaytime, efield, bfield,
-     pump_probe_dist, wavelength, temperature,
+     pump_probe_dist, wavelength, temperature, set_temperature,
      runID, index_in_run)
     """
     def __init__(self, **kwargs):
-        self.model_type = "fitfcn_featurevector_two_opposite_exp_sin_decay"
+        self.model_name = "fitfcn_featurevector_two_heated_species_exp_sin_decay"
         self.fit_result_scan_coord = "Pump-Probe Distance (um)"
         self.field_name = "measurement"  # just 1st coord of feature vector
         self.fitfunction = \
-            fitfcns.fitfcn_featurevector_two_opposite_exp_sin_decay
+            fitfcns.fitfcn_featurevector_two_heated_species_exp_sin_decay
         self.model_params = \
-            ["num_pulses", "pulse_amplitude", "species_amp_ratio",
-             "lifetime1", "lifetime2", "gfactor", "phase",
-             "species1_efield_heating_coeff", "species2_efield_heating_coeff",
+            ["num_pulses",
+            "pulse_amplitude", "species_amp_ratio", "lifetime1", "lifetime2",
+            "gfactor_mean", "gfactor_diff", "phase_mean", "phase_diff",
+             "efield_heating_coeff",
+             "absorption_vs_temp_exponent1", "absorption_vs_temp_exponent2",
+             "lifetime_vs_temp_exponent", "gfactor_temp_sensitivity",
              "mobility","slope", "offset"]
-        # params = num_pulses, pulse_amplitude, species_amp_ratio,
-        #          lifetime1, lifetime2, gfactor, phase, 
-        #          species1_efield_heating_coeff, species2_efield_heating_coeff
-        #          mobility, slope, offset
-        self.free_params = [False, True, True,
-                            True, True, True, True,
-                            True, True,
-                            False, True, True]
-        self.initial_params = [40, 0.04, 2.0,
-                               20000, 8000, 0.44, 0.0,
-                               0.5, 0.5,
-                               1e-4, 0, 0]
-        self.param_bounds = [(1,1000), (0, 1), (-100, 100),
-                             (1, 1e9), (1, 1e9), (0.3, 0.6), (-2*np.pi, 2*np.pi),
-                             (0, 4.0), (0, 4.0),
-                             (0, 1), (-1e-6, 1e-6), (-0.01, 0.01)]
-        self.max_fcn_evals = 10000
-        self.excluded_intervals = None
-        self.ignore_weights = True
-        
-        # unique to this model!
-        self.b_field = 0  # in mT
-
-        # keyword args override defaults
-        for key, val in kwargs.items():
-            self.__dict__[key] = val
-
-        self.initial_params = np.clip(self.initial_params,
-                                      *zip(*self.param_bounds))
-
-    def all_model_fields(self, model_param_array_list,
-                         model_param_uncertainty_array_list):
-        params = model_param_array_list[1:]  # 1st param is xcoords
-        param_sigmas = model_param_uncertainty_array_list
-        if len(params) == 0 or len(params) != len(param_sigmas):
-            raise ValueError("ScanDataModel: tried to extract " +
-                             "fit results without successful fit")
-        return self.model_params, model_param_array_list, \
-                model_param_uncertainty_array_list
-
-
-# %% NEEDS TESTS, SPHINX DOCUMENTATION
-class FeatureVectorsIndependentSinusoidalTRKRModel(ScanDataModel):
-    """
-    Expected feature vector:
-    (delaytime, efield, bfield,
-     pump_probe_dist, wavelength, temperature,
-     runID, index_in_run)
-    """
-    def __init__(self, **kwargs):
-        self.model_type = "fitfcn_featurevector_two_independent_exp_sin_decay"
-        self.fit_result_scan_coord = "Pump-Probe Distance (um)"
-        self.field_name = "measurement"  # just 1st coord of feature vector
-        self.fitfunction = \
-            fitfcns.fitfcn_featurevector_two_independent_exp_sin_decay
-        self.model_params = \
-            ["num_pulses", "pulse_amplitude", "species_amp_ratio",
-             "lifetime1", "lifetime2", "gfactor1", "gfactor2",
-             "phase1", "phase2", "mobility", "slope", "offset"]
-        # params = num_pulses, pulse_amplitude, species_amp_ratio,
-        #          lifetime1, lifetime2, gfactor1, gfactor2,
-        #          phase1, phase2, mobility, slope, offset
-        self.free_params = [False, True, True,
-                            True, True, True, True,
-                            False, False, False, False, False]
-        self.initial_params = [40, 0.04, 2.0,
-                               18000, 17000, 0.439, 0.441,
-                               0, -2*np.pi/3, 1e-4, 0, 0]
-        self.param_bounds = [(1,1000), (0, 1), (-100, 100),
-                             (1, 1e9), (1, 1e9),
-                             (0.3, 0.6), (0.3, 0.6),
-                             (-np.pi, np.pi), (-2*np.pi, np.pi),
-                             (0, 1), (-1e-6, 1e-6), (-0.01, 0.01)]
+        # params = num_pulses,
+        #          pulse_amplitude, species_amp_ratio, lifetime1, lifetime2,
+        #          gfactor_mean, gfactor_diff, phase_mean, phase_diff,
+        #          efield_heating_coeff,
+        #          absorption_vs_temp_exponent1, absorption_vs_temp_exponent2,
+        #          lifetime_vs_temp_exponent, gfactor_temp_sensitivity,
+        #           mobility, slope, offset
+        self.free_params = [False, True, True, False, True,
+                            True, False, False, False,
+                            False, False, False,
+                            False, False,
+                            False, False, False],
+        self.initial_params = [20, 0.008, 1.6, 20260, 8000,
+                               0.44, 0.0, np.pi/2, -np.pi,
+                               0.03, 0.0, 0.0,
+                               -1.5, 3.6e-4,
+                               1e-4, 0, 0],
+        self.param_bounds = [(1,1000), (0, 1), (1.5, 5.0), (1, 1e9), (1e3, 2e4),
+                             (0.3, 0.6), (-0.2, 0.2),
+                             (-4*np.pi, 4*np.pi), (-4*np.pi, 4*np.pi),
+                             (0.01, 0.06), (-10.0, 10.0), (-10.0, 10.0),
+                             (-1.8, -1.2), (0, 1e-3),
+                             (-1e-2, 1e-2), (-1e-6, 1e-6), (-0.01, 0.01)],
         self.max_fcn_evals = 10000
         self.excluded_intervals = None
         self.ignore_weights = True

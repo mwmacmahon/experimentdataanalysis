@@ -8,6 +8,8 @@ FitData construct from dataclasses.py
 @author: vsih-lab
 """
 
+from collections import OrderedDict
+from copy import deepcopy
 import inspect
 
 import numpy as np
@@ -22,6 +24,89 @@ from experimentdataanalysis.analysis.generalutilities \
 LASER_REPRATE = 13160  # ps period
 
 
+# %% NEEDS TESTS, SPHINX DOCUMENTATION
+class ScanDataModel():
+    """
+    Model used to facilitate fitting a function to ScanData.
+    
+    Attributes designed to be either almost entirely overwritten via keyword
+    parameters or the whole class inherited. To avoid long, bloated analysis
+    scripts, it is recommended to create a separate module to contain these
+    fit models, which can be imported into data analysis scripts.
+
+        e.g.    [in data analysis script:]
+                gaussian_model = ScanDataModel(
+                                    model_name="Gaussian Model",
+                                    =fcn_gaussian_fit,
+                                    (etc.),
+                                    )  # can leave some attributes as default
+
+        e.g.    [likely in module containing user's fit models:]
+                class GaussianModel(ScanDataModel):
+                    def __init__(self, **kwargs):
+                        # note: all ScanDataModel's attributes must be written!
+                        self.model_name = "Gaussian Model"
+                        self.yfield = None
+                        self.fitfunction = fcn_gaussian_fit
+                        (etc.)
+                    (other methods are not listed, ScanDataModel's
+                     inherited versions will work just fine for most models)
+
+                [in data analysis script:]
+                model = my_fit_models_module.GaussianModel()
+    """
+    def __init__(self, **kwargs):
+        self.model_name = "Generic Linear Model"
+        self.yfield = None  # if not set, scandata.y used as fit 'y' values
+        self.fitfunction = lambda x, slope, y0: y0 + slope * x
+        self.model_params = \
+            OrderedDict([('slope', {'free': True,
+                                    'initial value': 0,
+                                    'bounds': (-np.inf, np.inf)}),
+                         ('y0', {'free': True,
+                                 'initial value': 0}),  # param unbounded
+                        ])
+        self.max_fcn_evals = 20000
+        self.excluded_intervals = None
+        self.ignore_weights = False
+
+        # for ScanDataSets: coord spanning the set
+        self.fit_result_scan_coord = "SecondScanCoord"  
+
+        # keyword args override defaults
+        for key, val in kwargs.items():
+            self.__dict__[key] = val
+
+    def get_fit_params_labels(self):
+        return np.array(list(self.model_params.keys()))
+
+    def get_fit_params_is_free_param(self):
+        is_free = [param_dict.get('free', False)  # default: fixed
+                   for param_dict in self.model_params.values()]
+        return np.array(is_free, dtype=np.bool)
+            
+    def get_fit_params_initial_values(self):
+        initial_values = [param_dict.get('initial value', 0)  # default: 0
+                          for param_dict in self.model_params.values()]
+        return np.array(initial_values)
+            
+    def get_fit_params_bounds(self):
+        bounds = [param_dict.get('bounds',
+                                 (-np.inf, np.inf))  # default: no bounds
+                  for param_dict in self.model_params.values()]
+        return np.array(bounds)
+
+    def get_which_fit_params_fit_at_bound(self, fitdata):
+        param_fits = fitdata.fitparams
+        param_bounds = self.get_fit_params_bounds()
+        # TODO: FINISH THIS
+        return NotImplementedError('Function not implemented yet!')
+
+    def copy(self):  # must deep copy all mutable attributes
+        kwargs = deepcopy(self.__dict__)
+        return self.__class__(**kwargs)
+        
+
 # %% NEEDS TEST, SPHINX DOCUMENTATION
 def scandata_model_fit(scandata, model):
     """
@@ -29,17 +114,18 @@ def scandata_model_fit(scandata, model):
     function and parameters.
 
     The resulting FitData is stored in the ScanData's info dict under the
-    key 'fitdata_[field_name]'. 'None' is stored for failed fits.
+    key 'fitdata_[yfield]'. 'None' is stored for failed fits.
     The FitData (or None) is also returned.
     """    
-    fitdata = scandata_fit(scandata, model.field_name, model.fitfunction,
-                           model.free_params, model.initial_params,
-                           model.param_bounds, model.max_fcn_evals,
+    fitdata = scandata_fit(scandata, model.yfield, model.fitfunction,
+                           model.get_fit_params_is_free_param(),
+                           model.get_fit_params_initial_values(),
+                           model.get_fit_params_bounds(), model.max_fcn_evals,
                            model.excluded_intervals, model.ignore_weights)
     if fitdata is not None:
         return FitData(fitdata.fitfunction, fitdata.partialfcn,
                        fitdata.fitparams, fitdata.fitparamstds,
-                       model.model_params, fitdata.fityvals,
+                       model.get_fit_params_labels(), fitdata.fityvals,
                        fitdata.freeparamindices,
                        fitdata.covariancematrix,
                        fitdata.meansquarederror)
@@ -48,18 +134,23 @@ def scandata_model_fit(scandata, model):
 
 
 # %% NEEDS TEST, SPHINX DOCUMENTATION
-def scandata_list_model_fit(scandata, model, multiprocessing=False):
+def scandata_list_model_fit(scandata_list, model, multiprocessing=False):
     """
     Uses generic_curve_fit to fit a ScanData field with the given model's
     function and parameters.
 
     The resulting FitData is stored in the ScanData's info dict under the
-    key 'fitdata_[field_name]'. 'None' is stored for failed fits.
+    key 'fitdata_[yfield]'. 'None' is stored for failed fits.
     The FitData (or None) is also returned.
     """
-    fitdata_list = scandata_list_fit(scandata, model.field_name,
-                                     model.fitfunction, model.free_params,
-                                     model.initial_params, model.param_bounds,
+    scandata_list = list(scandata_list)  # ensure an actual list
+    if len(scandata_list) == 0:
+        return []
+    fitdata_list = scandata_list_fit(scandata_list, model.yfield,
+                                     model.fitfunction,
+                                     model.get_fit_params_is_free_param(),
+                                     model.get_fit_params_initial_values(),
+                                     model.get_fit_params_bounds(),
                                      model.max_fcn_evals,
                                      model.excluded_intervals,
                                      model.ignore_weights, multiprocessing)
@@ -69,7 +160,8 @@ def scandata_list_model_fit(scandata, model, multiprocessing=False):
             fixed_fitdata_list.append(
                         FitData(fitdata.fitfunction, fitdata.partialfcn,
                                 fitdata.fitparams, fitdata.fitparamstds,
-                                model.model_params, fitdata.fityvals,
+                                model.get_fit_params_labels(),
+                                fitdata.fityvals,
                                 fitdata.freeparamindices,
                                 fitdata.covariancematrix,
                                 fitdata.meansquarederror))
@@ -79,27 +171,29 @@ def scandata_list_model_fit(scandata, model, multiprocessing=False):
 
 
 # %% NEEDS TEST, SPHINX DOCUMENTATION
-def scandata_fit(scandata, field_name, fitfunction, free_params,
+def scandata_fit(scandata, yfield, fitfunction, free_params,
                  initial_params, param_bounds, max_fcn_evals=20000,
                  excluded_intervals=None, ignore_weights=False):
     """
     Uses generic_curve_fit to fit a ScanData field with the given function
     and parameters.
     The resulting FitData is stored in the ScanData's info dict under the
-    key 'fitdata_[field_name]'. 'None' is stored for failed fits.
+    key 'fitdata_[yfield]'. 'None' is stored for failed fits.
     The FitData (or None) is also returned.
     """
-    xvals, yvals, yerrvals = scandata.get_field_xyyerr(field_name)
+    if yfield is None:
+        yfield = scandata.yfield
+    xvals, yvals, yerrvals = scandata.get_field_xyyerr(yfield)
     fitdata = generic_curve_fit(xvals, yvals, yerrvals, fitfunction,
                                 free_params, initial_params,
                                 param_bounds, max_fcn_evals,
                                 excluded_intervals, ignore_weights)
-    setattr(scandata, 'fitdata_' + field_name, fitdata)
+    setattr(scandata, 'fitdata_' + yfield, fitdata)
     return fitdata
 
 
 # %% NEEDS TEST, SPHINX DOCUMENTATION
-def scandata_list_fit(scandata_list, field_name, fitfunction,
+def scandata_list_fit(scandata_list, yfield, fitfunction,
                       free_params, initial_params, param_bounds,
                       max_fcn_evals=20000, excluded_intervals=None,
                       ignore_weights=False, multiprocessing=False):
@@ -113,33 +207,46 @@ def scandata_list_fit(scandata_list, field_name, fitfunction,
     instead of using the same parameters for each fit.
 
     FitData resulting from fits are stored in the info dict of each ScanData
-    under the key 'fitdata_[field_name]'. 'None' is stored for failed fits.
+    under the key 'fitdata_[yfield]'. 'None' is stored for failed fits.
     These FitData (and Nones) are also returned as a list.
     """
     scandata_list = list(scandata_list)  # ensure an actual list
-    
-    try:  # all different fit params
+    if len(scandata_list) == 0:
+        return []
+    try:  # assume first all args are equal length, correspond to ScanData 1:1
+        assert len(fitfunction) == len(scandata_list)
+        assert len(yfield) == len(scandata_list)
+        assert len(free_params) == len(scandata_list)
+        assert len(initial_params) == len(scandata_list)
+        assert len(param_bounds) == len(scandata_list)
+        assert len(max_fcn_evals) == len(scandata_list)
+        assert len(excluded_intervals) == len(scandata_list)
+        assert len(ignore_weights) == len(scandata_list)
+        yfield = [field if field is not None else scandata.yfield
+                  for scandata, field in zip(scandata_list, yfield)]
         xyyerr_lists = \
             list(zip(*[scandata.get_field_xyyerr(field)
-                       for scandata, field in zip(scandata_list, field_name)]))
+                       for scandata, field in zip(scandata_list, yfield)]))
         assert len(xyyerr_lists[0]) == len(scandata_list)  # zip error check
         input_args_list = list(zip(*xyyerr_lists,
                                    fitfunction, free_params, initial_params,
                                    param_bounds, max_fcn_evals,
                                    excluded_intervals, ignore_weights))
         assert len(input_args_list) == len(scandata_list)  # zip error check
-        field_name_list = field_name
-    except (TypeError, AssertionError):  # all same fit params
-        input_args_list = [[*scandata.get_field_xyyerr(field_name),
+        yfield_list = yfield
+    except (TypeError, AssertionError):  # assume all scandata share fit params
+        if yfield is None:
+            yfield = scandata_list[0].yfield
+        input_args_list = [[*scandata.get_field_xyyerr(yfield),
                             fitfunction, free_params, initial_params,
                             param_bounds, max_fcn_evals,
                             excluded_intervals, ignore_weights]
                            for scandata in scandata_list]
-        field_name_list = [field_name] * len(scandata_list)
+        yfield_list = [yfield] * len(scandata_list)
     fitdata_list = multiprocessable_map(generic_curve_fit, input_args_list,
                                         multiprocessing)
     for scandata, fitdata, field in \
-                            zip(scandata_list, fitdata_list, field_name_list):
+                            zip(scandata_list, fitdata_list, yfield_list):
         setattr(scandata, 'fitdata_' + field, fitdata)
     return fitdata_list
 
@@ -154,8 +261,9 @@ def generic_curve_fit(xvals, yvals, yerrvals, fitfunction, free_params,
     to "x" values and whose output is assumed to correspond to "y" values.
 
     Positional arguments:
-    :scandata: ScanData object containing data points to fit.
-    :field_name: Name of field to fit, e.g. "lockin2x"
+    :xvals:
+    :yvals:
+    :yerrvals:
     :function (x,...)->y: function mapping a numpy array x to numpy array y
     :free_params: list/tuple describing whether each non-x parameter should
     be free, should have True/False for each parameter.
@@ -273,7 +381,7 @@ def generic_curve_fit(xvals, yvals, yerrvals, fitfunction, free_params,
                         sum((y_fit - y_real)**2 for y_fit, y_real in
                             zip(fityvals, original_yvals))
     return FitData(fitfunction, partialfcn, fitparams, fitparamstds,
-                   len(fitparams) * [''], fityvals,
+                   len(fitparams) * ['?'], fityvals,
                    free_param_indices, rawcovariances, meansquarederror)
 
 
@@ -301,9 +409,12 @@ def check_fit_parameter_consistency(num_nonx_args, free_params,
     if (len(free_params) != num_nonx_args or
         len(initial_params) != num_nonx_args or
             len(param_bounds) != num_nonx_args):
-                raise TypeError("fit_function_to_dataseries: inconsistent " +
-                                "parameter counts, recall first argument " +
-                                "is x, not a parameter.")
+                err_msg = ("fit_function_to_dataseries: inconsistent " +
+                           "parameter counts, recall first argument " +
+                           "is x, not a parameter.")
+                err_msg += "\n # Free params: {}".format(len(free_params))
+                err_msg += "\n # Non-X params: {}".format(num_nonx_args)
+                raise TypeError(err_msg)
     free_params_bool = [bool(x) for x in free_params]
     free_param_indices = [i for i, x in enumerate(free_params_bool)
                           if x is True]
@@ -458,10 +569,10 @@ def process_scandata_fields(scandata, xyyerr_fcn,
 
     Note the xfield will be overwritten for each set in sequence! Careful...
     """
-    if only_process_these_fields is None:
-        field_list = scandata.fields
-    else:
+    if only_process_these_fields is not None:
         field_list = only_process_these_fields
+    else:
+        field_list = scandata.fields
 
     # prune x, yerr fields so that we can use the rest to make x, y, yerr sets
     field_list = [field_name for field_name in field_list
@@ -472,6 +583,11 @@ def process_scandata_fields(scandata, xyyerr_fcn,
         # run xyyerr_fcn, overwrite attributes with returned values
         # (unless returned values are None)
         y, yerr = scandata.get_field_yyerr(field_name)
+        if y is None:
+            print("Warning: process_scandata_fields: " +
+                  "field {} not found in ScanData, ".format(field_name) +
+                  "skipping...")
+            continue
         new_x, new_y, new_yerr = \
             xyyerr_fcn(x_copy, y, yerr, *xyyerr_fcn_args,
                        field_name=field_name, **xyyerr_fcn_kwargs)

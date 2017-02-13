@@ -18,11 +18,10 @@ from experimentdataanalysis.analysis.scandataprocessing \
            process_scandata_fields, \
            generic_curve_fit, \
            scandata_model_fit
-from experimentdataanalysis.analysis.scandatamodels \
-    import FeatureVectorsTwoLifetimesOppositePhaseTRKRModel, \
-           FeatureVectorsIndependentSinusoidalTRKRModel
 from experimentdataanalysis.parsing.scandataparsing import \
         fetch_dir_as_unfit_scandata_iterator
+
+import fit_models_two_species_pump_probe as fit_models
 
 
 #GFACTORCONSTANT = 0.013996  # 1/(ps*Tesla), = bohr magneton/2*pi*hbar
@@ -41,10 +40,13 @@ in_filepath_element_keyword_list = [("Vcm", "Electric Field (V/cm)"),
                                     ("nm", "Wavelength (nm)"),
                                     ("ps", "Delay Time (ps)"),
                                     ("run", "RunIndex"),
-                                    ("x", "Voltage (V)")]
+                                    ("V", "Voltage (V)"),
+                                    ("x", "SecondScanCoord")]
+
 # for this one, if element[0] found, next element stored w/ key element[1]
 in_filepath_next_element_keyword_list = [("MirrorZ",
-                                          "Pump-Probe Distance (um)")]
+                                          "Pump-Probe Distance (um)"),
+                                          ("Voltage", "Voltage (V)")]
 FILEPATH_PARSING_KEYWORD_LISTS = [[],
                                   in_filepath_next_element_keyword_list,
                                   in_filepath_element_keyword_list]
@@ -103,12 +105,23 @@ def scandata_list_to_feature_vector_scandata(scandata_list, fvec_fields,
         scandata_feature_vector_array[:, -2] = \
             scandata_index * np.ones(scandata_nfvecs)
         scandata_feature_vector_array[:, -1] = np.arange(scandata_nfvecs)
-        scandata_measurement_error = getattr(scandata,
-                                             fvec_fields[0][1] + '_error',
-                                             None)  # default to unknown error
-        if scandata_measurement_error is not None:
-            scandata_measurement_error = \
-                scandata_measurement_error[indices_to_use_mask]
+
+#        scandata_measurement_error = getattr(scandata,
+#                                             fvec_fields[0][1] + '_error',
+#                                             None)  # default to unknown error
+#        if scandata_measurement_error is not None:
+#            scandata_measurement_error = \
+#                scandata_measurement_error[indices_to_use_mask]
+
+        # TEMPORARY: MESSING WITH WEIGHTS
+        # note: for some bizarre reason making it the mean of the ABS of the
+        # data ruins the effect - making the data 'weight' independent of
+        # magnitude.
+#        scandata_measurement_error = \
+#           np.ones(scandata_nfvecs) * (1.0 / np.mean(scandata.y))
+        scandata_measurement_error = \
+           np.ones(scandata_nfvecs) * (1.0 / np.mean(np.abs(scandata.y)))**2
+
         if feature_vector_array is None:  # if examining first scandata
             feature_vector_array = scandata_feature_vector_array
             measurement_error_array = scandata_measurement_error
@@ -159,84 +172,80 @@ def split_scandata_into_training_and_test_sets(fvec_scandata, test_fraction,
     return training_set_fvec_scandata, test_set_fvec_scandata
 
 
+def plot_scandata_fvec_fit(scandata_index, scandata_list,
+                           axes, model, forced_fitparams=None):
+    if forced_fitparams is not None:
+        fitparams = forced_fitparams
+    else:
+        fitparams = model.fitdata.fitparams
+    scandata_mask = (model.fvec_scandata.runID == scandata_index)
+    fvecs = model.fvec_scandata.x[scandata_mask]
+    yvals = model.fvec_scandata.y[scandata_mask]
+#    yerrvals = model.fvec_scandata.measurement_error[scandata_mask]
+
+    # find xvals, a little roundabout
+    xfield = scandata_list[scandata_index].xfield
+    for fvec_elem_index, (_, original_field) in enumerate(fvec_fields):
+        if original_field == xfield:
+            xvals = model.fvec_scandata.x[scandata_mask, fvec_elem_index]
+            break
+
+    axes.set_title(model.model_name)
+    axes.plot(xvals, yvals, 'bd', markersize=5)
+    axes.plot(xvals, model.fitfunction(fvecs.T, *fitparams), 'r-')
+    plt.xticks([])
+    plt.yticks([])
+
+
 # %%
 if __name__ == '__main__':
 # %%
     # GENERAL OPTIONS
-    test_fraction = 0.1
+    test_fraction = 0.3
     test_by_run = True  # TEST BY RUN VS INDIVIDUAL POINTS
 
-# %%
     # DATA TO FIT
-#    dirpath = ("C:\\Data\\fake_data\\fake_trkr")
+    dirpath = ("C:\\Data\\fake_data\\fake_trkr")
+#    dirpath = ("C:\\Data\\fake_data\\fake_trkr_huge_slopes")
 #    dirpath = ("C:\\Data\\fake_data\\fake_rsa")
-    dirpath = ("C:\\Data\\august_data\\160902\\" +
-               "BestDataFromWavelengthDependence_TRKRvsV_300mT_" +
-               "033XT-A5_818.9nm_30K_2Dscan_Voltage_DelayTime")
+#    dirpath = ("C:\\Data\\august_data\\160902\\" +
+#               "BestDataFromWavelengthDependence_TRKRvsV_300mT_" +
+#               "033XT-A5_818.9nm_30K_2Dscan_Voltage_DelayTime")
 
     # DATA OPTIONS:
     # manipulations on each scandata, e.g. filling missing info:
     def update_scandata_info(scandata):
-        scandata.info['Wavelength (nm)'] = 818.9  # since filename reading iffy
-        scandata.info['Set Temperature (K)'] = 30.0  # UNLESS HAVE ACTUAL TEMP
-        if 'Voltage (V)' in scandata.info:
-            efield = 20 * scandata.info['Voltage (V)']
-            scandata.info['Electric Field (V/cm)'] = efield
+        if 'TRKRvsV' in scandata.info['Filepath']:
+            scandata.info['Voltage (V)'] = scandata.info['SecondScanCoord']
+        if 'Set Temperature (K)' not in scandata.info.keys():
+            scandata.info['Set Temperature (K)'] = 30.0  # ASSUME DEFAULT
+        if 'temperature' not in scandata.fields:
+            scandata.info['temperature'] = scandata.info['Set Temperature (K)']
+        if 'Electric Field (V/cm)' not in scandata.info:
+            if 'Voltage (V)' in scandata.info:
+                efield = 20 * scandata.info['Voltage (V)']
+                scandata.info['Electric Field (V/cm)'] = efield
+            else:
+                scandata.info['Electric Field (V/cm)'] = 0.0
         if 'Pump-Probe Distance (um)' not in scandata.info.keys():
             scandata.info['Pump-Probe Distance (um)'] = 0.0
 
-    # tweaks to each model, e.g. if dataset has super high amplitude:
-    def update_model_params(models_to_compare):
-        feature_vector_model_1 = models_to_compare[0]
-        # params = num_pulses, pulse_amplitude, species_amp_ratio,
-        #          lifetime1, lifetime2, gfactor, phase,
-        #          species1_efield_heating_coeff, species2_efield_heating_coeff
-        #          mobility, slope, offset
-        feature_vector_model_1.free_params = \
-                                    [False, True, False,
-                                     False, True, True, False,
-                                     False, True,
-                                     False, False, False]
-        feature_vector_model_1.initial_params = \
-                                    [20, 0.004, 2.0,
-                                     20000, 10000, 0.44, 0,
-                                     0.2, 0.5,
-                                     1e-4, 0, 0]
-        feature_vector_model_1.param_bounds[1] = (0, 1)  # pulse amp
-        feature_vector_model_1.param_bounds[2] = (1.5, 3.0)  # species ratio
-        feature_vector_model_1.param_bounds[4] = (1e3, 2e4)  # short lifetime
-        feature_vector_model_2 = models_to_compare[1]
-        # params = num_pulses, pulse_amplitude, species_amp_ratio,
-        #          lifetime1, lifetime2, gfactor1, gfactor2,
-        #          phase1, phase2, mobility, slope, offset
-        feature_vector_model_2.free_params = \
-                                      [False, True, True,
-                                       False, False, False, True,
-                                       False, True, True, False, False]
-        feature_vector_model_2.initial_params = \
-                                      [20, 0.0045, 1.0,
-                                       20260, 20260, 0.44, 0.42,
-                                       0, -1*np.pi/3, 1e-4, 0, 0]
-        feature_vector_model_2.param_bounds[1] = (1e-3, 1)  # pulse amp
-        feature_vector_model_2.param_bounds[6] = (0.42, 0.44)  # gfactor2
-
     # manually set uncertainty of data
-    fixed_uncertainty = 1e-3
+    fixed_uncertainty = 2e-4
 #    fixed_uncertainty = None  # ...or don't
 
     # excluded intervals of data's xfield (assumed scan coordinate)
     # (replaces model-specific excluded intervals)
     # (remember, applied post-data-filters, e.g. forcing positive delay times)
-    excluded_intervals = [[-100, 400],  # for simulated TRKR
-                          [LASER_REPRATE - 15, 15000]]
-#    excluded_intervals = [[-100, 400],  # for actual TRKR @818.9, no neg data yet
-#                          [7000, 15000]]
+    excluded_intervals = [[-100, 100],
+#                          [LASER_REPRATE - 15, 15000]]  # neg dalyta on to 15ps
+                          [7000, 15000]]  # no negative data at all
 
 
     # DEFINE MAP OF DATA TO FEATURE VECTORS
     # feature_vectors: (measurement, delaytime, efield, bfield,
     #                   pump_probe_dist, wavelength, temperature,
-    #                   runID, index_in_run)
+    #                   set_temperature, runID, index_in_run)
 #    timefield = 'Delay Time (ps)'  # RSA DATA
 #    bfieldfield = 'scancoord'  # RSA DATA
     timefield = 'scancoord'  # TRKR DATA
@@ -248,73 +257,12 @@ if __name__ == '__main__':
                    ('bfield', bfieldfield),
                    ('pump_probe_dist', "Pump-Probe Distance (um)"),
                    ('wavelength', "Wavelength (nm)"),
-#                   ('temperature', "temperature"),  # right now ignores measured temp...
-                   ('temperature', "Set Temperature (K)"),  # make set_temp?
+                   ('temperature', "temperature"),  # right now ignores measured temp...
+                   ('set_temperature', "Set Temperature (K)"),  # make set_temp?
                    ('runID', None),
                    ('index_in_run', None)]
 
-    # Model 1: simplified two-opposite-pulses model
-    # params = num_pulses, pulse_amplitude, species_amp_ratio,
-    #          lifetime1, lifetime2, gfactor, phase,
-    #          species1_efield_heating_coeff, species2_efield_heating_coeff
-    #          mobility, slope, offset
-    feature_vector_model_1 = \
-        FeatureVectorsTwoLifetimesOppositePhaseTRKRModel(
-            field_name="measurement",
-            max_fcn_evals=20000,
-            free_params=[False, True, True,
-                         True, True, True, True,
-                         True, True,
-                         False, False, False],
-#            initial_params=([40] + \
-#                            list((1.0 + np.random.randn(7) *
-#                                   np.array([0.2, 0.2,  # std per param
-#                                             0.2, 0.2, 0.01, 0.0,
-#                                             0.0, 0.0])) *
-#                                 np.array([0.022, 1.8,  # correct param
-#                                           20000, 2000, 0.44, 0.0,
-#                                           0.0, 0.0])) + \
-#                            [1e-4, 0, 0]),
-            initial_params=[20, 0.022, 1.8,  # correct params
-                            20000, 6000, 0.44, 0,
-                            0.5, 0.5,
-                            1e-4, 0, 0],
-            param_bounds=[(1,1000), (0, 1), (0, 100),
-                          (1, 1e9), (1, 1e9), (0.3, 0.6), (-2*np.pi, 2*np.pi),
-                          (0, 4.0), (0, 4.0),
-                          (0, 1), (-1e-6, 1e-6), (-0.01, 0.01)],
-            fit_result_scan_coord="Pump-Probe Distance (um)",
-            excluded_intervals=None,  # use feature vectors' alternative
-            b_field=300,
-            ignore_weights=False)
-
-    # DEFINE MODELS TO COMPARE
-    # Model 2: two totally-adjustable sines
-    # params = num_pulses, pulse_amplitude, species_amp_ratio,
-    #          lifetime1, lifetime2, gfactor1, gfactor2,
-    #          phase1, phase2, mobility, slope, offset
-    feature_vector_model_2 = \
-        FeatureVectorsIndependentSinusoidalTRKRModel(
-            field_name="measurement",
-            max_fcn_evals=20000,
-            free_params=[False, True, True,
-                         False, True, False, True,
-                         False, True, False, False, False],
-            initial_params=[20, 0.04, 1.0,
-                            20000, 18000, 0.44, 0.43,
-                            0, -1*np.pi/3, 1e-4, 0, 0],
-            param_bounds=[(1,1000), (0, 1), (0, 100),
-                          (1, 1e9), (1, 1e9),
-                          (0.3, 0.6), (0.3, 0.6),
-                          (-np.pi, np.pi), (-4*np.pi, 4*np.pi),
-                          (0, 1), (-1e-6, 1e-6), (-0.01, 0.01)],
-            fit_result_scan_coord="Pump-Probe Distance (um)",
-            excluded_intervals=None,  # use feature vectors' alternative
-            b_field=300,
-            ignore_weights=False)
-
-    models_to_compare = [feature_vector_model_1, feature_vector_model_2]
-    update_model_params(models_to_compare)
+    models_to_compare = [fit_models.get_fvec_two_species_model()]
  
     # FETCH DATA AND APPLY CORRECTIONS/FILTERS
     scandata_list = \
@@ -351,17 +299,34 @@ if __name__ == '__main__':
         test_set_fvec_scandata.fit_result = \
             model.fitfunction(test_set_fvec_scandata.x.T, *fitdata.fitparams)
     
+        # PRINT FIT RESULTS
+        fitted_coord_strings = []
+        fixed_coord_strings = []
+        zipdata = zip(fitdata.fitparamlabels,
+                      fitdata.fitparams,
+                      fitdata.fitparamstds)
+        for param_ind, (param_label, param, param_std) in enumerate(zipdata):
+            if param_ind not in fitdata.freeparamindices:
+                try:
+                    fixed_coord_strings.append(
+                        " -{}: {:.4g}".format(param_label, param))
+                except (TypeError, ValueError):
+                    fixed_coord_strings.append(
+                        " -{}: {}".format(param_label, param))
+            else:
+                fitted_coord_strings.append(
+                    " -{}: {:.4g} +- {:.4g}".format(param_label,
+                                                    param, param_std))
         print('---')
-        print("model: {}".format(model.model_type))
+        print("model: {}".format(model.model_name))
+        print("Fixed parameters:")
+        for param_string in fixed_coord_strings:
+            print(param_string)
         print("Fitted parameters from training set:")
         print("({} parameters from {} data points)".format(
                 len(fitdata.freeparamindices), len(training_set_fvec_scandata)))
-        for param_label, param, param_std in zip(fitdata.fitparamlabels,
-                                                 fitdata.fitparams,
-                                                 fitdata.fitparamstds):
-            if param_std != 0.0:
-                print(" -{}: {:.4g} +- {:.4g}".format(param_label,
-                                                      param, param_std))
+        for param_string in fitted_coord_strings:
+            print(param_string)
         training_error = np.mean((training_set_fvec_scandata.y -
                                   training_set_fvec_scandata.fit_result)**2)
         test_error = np.mean((test_set_fvec_scandata.y -
@@ -377,14 +342,70 @@ if __name__ == '__main__':
         model.fitdata = fitdata
 
 
+# %%
+if False:
+# %%
+    model = models_to_compare[0]
+    fitparams = None  # grab from model
+    # OPTIONAL: force fit params
+#    fitparams = \
+#        [
+#            20.0, 0.025, 2.0, 20260, 8000,  # for best 818.9 data 09/02/2016
+#            0.4385, 0.0, np.pi/2, -np.pi,
+#            0.03, -0.8, -1.2, -1.2, 0.00035,
+#            0.0001, 0.0, 0.0
+##            20.0, 0.024, 2.0, 20260, 8000,  # for fake_trkr 1/9/2017
+##            0.44, 0.0, np.pi/2, -np.pi,
+##            0.03, 1.0, -1.5, 0.0004,
+##            0.0001, 0.0, 0.0
+#        ]
+    n_rows = 3
+    n_cols = 4
+    for scandata_ind in range(len(scandata_list)):
+        subplot_ind = scandata_ind % (n_rows * n_cols) + 1
+        if subplot_ind == 1:
+            plt.figure()
+        axes = plt.subplot(n_rows, n_cols, subplot_ind)
+        plot_scandata_fvec_fit(scandata_ind, scandata_list,
+                               axes, model, fitparams)
+        
+
+
+# %%
+if False:
 # %% plot results on one scandata
-    scandata_index_to_plot = 20
+    scandata_index_to_plot = 7
+#    for item in scandata_list[scandata_index_to_plot].info.items():
+#        print(item)
+    current_scandata = scandata_list[scandata_index_to_plot]
+    if 'temperature' in scandata_list[scandata_index_to_plot].fields:
+        current_temp = np.mean(current_scandata.temperature)
+    else:
+        current_temp = current_scandata.info['temperature']
+    current_field = current_scandata.info['Electric Field (V/cm)']
+    print('temp: {} K'.format(current_temp))
+    print("field: {} V/cm".format(current_field))
     plt.figure()
     for model_ind, model in enumerate(models_to_compare):
+        axes = plt.subplot(len(models_to_compare), 1, model_ind + 1)
+        fitfunction = model.fitfunction
         fitparams = model.fitdata.fitparams
+        # OPTIONAL: force fit params
+#        fitparams = \
+#            [
+#                20.0, 0.025, 2.0, 20260, 8000,  # for best 818.9 data 09/02/2016
+#                0.4385, 0.0, np.pi/2, -np.pi,
+#                0.03, -0.8, -1.2, -1.2, 0.00035,
+#                0.0001, 0.0, 0.0
+#                20.0, 0.024, 2.0, 20260, 8000,  # for fake_trkr 1/9/2017
+#                0.44, 0.0, np.pi/2, -np.pi,
+#                0.03, 1.0, -1.5, 0.0004,
+#                0.0001, 0.0, 0.0
+#            ]
         scandata_mask = (model.fvec_scandata.runID == scandata_index_to_plot)
         fvecs = model.fvec_scandata.x[scandata_mask]
         yvals = model.fvec_scandata.y[scandata_mask]
+        yerrvals = model.fvec_scandata.measurement_error[scandata_mask]
 
         # find xvals, a little roundabout
         original_scandata = scandata_list[scandata_index_to_plot]
@@ -392,12 +413,16 @@ if __name__ == '__main__':
             if original_field == original_scandata.xfield:
                 xvals = model.fvec_scandata.x[scandata_mask, fvec_elem_index]
                 break
-        
-        axes = plt.subplot(len(models_to_compare), 1, model_ind + 1)
-        axes.set_title(model.model_type)
+
+        axes.set_title(model.model_name)
         axes.plot(xvals, yvals, 'bd')
         axes.plot(xvals, model.fitfunction(fvecs.T, *fitparams), 'r-')
+        plt.title('field = {} V/cm, temp = {} K'.format(
+                    current_field, current_temp))
 
+
+    plt.title('field = {} V/cm, temp = {} K'.format(
+                current_field, current_temp))
 
 #        test_scandata = model.test_set_fvec_scandata
 #        training_scandata = model.training_set_fvec_scandata

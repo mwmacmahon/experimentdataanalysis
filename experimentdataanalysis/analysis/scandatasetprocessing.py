@@ -48,7 +48,7 @@ class ScanDataSet:
             secondary_key = self.fit_result_scan_coord
             scandata_list_tuple, _ = \
                 scandata_iterable_sort(self.scandata_list,
-                                       self.model.yfield,
+#                                       self.model.yfield,
                                        primary_key, secondary_key)
             self.scandata_list = list(scandata_list_tuple)
 
@@ -355,11 +355,11 @@ def sort_scandata_into_sets_single_key(scandata_list, model, sort_key):
 #            raise KeyError("sort_scandata_into_sets: invalid sort_key")
             pass
     except ValueError:  # sort key non-numeric, so pre-sort alphanumerically
-        scandata_list, _ = scandata_iterable_sort(scandata_list, 0,
+        scandata_list, _ = scandata_iterable_sort(scandata_list,
                                                   sort_key, sort_key,
                                                   numeric_sort=False)
     else:  # sort key numeric, so pre-sort numerically
-        scandata_list, _ = scandata_iterable_sort(scandata_list, 0,
+        scandata_list, _ = scandata_iterable_sort(scandata_list,
                                                   sort_key, sort_key,
                                                   numeric_sort=True)
 

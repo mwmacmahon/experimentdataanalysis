@@ -451,7 +451,7 @@ def check_fit_parameter_consistency(num_nonx_args, free_params,
 
 
 # %% NEEDS TEST, SPHINX DOCUMENTATION
-def scandata_iterable_sort(scandata_iterable, field_index,
+def scandata_iterable_sort(scandata_iterable,
                            primary_key, secondary_key, numeric_sort=True):
     """
     right now, no mixed numeric/non-numeric keys, because effort

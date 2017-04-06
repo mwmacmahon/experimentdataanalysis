@@ -1,6 +1,7 @@
 # no spyder .cache or other bookkeeping files
 .spyderproject
 .spyderworkspace
+.spyproject
 *.cache
 *.egg-info
 _build

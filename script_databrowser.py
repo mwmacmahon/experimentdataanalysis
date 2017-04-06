@@ -13,14 +13,20 @@ from experimentdataanalysis.guis.guistarter import QApplicationStarter
 if __name__ == "__main__":
 
 # %%    
-    scandata_list = []
+    databrowser_scandata_list = []
 # %%
     qapp = QApplicationStarter()
-    app_saved_state = {'current_scan_list': scandata_list}
+    app_saved_state = {'current_scan_list': databrowser_scandata_list}
     window, windowoutput = \
         databrowser.DataBrowserWindow.launch_with_output(app_saved_state)
 #    window, windowoutput = \
 #        databrowser.DataBrowserWindow.launch_with_output()
     qapp.exec_()
 
-#    scandata_list = windowoutput.output[0]["current_scan_list"]
+# %%
+    databrowser_scandata_list = windowoutput.output[0]["current_scan_list"]
+
+# %%
+#    scandata_list = databrowser_scandata_list
+#    for scandata in scandata_list:
+#        scandata.yfield = 'lockin1x'

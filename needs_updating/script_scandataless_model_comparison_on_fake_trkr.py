@@ -40,6 +40,7 @@ in_filepath_element_keyword_list = [("Vcm", "Electric Field (V/cm)"),
                                     ("nm", "Wavelength (nm)"),
                                     ("ps", "Delay Time (ps)"),
                                     ("run", "RunIndex"),
+                                    ("sAt", "Time At Field + Junk"),
                                     ("V", "Voltage (V)"),
                                     ("x", "SecondScanCoord")]
 
@@ -172,7 +173,7 @@ def split_scandata_into_training_and_test_sets(fvec_scandata, test_fraction,
     return training_set_fvec_scandata, test_set_fvec_scandata
 
 
-def plot_scandata_fvec_fit(scandata_index, scandata_list,
+def plot_scandata_fvec_fit(scandata_index, scandata_list, fvec_fields,
                            axes, model, forced_fitparams=None):
     if forced_fitparams is not None:
         fitparams = forced_fitparams
@@ -205,7 +206,7 @@ if __name__ == '__main__':
     test_by_run = True  # TEST BY RUN VS INDIVIDUAL POINTS
 
     # DATA TO FIT
-    dirpath = ("C:\\Data\\fake_data\\fake_trkr")
+#    dirpath = ("C:\\Data\\fake_data\\fake_trkr")
 #    dirpath = ("C:\\Data\\fake_data\\fake_trkr_huge_slopes")
 #    dirpath = ("C:\\Data\\fake_data\\fake_rsa")
 #    dirpath = ("C:\\Data\\august_data\\160902\\" +
@@ -366,7 +367,7 @@ if False:
         if subplot_ind == 1:
             plt.figure()
         axes = plt.subplot(n_rows, n_cols, subplot_ind)
-        plot_scandata_fvec_fit(scandata_ind, scandata_list,
+        plot_scandata_fvec_fit(scandata_ind, scandata_list, fvec_fields,
                                axes, model, fitparams)
         
 

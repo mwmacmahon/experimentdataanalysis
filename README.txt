@@ -9,6 +9,57 @@ INSTALLATION:
     In directory where you want to put project, open Git Bash and type:
         git clone https://github.com/vsihlab/experimentdataanalysis.git
 
+-To actually edit and run code, it is recommended you work within a virtual
+    environment, which conda makes relatively painless. From the command line,
+    navigate to the experimentdataanalysis directory and type:
+	conda env create -f environment.yml
+
+    This will install all required packages (and no others) to a virtual
+    environment named "experimentdataanalysis". To use it, type
+	[in bash]:
+	source activate experimentdataanalysis
+
+	[in cmd.exe]:
+	activate experimentdataanalysis
+
+	[in Windows PowerShell]:
+	cmd
+	activate experimentdataanalysis
+	powershell
+
+    This will put the text "(experimentdataanalysis)" before the command prompt
+    (except in PowerShell), letting you know you are in the virtual environment.
+    To leave the environment, use the same command, except with
+    "activate experimentdatanalysis" replaced with "deactivate". While inside the
+    virtual environment, you can run any python code with no fear of conflict with
+    other installed Python packages, and without these packages affecting the rest
+    of your Python install. I recommend the program Spyder, which is a bit like
+    MATLAB, for development, but there are other options as well, such as Python's
+    native IDLE or JuPyTer. You can even write code in a program like Notepad and
+    run it from Python's command line interpreter. New packages may be installed into
+    your virtual environment at will, and they will remain local to that environment.
+
+	[To run Spyder]:
+	spyder
+
+	[To run IDLE]:
+	idle
+
+	[To run command-line Python interpreter]:
+	python
+
+	[To run script from command-line interpreter]:
+	python [script name]  (if in directory already)
+	python [path-to-script]  (otherwise)
+
+	[To install a new python package]:
+	conda install [package name]
+	conda install -c [channel name, e.g. conda-forge] [package name]
+	pip install
+
+    There are ways to automate this process inside Windows shortcuts, if you
+    are so inclined, but that is beyond the scope of this readme.
+
 -Should immediately switch to a new custom branch with your name and upload
     it. This keeps your changes local to your "branch" both on your computer
     and online, and lets the rest of us see any proposed changes to be merged

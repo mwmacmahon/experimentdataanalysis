@@ -5,14 +5,13 @@ Created on Tue Mar  1 19:27:08 2016
 @author: Michael
 """
 
-import pkg_resources
-
 from matplotlib.backends.backend_qt4agg \
     import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 import numpy as np
 from PyQt4 import QtCore, QtGui, uic
 
+import experimentdataanalysis.guis as guis
 from experimentdataanalysis.analysis.dataclasses \
     import FitData, ScanData
 import experimentdataanalysis.parsing.scandataparsing as sdparsing
@@ -32,10 +31,14 @@ class DataBrowserWindow(QtGui.QMainWindow):
         app_saved_state object emitted from a previous instance.
         """
         super(DataBrowserWindow, self).__init__()
-        resource_package = __name__
-        gui_filepath = pkg_resources.resource_filename(resource_package,
-                                                       "ui_databrowser.ui")
-        uic.loadUi(gui_filepath, self)
+#        # This method requires pkg_resources module, which has issues w/conda
+#        resource_package = __name__
+#        gui_filepath = pkg_resources.resource_filename(resource_package,
+#                                                       "ui_databrowser.ui")
+#        uic.loadUi(gui_filepath, self)
+
+        uic.loadUi('experimentdataanalysis\\guis\\ui_databrowser.ui', self)
+
         self.ignore_input = True
         self.canvas = MPLCanvas(dpi=75)
         self.figure_container.addWidget(self.canvas)
@@ -537,7 +540,7 @@ class DataBrowserWindow(QtGui.QMainWindow):
             # only plot scandata with same shape as current selection
             data2d = np.vstack([scandata.get_field_y(plotfield)
                                 for scandata in scandata_list
-                                if scandata.shape == ref_scandata.shape])
+                                if len(scandata) == len(ref_scandata)])
             try:
                 imageplot = self.canvas.axes.imshow(data2d,
                                                     interpolation="none")

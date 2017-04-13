@@ -1,3 +1,6 @@
+# generic tag for one's custom stuff you don't want tracked on git
+*_nogit_*
+
 # no jupyter/spyder .cache or other bookkeeping files
 .ipynb_checkpoints
 .spyderproject

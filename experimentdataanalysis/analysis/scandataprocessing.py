@@ -102,6 +102,10 @@ class ScanDataModel():
         # TODO: FINISH THIS
         return NotImplementedError('Function not implemented yet!')
 
+    def fitfunction_with_initial_parameters(self, x):
+        initial_params = self.get_fit_params_initial_values()
+        return self.fitfunction(x, *initial_params)
+            
     def copy(self):  # must deep copy all mutable attributes
         kwargs = deepcopy(self.__dict__)
         return self.__class__(**kwargs)

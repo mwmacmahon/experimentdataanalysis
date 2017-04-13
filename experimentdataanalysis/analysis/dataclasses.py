@@ -262,6 +262,11 @@ class ScanData(object, metaclass=SupportsReservedAliases):
             print("ScanData: one or more field names changed, " +
                   "new field names: {}".format(self.fields))
 
+    def get_nonx_nonerror_fields(self):
+        return [field_name for field_name in self.fields
+                if '_error' not in field_name
+                if field_name != self.xfield]
+
     def get_field_y(self, field_name):
         y = getattr(self, field_name, None)
         return y

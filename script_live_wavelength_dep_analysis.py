@@ -5,13 +5,6 @@ Created on Tue Jan 31 13:32:15 2017
 @author: Michael
 """
 
-# -*- coding: utf-8 -*-
-"""
-Created on Sun Dec 18 13:34:40 2016
-
-@author: Michael
-"""
-
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.ndimage.filters as filters
@@ -224,10 +217,10 @@ if __name__ == '__main__':
     model.excluded_intervals = excluded_intervals
 #    model.ignore_weights = True
 #    params = feature_vector_model_1.model_params  # simplify handle
-#    params['lifetime1'] = {'free parameter': True,
+#    params['lifetime1'] = {'free': True,
 #                           'initial value': 20000,
 #                           'bounds': (0, np.inf)}
-#    params['lifetime2'] = {'free parameter': True,
+#    params['lifetime2'] = {'free': True,
 #                           'initial value': 8000,
 #                           'bounds': (0, np.inf)}
  

@@ -52,9 +52,11 @@ def fitfcn_trkr_single_species(delay_time,
                                pulse_amplitude,
                                gfactor, bfield, spin_lifetime,
                                initial_phase, slope, offset):
+    zero_delay_offset = config_dict.get('zero_delay_offset', 0.0)
     trkr_per_unit_polarization = 1.0
     trkr_phase_offset = 0.0
-    pos_def_delay = delay_time % LASER_REPRATE
+    pos_def_delay = (delay_time + zero_delay_offset) % LASER_REPRATE \
+                        - zero_delay_offset
     osc_ang_freq = 2 * np.pi * GFACTORCONSTANT * gfactor * bfield
     net_polarization, net_phase = get_pulse_sum_vector(spin_lifetime,
                                                        gfactor, bfield,
@@ -64,7 +66,8 @@ def fitfcn_trkr_single_species(delay_time,
                             np.exp(-pos_def_delay / spin_lifetime)
     signal = trkr_per_unit_polarization * final_polarization * \
                                     np.cos(final_phase + trkr_phase_offset)
-    return signal
+    output = signal + delay_time * slope + offset  # NOT pos-definite
+    return output
 
 
 # %%
@@ -73,17 +76,59 @@ def fitfcn_rsa_single_species(bfield,
                               pulse_amplitude,
                               gfactor, delay_time, spin_lifetime,
                               initial_phase, slope, offset):
-    return fitfcn_trkr_single_species(delay_time,
-                                      config_dict,
-                                      pulse_amplitude,
-                                      gfactor, bfield, spin_lifetime,
-                                      initial_phase, slope, offset)
+    signal = fitfcn_trkr_single_species(delay_time,
+                                        config_dict,
+                                        pulse_amplitude,
+                                        gfactor, bfield, spin_lifetime,
+                                        initial_phase, slope=0, offset=0)
+    output = signal + bfield * slope + offset
+    return output
+
+
+# %% FIT FUNCTION MODELS
+class OneSpecies_NoDNP_TRKR_Model(ScanDataModel):
+    def __init__(self, **kwargs):
+        self.model_name = "One Species Pump Probe TRKR"
+        self.yfield = None  # if not set, scandata.y used as fit 'y' values
+        self.fitfunction = fitfcn_trkr_single_species
+        self.model_params = \
+            OrderedDict([('config_dict',        {'free': False,  # untouchable
+                                                 'initial value': {}}),
+                         ('pulse_amplitude',    {'free': True,
+                                                 'initial value': 0.025,
+                                                 'bounds': (0, .05)}),
+                         ('gfactor',            {'free': True,
+                                                 'initial value': 0.44}),
+                         ('bfield',             {'free': False,
+                                                 'initial value': 0.0}),
+                         ('spin_lifetime',      {'free': True,
+                                                 'initial value': 20000,
+                                                 'bounds': (0, np.inf)}),
+                         ('initial_phase',      {'free': False,
+                                                 'initial value': 0.0,
+                                                 'bounds':
+                                                     (-4*np.pi, 4*np.pi)}),
+                         ('slope',              {'free': True,
+                                                 'initial value': 0}),
+                         ('offset',             {'free': True,
+                                                 'initial value': 0}),
+                        ])
+        self.max_fcn_evals = 20000
+        self.excluded_intervals = None
+        self.ignore_weights = False
+
+        # for ScanDataSets: coord spanning the set
+        self.fit_result_scan_coord = "Wavelength (nm)" 
+
+        # keyword args override defaults
+        for key, val in kwargs.items():
+            self.__dict__[key] = val
 
 
 # %% FIT FUNCTION MODELS
 class OneSpecies_NoDNP_RSA_Model(ScanDataModel):
     def __init__(self, **kwargs):
-        self.model_name = "Two Species Pump Probe TRKR"
+        self.model_name = "One Species Pump Probe RSA"
         self.yfield = None  # if not set, scandata.y used as fit 'y' values
         self.fitfunction = fitfcn_rsa_single_species
         self.model_params = \
@@ -263,47 +308,47 @@ def extract_dnp_from_field_sweep(bvals, yvals,
             y_uncertainty = 0.05 * (max(rsa_yvals) - min(rsa_yvals))
 #        yvals_to_test = np.array([yval])
 
-        # method 1: uncertainties via sampling y-vals
-        mu, sigma = yval, y_uncertainty
-        yvals_to_test = np.random.normal(mu, sigma, 20)
-        yvals_to_test.clip(min=min(rsa_yvals), max=max(rsa_yvals),
-                           out=yvals_to_test)
-        centroid_list = [0.0]
-        for test_yval in yvals_to_test:
-            yval_total_b_candidates = find_rsa_match_fields(test_yval)
-            yval_dnp_candidates = (yval_total_b_candidates - bval) % rsa_period
-            nrows, ncols = len(centroid_list), len(yval_dnp_candidates)
-            distance_matrix = np.zeros((nrows, ncols))
-            for row, centroid in enumerate(centroid_list):
-                for col, candidate in enumerate(yval_dnp_candidates):
-                    distance = \
-                        np.min(np.abs([centroid - candidate - rsa_period,
-                                       centroid - candidate,
-                                       centroid - candidate + rsa_period]))
-                    distance_matrix[row, col] = distance
-            # GOAL: pair up cols & rows to minimize sum of distance of
-            #       the elements (i, j) across each pair i-j. If more columns
-            #       than rows, we then add centroids at each "loser" column
-            #       location (so if recomputed, element at loser column and
-            #       new row would be 0.0). Either way we recompute centroids
-            #       by weighted avg (faster than recomputing from new list):
-            #       (N_vals_in_centroid * centroid val + new value) /
-            #                                          (N_vals_in_centroid + 1)
+#        # method 1: uncertainties via sampling y-vals
+#        mu, sigma = yval, y_uncertainty
+#        yvals_to_test = np.random.normal(mu, sigma, 20)
+#        yvals_to_test.clip(min=min(rsa_yvals), max=max(rsa_yvals),
+#                           out=yvals_to_test)
+#        centroid_list = [0.0]
+#        for test_yval in yvals_to_test:
+#            yval_total_b_candidates = find_rsa_match_fields(test_yval)
+#            yval_dnp_candidates = (yval_total_b_candidates - bval) % rsa_period
+#            nrows, ncols = len(centroid_list), len(yval_dnp_candidates)
+#            distance_matrix = np.zeros((nrows, ncols))
+#            for row, centroid in enumerate(centroid_list):
+#                for col, candidate in enumerate(yval_dnp_candidates):
+#                    distance = \
+#                        np.min(np.abs([centroid - candidate - rsa_period,
+#                                       centroid - candidate,
+#                                       centroid - candidate + rsa_period]))
+#                    distance_matrix[row, col] = distance
+#            # GOAL: pair up cols & rows to minimize sum of distance of
+#            #       the elements (i, j) across each pair i-j. If more columns
+#            #       than rows, we then add centroids at each "loser" column
+#            #       location (so if recomputed, element at loser column and
+#            #       new row would be 0.0). Either way we recompute centroids
+#            #       by weighted avg (faster than recomputing from new list):
+#            #       (N_vals_in_centroid * centroid val + new value) /
+#            #                                          (N_vals_in_centroid + 1)
                 
 
         # method 2: uncertainties via slope:
-#        yvals_to_test = np.linspace(yval - y_uncertainty / 2,
-#                                    yval + y_uncertainty / 2,
-#                                    3)  # must be odd to not lose orig. yval
-#        yvals_to_test.clip(min=min(rsa_yvals), max=max(rsa_yvals),
-#                           out=yvals_to_test)
-#        total_b_candidates = np.hstack([find_rsa_match_fields(test_yval)
-#                                        for test_yval in yvals_to_test])
-#        dnp_candidates = (total_b_candidates - bval) % rsa_period
-#        slope_mags = np.abs(get_rsa_signal_slope(total_b_candidates))
-#        slope_floor = 2 * y_uncertainty / rsa_period  # caps s_dnp @ period/2
-#        slope_mags.clip(min=slope_floor, out=slope_mags)
-#        dnp_uncertainties = y_uncertainty / slope_mags
+        yvals_to_test = np.linspace(yval - y_uncertainty / 2,
+                                    yval + y_uncertainty / 2,
+                                    3)  # must be odd to not lose orig. yval
+        yvals_to_test.clip(min=min(rsa_yvals), max=max(rsa_yvals),
+                           out=yvals_to_test)
+        total_b_candidates = np.hstack([find_rsa_match_fields(test_yval)
+                                        for test_yval in yvals_to_test])
+        dnp_candidates = (total_b_candidates - bval) % rsa_period
+        slope_mags = np.abs(get_rsa_signal_slope(total_b_candidates))
+        slope_floor = 2 * y_uncertainty / rsa_period  # caps s_dnp @ period/2
+        slope_mags.clip(min=slope_floor, out=slope_mags)
+        dnp_uncertainties = y_uncertainty / slope_mags
 
         # IF NEEDED, ADD K-MEANS CLUSTERING AND COLLAPSE...
 
@@ -596,5 +641,28 @@ if False:
 
 
 
+# %%  TESTING SCRIPTS (CONT.)
+if False:
+# %%
+    bfields = np.arange(110, 150+1, 1)
+    amplitudes = []
+    phases = []
+    for bfield in bfields:
+        amplitude, phase = get_pulse_sum_vector(spin_lifetime, gfactor, bfield, initial_phase=0)
+        amplitudes.append(amplitude)
+        phases.append(phase)
+    
+    plt.figure()
+    plt.subplot(2,1,1)
+    plt.plot(bfields, amplitudes)
+    plt.subplot(2,1,2)
+    plt.plot(bfields, phases)
+
+# %%  TESTING SCRIPTS (CONT.)
+if False:
+# %%
+    pass
+    # NEW DATA: since all in -500 to 0 range, ignore exponential decay
+    # and possible 2nd species, and just fit to phase of a cosine!
 
 

@@ -1,4 +1,5 @@
-# no spyder .cache or other bookkeeping files
+# no jupyter/spyder .cache or other bookkeeping files
+.ipynb_checkpoints
 .spyderproject
 .spyderworkspace
 .spyproject

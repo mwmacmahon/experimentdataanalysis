@@ -39,6 +39,10 @@ INSTALLATION:
     run it from Python's command line interpreter. New packages may be installed into
     your virtual environment at will, and they will remain local to that environment.
 
+	[To run Jupyter Notebook]:
+	[one time only, in environment]: jupyter contrib nbextension install --user 
+	jupyter notebook
+
 	[To run Spyder]:
 	spyder
 

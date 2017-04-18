@@ -86,7 +86,8 @@ def multiprocessable_map(processfunction, input_arglist_iterable,
         elapsed_processing_time = time.time() - start_processing_time
         print('{} seconds elapsed during multiprocessing'.format(
                                                     elapsed_processing_time))
-        return list(output_iter)
+        output_list = list(output_iter)
+        return list(output_list)
     else:
         output_list = []
         for input_args in input_arglist_iterable:

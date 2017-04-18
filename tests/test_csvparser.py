@@ -40,7 +40,7 @@ def test_csvs_dir_path():
 
 # %% TESTS
 def test_extrarowsatend(test_csvs_dir_path):
-    filepath, rawdata = csvparser.parse_csv(
+    filepath, headerfooterstr, rawdata = csvparser.parse_csv(
         test_csvs_dir_path + "extra_tabs.dat")
     fields, columndata = rawdata
     assert len(fields) == 3
@@ -50,7 +50,7 @@ def test_extrarowsatend(test_csvs_dir_path):
 
 
 def test_headered_csv(test_csvs_dir_path):
-    filepath, rawdata = csvparser.parse_csv(
+    filepath, headerfooterstr, rawdata = csvparser.parse_csv(
         test_csvs_dir_path + "headers.dat")
     fields, columndata = rawdata
     assert fields == tuple(["col1", "col2", "col3"])
@@ -60,7 +60,7 @@ def test_headered_csv(test_csvs_dir_path):
 
 
 def test_nonheadered_csv(test_csvs_dir_path):
-    filepath, rawdata = csvparser.parse_csv(
+    filepath, headerfooterstr, rawdata = csvparser.parse_csv(
         test_csvs_dir_path + "noheaders.dat")
     fields, columndata = rawdata
     assert fields == tuple(["Column 1", "Column 2", "Column 3"])

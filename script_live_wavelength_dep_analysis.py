@@ -52,7 +52,7 @@ filepath_element_keyword_list = [("Vcm", "Electric Field (V/cm)"),
                                  ("nm", "Wavelength (nm)"),
                                  ("ps", "Delay Time (ps)"),
                                  ("run", "RunIndex"),
-#                                 ("V", "Voltage (V)"),
+                                 ("V", "Voltage (V)"),
                                  ("x", "SecondScanCoord")]
 
 # for this one, if element [0] is found,

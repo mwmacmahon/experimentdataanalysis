@@ -140,7 +140,10 @@ def analyze_scan_filepath(filepath, scaninfo=None, keywordlists=None):
     if scaninfo is None:
         scaninfo = {}  # NECESSARY, if defined in header, shared between calls!
     scaninfo['Filepath'] = filepath
-    scaninfo['File Last Modified'] = time.ctime(os.path.getmtime(filepath))
+    try:
+        scaninfo['File Last Modified'] = time.ctime(os.path.getmtime(filepath))
+    except FileNotFoundError:
+        pass
     if keywordlists is not None:
         this_element_keyword_list, \
             next_element_keyword_list, \
@@ -151,25 +154,30 @@ def analyze_scan_filepath(filepath, scaninfo=None, keywordlists=None):
         #    tag containing third string/value
         #        e.g. if keyword_list contains ("warmup", "Warmup?", "Yes"):
         #             "...warmup..." -> {"Warmup?": "Yes"}
-        this_element_keyword_list = []
+        this_element_keyword_list = [("TRKR", "IsTRKR?", True),
+                                     ("RSA", "IsRSA?", True)]
         # 2. Grab next element(s) if this one CONTAINS first string,
         #    tag next element(s) as second string(s)
         #        e.g. "..._Ind_3_..." -> {"FastScanIndex": 3}
         #        e.g. "..._2Dscan_MirrorY_MirrorZ_..."
         #                 -> {"SecondScanType": "MirrorY",
         #                     "FirstScanType": "MirrorZ"}
-        next_element_keyword_list = [("Voltage", "Voltage"),
-                                     ("Ind", "FirstScanIndex"),
+        next_element_keyword_list = [("Ind", "FirstScanIndex"),
                                      ("2Dscan", ["SecondScanType",
-                                                 "FirstScanType"])]
+                                                 "FirstScanType"]),
+                                     ("Voltage", "Voltage (V)"),
+                                     ("MirrorZ", "Pump-Probe Distance (um)")]
         # 3. Grab this element if it CONTAINS first string,
         #    tag remainder as second string
         #        e.g. "..._30K_..." -> {"SetTemperature": 30}
-        inside_this_element_keyword_list = [("Channel", "Channel"),
-                                            ("Vcm", "Electric Field (V/cm)"),
+        inside_this_element_keyword_list = [("Vcm", "Electric Field (V/cm)"),
                                             ("mT", "Magnetic Field (mT)"),
                                             ("K", "Set Temperature (K)"),
-                                            ("nm", "Wavelength (nm)")]
+                                            ("nm", "Wavelength (nm)"),
+                                            ("ps", "Delay Time (ps)"),
+                                            ("run", "RunIndex"),
+                                            ("V", "Voltage (V)"),
+                                            ("x", "SecondScanCoord")]
 
     # get rid of idiosyncratic delimiters by swapping with _
     filepath = filepath.replace("\\", "__")

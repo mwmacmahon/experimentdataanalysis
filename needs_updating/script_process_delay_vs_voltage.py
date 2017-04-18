@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 
 from experimentdataanalysis.analysis.dataseriesprocessing \
-    import get_positive_time_delay_scandata, add_excluded_interval_scandata
+    import get_positive_time_delay_scandata
 from experimentdataanalysis.analysis.scandatamodels \
     import SinusoidalSpinLifetimeModel
 from experimentdataanalysis.analysis.scandatasetprocessing \
@@ -24,10 +24,12 @@ spin_lifetime_model = \
         free_params=[True, True, True, True, True, True, True, True],
         initial_params = [0.002, 50, 0.002, 1000, 810, 0, 0, 0],
         param_bounds = [(-1, 1), (1, 200), (-1, 1), (10, 1e6),
-                        (810, 830), (0, 2*np.pi),
+                        (810, 830), (-np.pi, np.pi),
                         (-1e-6, 1e-6), (-0.01, 0.01)],
         error_thresholds=[None, None, 0.2, 2000, None, None, None, None],
-        dim2_key="Voltage")
+        dim2_key="Voltage",
+        field_index=0,  # use lockin2x directly instead of, say, area
+        excluded_intervals=[[-15, 100], [7000, 15000]])
 
 
 # %% FILTER FUNCTIONS
@@ -76,19 +78,17 @@ def get_filter_fcn_only_one_channel(target_channel):
 
 # %% PLOTTING FUNCTION
 def plot_scandata(scandata, field_index,
-                  label="", fmt="-bd", fit_fmt="xr:", unfiltered=True):
-    x_vals, y_vals = \
-        scandata.dataseries_list[field_index].\
-                                        datalists(unfiltered=unfiltered)
+                  label="", fmt="-bd", fit_fmt="xr:"):
+    x_vals, y_vals = scandata.dataseries_list[field_index].data()
     error_dataseries = scandata.error_dataseries_list[field_index]
     if error_dataseries is not None:
-        _, y_errs = error_dataseries.datalists(unfiltered=unfiltered)
+        _, y_errs = error_dataseries.data()
         plt.errorbar(x_vals, y_vals, yerr=y_errs, label=label, fmt=fmt)
     else:
         plt.plot(x_vals, y_vals, fmt, label=label)
     if scandata.fitdata_list[field_index] is not None:
         x_vals, y_vals = \
-            scandata.fitdata_list[field_index].fitdataseries.datalists()
+            scandata.fitdata_list[field_index].fitdataseries.data()
         plt.plot(x_vals, y_vals, fit_fmt)
 
 
@@ -121,33 +121,61 @@ if __name__ == "__main__":
 # %%  ANALYSIS OF DELAY SCANS, LIFETIME VS VOLTAGE
     # LOAD DATA, ORGANIZE, AND FIT IN ANALYZER
     analyzer = ScanDataSetsAnalyzer(spin_lifetime_model,
-                                    dirpath="C:\\Data\\160702\\delayscans_-6V_to_6V_noautocenter",
+#                                    dirpath="C:\\Data\\160702\\delayscans_-6V_to_6V_noautocenter",
 #                                    dirpath="C:\\Data\\160702\\delayscans_-6V_to_6V",
+                                    dirpath="C:\\Data\\august_data\\160901\\DelayScansNewWavelength",
                                     uncertainty_value=1e-4,
                                     set_key="Voltage"  # group consecutive runs
                                     )
+
+    # fix improper "StageZ" 2nd coord, change Vapp to V/cm anyway
+    for scandataset in analyzer.scandataset_list:
+        for scandata in scandataset.scandata_list:
+            field = scandata.scaninfo_list[0]['Voltage']*20
+            for scaninfo in scandata.scaninfo_list:
+                scaninfo['MiddleScanType'] = 'Electric Field (V/cm)'
+                scaninfo['MiddleScanCoord'] = field
+
 #    analyzer.break_up_repeating_scandatasets()  # breaks up sets too much!
     analyzer.apply_transform_to_all_scandata(get_positive_time_delay_scandata,
                                              zero_delay_offset=-15)
-    analyzer.apply_transform_to_all_scandata(add_excluded_interval_scandata,
-                                             start=7000, stop=15000)
-    analyzer.apply_transform_to_all_scandata(add_excluded_interval_scandata,
-                                             start=-15, stop=100)
+#    analyzer.apply_transform_to_all_scandata(add_excluded_interval_scandata,
+#                                             start=7000, stop=15000)
+#    analyzer.apply_transform_to_all_scandata(add_excluded_interval_scandata,
+#                                             start=-15, stop=100)
     analyzer.fit_all_scandata_to_model(multiprocessing=True)
 
-    # APPLY FILTERS, PLOT CHANNEL LIFETIME FIT DATA
-    analyzer.add_filter_to_each_scandataset(
-        get_filter_fcn_no_super_long_lifetimes(threshold=5000))
-    analyzer.add_filter_to_each_scandataset(
-        get_filter_fcn_no_first_n_scans_in_series(num_ignored=1))
+    # APPLY FILTERS AND EXTRACT FITTED SCANDATA AND SCANDATA OF FITS
+#    analyzer.add_filter_to_each_scandataset(
+#        get_filter_fcn_no_super_long_lifetimes(threshold=999999))
+#    analyzer.add_filter_to_each_scandataset(
+#        get_filter_fcn_no_first_n_scans_in_series(num_ignored=1))
+    lifetime_scandata_list = \
+        analyzer.collapse_to_scandata_list(filtered=False)
     collapsed_scandata_list = \
         analyzer.collapse_to_model_fit_scandata_list(new_scan_type="[Unknown]",
-                                                     filtered=True)
-    field_index = 3  # dataseries: x:voltage, y:single long lifetime fit value
+                                                     filtered=False)
+
+
+# %% OVERVIEW OF FITS
+    field_index = 0  # lockin2x
+    for scandata in lifetime_scandata_list[:]:
+       plot_scandata(scandata, field_index, fmt="bd")
+    plt.xlabel("Delay (ps)")
+    plt.ylabel("Kerr Rotation (AU)")
+    plt.text(8000, 0,
+             "Last fit lifetime: {}ns\n     +={}ns".format(
+                 scandata.fitdata_list[field_index].fitparams[3]/1000,
+                 scandata.fitdata_list[field_index].fitparamstds[3]/1000))
+    plt.show()
+
+
+# %%
+    field_index = 3  # dataseries: x:field, y:single long lifetime fit value
     plt.figure()
     plt.hold(True)
-    for scandata in collapsed_scandata_list:
-        plot_scandata(scandata, field_index, fmt="-bd")
+    for scandata in collapsed_scandata_list[:]:
+        plot_scandata(scandata, field_index, fmt="bd")
 
     # LABEL AND DISPLAY GRAPH
     plt.xlabel("Applied Voltage (V)  |  Electric Field (V/500um)")
@@ -168,10 +196,10 @@ if __name__ == "__main__":
 #    analyzer.break_up_repeating_scandatasets()  # breaks up sets too much!
     analyzer.apply_transform_to_all_scandata(get_positive_time_delay_scandata,
                                              zero_delay_offset=-15)
-    analyzer.apply_transform_to_all_scandata(add_excluded_interval_scandata,
-                                             start=7000, stop=15000)
-    analyzer.apply_transform_to_all_scandata(add_excluded_interval_scandata,
-                                             start=-15, stop=100)
+#    analyzer.apply_transform_to_all_scandata(add_excluded_interval_scandata,
+#                                             start=7000, stop=15000)
+#    analyzer.apply_transform_to_all_scandata(add_excluded_interval_scandata,
+#                                             start=-15, stop=100)
     analyzer.fit_all_scandata_to_model(multiprocessing=True)
 
     # DEFINE SHARED FILTERS TO USE EVERY TIME FOR CONVENIENCE

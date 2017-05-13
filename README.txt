@@ -160,7 +160,7 @@ PACKAGE INSTALLATION [NON-ANACONDA, OUTDATED]:
 -Note "install_requires" line of the setuptools script is borked, preventing
     an easy auto-install of required packages. Needs fixing, sorry.
 
-IMPLEMENTATION NOTES ON ITERATORS AND ITERABLES:
+IMPLEMENTATION NOTES ON ITERATORS AND ITERABLES [MOSTLY OUTDATED]:
 -Most functions are set to accept iterables instead of say, lists. This means
     you can send it a list, a tuple, or even an iterator.
 -Returning iterators is good practice if you can lazily process it. However,

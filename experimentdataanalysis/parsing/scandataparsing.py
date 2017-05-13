@@ -162,7 +162,7 @@ def analyze_scan_filepath(filepath, scaninfo=None, keywordlists=None):
         #        e.g. "..._2Dscan_MirrorY_MirrorZ_..."
         #                 -> {"SecondScanType": "MirrorY",
         #                     "FirstScanType": "MirrorZ"}
-        next_element_keyword_list = [("Ind", "FirstScanIndex"),
+        next_element_keyword_list = [("Ind", "SecondScanIndex"),
                                      ("2Dscan", ["SecondScanType",
                                                  "FirstScanType"]),
                                      ("Voltage", "Voltage (V)"),

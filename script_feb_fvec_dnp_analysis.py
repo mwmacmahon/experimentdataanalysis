@@ -53,7 +53,7 @@ filepath_element_keyword_list = [("Vcm", "Electric Field (V/cm)"),
 
 # for this one, if element [0] is found,
 # next element stored w/ key given by elements [1][0], [1][1], [1][2], etc.
-filepath_next_element_keyword_list = [("Ind", "FirstScanIndex"),
+filepath_next_element_keyword_list = [("Ind", "SecondScanIndex"),
                                       ("2Dscan", ["SecondScanType",
                                                   "FirstScanType"]),
                                       ("Voltage", "Voltage (V)"),
@@ -376,7 +376,7 @@ if __name__ == '__main__':
     scandata_list, temp = scandata_iterable_sort(scandata_list,
                                                  'Delay Time (ps)',
 #                                                 'SecondScanCoord',
-                                                 'FirstScanIndex',
+                                                 'SecondScanIndex',
                                                  numeric_sort=True)
 #    scandata_list = scandata_list[0:3]
 #    scandata_list = scandata_list[3:6]

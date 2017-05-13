@@ -57,7 +57,7 @@ filepath_element_keyword_list = [("Vcm", "Electric Field (V/cm)"),
 
 # for this one, if element [0] is found,
 # next element stored w/ key given by elements [1][0], [1][1], [1][2], etc.
-filepath_next_element_keyword_list = [("Ind", "FirstScanIndex"),
+filepath_next_element_keyword_list = [("Ind", "SecondScanIndex"),
                                       ("2Dscan", ["SecondScanType",
                                                   "FirstScanType"]),
                                       ("Voltage", "Voltage (V)"),

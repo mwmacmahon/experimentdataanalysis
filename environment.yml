@@ -11,11 +11,12 @@ dependencies:
 #  - numexpr=2.6.1
   - numpy>=1.11.0
   - packaging  # jupyter/spyder requirement that won't auto-install
-  - pandas>=0.19.0
+  - pandas>=0.20.0  # 20.0 for squeeze...
   - pyqt=4.11
   - scipy=0.19.0
   - spyder=3.1.4
   - sympy=1.0
-#  - pip
-#  - pip:
+  - pip
+  - pip:
+      - jupyterthemes
 

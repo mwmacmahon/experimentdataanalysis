@@ -14,7 +14,7 @@ from PyQt4 import QtCore, QtGui, uic
 import experimentdataanalysis.guis as guis
 from experimentdataanalysis.analysis.dataclasses \
     import FitData, ScanData
-import experimentdataanalysis.parsing.scandataparsing as sdparsing
+import experimentdataanalysis.parsing.metadataparsing as mdparsing
 from experimentdataanalysis.guis.guistarter import QApplicationStarter
 
 
@@ -137,7 +137,7 @@ class DataBrowserWindow(QtGui.QMainWindow):
         self.statusBar.showMessage("Loading...")
         try:
             scandata_list = \
-                list(sdparsing.fetch_dir_as_unfit_scandata_iterator())
+                list(mdparsing.fetch_dir_as_unfit_scandata_iterator())
         # TODO: catch exceptions!
         except:
             self.ignore_input = False
@@ -160,7 +160,7 @@ class DataBrowserWindow(QtGui.QMainWindow):
         self.ignore_input = True
         self.statusBar.showMessage("Loading...")
         try:
-            scandata = sdparsing.fetch_csv_as_unfit_scandata()
+            scandata = mdparsing.fetch_csv_as_unfit_scandata()
         # TODO: catch exceptions!
         except:
             self.ignore_input = False

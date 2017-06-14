@@ -37,30 +37,18 @@ def analyze_scan_filepath(filepath, scaninfo=None, keywordlists=None):
         #    tag containing third string/value
         #        e.g. if keyword_list contains ("warmup", "Warmup?", "Yes"):
         #             "...warmup..." -> {"Warmup?": "Yes"}
-        this_element_keyword_list = [("TRKR", "IsTRKR?", True),
-                                     ("RSA", "IsRSA?", True)]
+        this_element_keyword_list = []
         # 2. Grab next element(s) if this one CONTAINS first string,
         #    tag next element(s) as second string(s)
         #        e.g. "..._Ind_3_..." -> {"FastScanIndex": 3}
         #        e.g. "..._2Dscan_MirrorY_MirrorZ_..."
         #                 -> {"SecondScanType": "MirrorY",
         #                     "FirstScanType": "MirrorZ"}
-        next_element_keyword_list = [("Ind", "SecondScanIndex"),
-                                     ("2Dscan", ["SecondScanType",
-                                                 "FirstScanType"]),
-                                     ("Voltage", "Voltage (V)"),
-                                     ("MirrorZ", "Pump-Probe Distance (um)")]
+        next_element_keyword_list = []
         # 3. Grab this element if it CONTAINS first string,
         #    tag remainder as second string
         #        e.g. "..._30K_..." -> {"SetTemperature": 30}
-        inside_this_element_keyword_list = [("Vcm", "Electric Field (V/cm)"),
-                                            ("mT", "Magnetic Field (mT)"),
-                                            ("K", "Set Temperature (K)"),
-                                            ("nm", "Wavelength (nm)"),
-                                            ("ps", "Delay Time (ps)"),
-                                            ("run", "RunIndex"),
-                                            ("V", "Voltage (V)"),
-                                            ("x", "SecondScanCoord")]
+        inside_this_element_keyword_list = []
 
     # get rid of idiosyncratic delimiters by swapping with _
     filepath = filepath.replace("\\", "__")

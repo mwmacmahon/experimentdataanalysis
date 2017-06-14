@@ -100,11 +100,17 @@ def plot_dataframe_2d(df, data_column,
     if ax is None:
         plt.figure()
         ax = plt.subplot(111)
+    if 'origin' not in imshow_kwargs.keys():
+        imshow_kwargs['origin'] = 'upper'
     if 'extent' not in imshow_kwargs.keys():
-        imshow_kwargs['extent'] = [min(xvec), max(xvec),
-                                   min(yvec), max(yvec)]
-    width = imshow_kwargs['extent'][1] - imshow_kwargs['extent'][0]
-    height = imshow_kwargs['extent'][3] - imshow_kwargs['extent'][2]
+        if imshow_kwargs['origin'] == 'upper':
+            imshow_kwargs['extent'] = [min(xvec), max(xvec),
+                                       max(yvec), min(yvec)]
+        else:
+            imshow_kwargs['extent'] = [min(xvec), max(xvec),
+                                       min(yvec), max(yvec)]
+        width = imshow_kwargs['extent'][1] - imshow_kwargs['extent'][0]
+        height = abs(imshow_kwargs['extent'][2] - imshow_kwargs['extent'][3])
     natural_aspect_ratio = width / height
     if 'aspect' in imshow_kwargs.keys():
         imshow_kwargs['aspect'] *= natural_aspect_ratio
@@ -115,7 +121,7 @@ def plot_dataframe_2d(df, data_column,
     if 'interpolation' not in imshow_kwargs.keys():
         imshow_kwargs['interpolation'] = 'nearest'
     ax.imshow(Zmat, **imshow_kwargs)
-    plt.show()
+#    plt.show()
 
 #     def get_axis_ticks(axis_values, use_inflection_points=False):
 #         if use_inflection_points:

@@ -5,7 +5,8 @@ import pandas as pd
 
 def get_dataframe_XYZ_pivot_tables(df, data_column,
                                    x_values_column=None,
-                                   y_values_column=None):
+                                   y_values_column=None,
+                                   fill_value=np.nan):
     """
     Returns X, Y, Z dataframes corresponding to a 2D pivot of the
     given dataframe along X, Y. Expects a 2+ level multi-index and/or
@@ -56,7 +57,7 @@ def get_dataframe_XYZ_pivot_tables(df, data_column,
                                   index=pivot_index_columns,
                                   columns=[x_index_column],
                                   aggfunc=lambda x: x.head(1),
-                                  fill_value=0)
+                                  fill_value=fill_value)
     xvals_df = pivot_df[x_values_column]  # pd.DataFrames in meshgrid()-style 
     yvals_df = pivot_df[y_values_column]
     zvals_df = pivot_df[data_column]
@@ -64,12 +65,14 @@ def get_dataframe_XYZ_pivot_tables(df, data_column,
 
 def get_dataframe_2d_matrix_and_axes_vecs(df, data_column,
                                           x_values_column=None,
-                                          y_values_column=None):
+                                          y_values_column=None,
+                                          fill_value=np.nan):
     X, Y, Z = get_dataframe_XYZ_pivot_tables(df, data_column,
                                              x_values_column,
-                                             y_values_column)
-    x_s = X.iloc[0]  # pd.Series w/matching x/y-dimensional indexing
-    y_s = Y.T.iloc[0]
+                                             y_values_column,
+                                             fill_value)
+    x_s = X.mean()  # pd.Series w/ALL values spread across rows
+    y_s = Y.T.mean()
     return x_s.values, y_s.values, Z.values
 
 # helper fcn for labelling axes with nonconsecutive values:
@@ -89,14 +92,50 @@ def get_inflection_points(values):
     inflection_point_values.append(val)
     return inflection_point_indices, inflection_point_values
 
-def plot_dataframe_2d(df, data_column,
-                      x_values_column=None, y_values_column=None,
-                      ax=None, **imshow_kwargs):
+def plot_dataframe_waterfall(df, data_column,
+                             num_waterfall_plots=None,
+                             x_values_column=None, y_values_column=None,
+                             fill_value=np.nan,
+                             xlabel=None, ylabel=None,
+                             ax=None):
     xvec, yvec, Zmat = \
         get_dataframe_2d_matrix_and_axes_vecs(df, data_column,
                                               x_values_column,
-                                              y_values_column)
-    nx, ny = len(xvec), len(yvec)
+                                              y_values_column,
+                                              fill_value)
+    if x_values_column is None:  # disregard original indices
+        xvec = np.arange(len(xvec))
+    if y_values_column is None:
+        yvec = np.arange(len(yvec))
+    if num_waterfall_plots is None:  # default 5 plots
+        num_waterfall_plots = 5
+    num_waterfall_plots = min(num_waterfall_plots, len(yvec))
+    waterfall_indices = np.linspace(0, len(yvec) - 1,
+                                    num_waterfall_plots)
+    waterfall_indices = np.int64(np.trunc(waterfall_indices))
+    z_offset = 0
+    for y_ind in waterfall_indices:
+        zvals = Zmat[y_ind, :]
+        valid_indices = ~np.isnan(zvals)
+        zvals = zvals[valid_indices]
+        zvals -= zvals.max()
+        ax.plot(xvec[valid_indices], zvals + z_offset,
+                'd-', label=str(yvec[y_ind]))
+        z_offset += zvals.min()
+    ax.legend()
+    if xlabel is not None:
+        ax.set_xlabel(xlabel)
+    if ylabel is not None:
+        ax.set_ylabel(ylabel)
+
+def plot_matrix_colorplot(matrix, xvec=None, yvec=None,
+                          xlabel=None, ylabel=None,
+                          ax=None, **imshow_kwargs):
+    nx, ny = matrix.shape
+    if xvec is None:
+        xvec = np.arange(nx)
+    if yvec is None:
+        yvec = np.arange(ny)
     if ax is None:
         plt.figure()
         ax = plt.subplot(111)
@@ -109,8 +148,8 @@ def plot_dataframe_2d(df, data_column,
         else:
             imshow_kwargs['extent'] = [min(xvec), max(xvec),
                                        min(yvec), max(yvec)]
-        width = imshow_kwargs['extent'][1] - imshow_kwargs['extent'][0]
-        height = abs(imshow_kwargs['extent'][2] - imshow_kwargs['extent'][3])
+    width = abs(imshow_kwargs['extent'][1] - imshow_kwargs['extent'][0])
+    height = abs(imshow_kwargs['extent'][3] - imshow_kwargs['extent'][2])
     natural_aspect_ratio = width / height
     if 'aspect' in imshow_kwargs.keys():
         imshow_kwargs['aspect'] *= natural_aspect_ratio
@@ -120,8 +159,30 @@ def plot_dataframe_2d(df, data_column,
         imshow_kwargs['cmap'] = 'jet'
     if 'interpolation' not in imshow_kwargs.keys():
         imshow_kwargs['interpolation'] = 'nearest'
-    ax.imshow(Zmat, **imshow_kwargs)
-#    plt.show()
+    ax.imshow(matrix, **imshow_kwargs)
+    if xlabel is not None:
+        ax.set_xlabel(xlabel)
+    if ylabel is not None:
+        ax.set_ylabel(ylabel)
+#    plt.show()  # screws up other plots subsequent to this one
+
+def plot_dataframe_colorplot(df, data_column,
+                             x_values_column=None, y_values_column=None,
+                             fill_value=np.nan,
+                             xlabel=None, ylabel=None,
+                             ax=None, **imshow_kwargs):
+    xvec, yvec, Zmat = \
+        get_dataframe_2d_matrix_and_axes_vecs(df, data_column,
+                                              x_values_column,
+                                              y_values_column,
+                                              fill_value)
+    if x_values_column is None:  # disregard original indices
+        xvec = np.arange(len(xvec))
+    if y_values_column is None:
+        yvec = np.arange(len(yvec))
+    plot_matrix_colorplot(Zmat, xvec, yvec,
+                          xlabel=xlabel, ylabel=ylabel,
+                          ax=ax, **imshow_kwargs)
 
 #     def get_axis_ticks(axis_values, use_inflection_points=False):
 #         if use_inflection_points:

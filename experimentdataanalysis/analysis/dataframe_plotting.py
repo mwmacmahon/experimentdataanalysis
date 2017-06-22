@@ -56,7 +56,7 @@ def get_dataframe_XYZ_pivot_tables(df, data_column,
     pivot_df = flatdf.pivot_table(values=[data_column, x_values_column, y_values_column],
                                   index=pivot_index_columns,
                                   columns=[x_index_column],
-                                  aggfunc=lambda x: x.head(1),
+                                  aggfunc=lambda x: x.iloc[0],
                                   fill_value=fill_value)
     xvals_df = pivot_df[x_values_column]  # pd.DataFrames in meshgrid()-style 
     yvals_df = pivot_df[y_values_column]
@@ -72,7 +72,7 @@ def get_dataframe_2d_matrix_and_axes_vecs(df, data_column,
                                              y_values_column,
                                              fill_value)
     x_s = X.mean()  # pd.Series w/ALL values spread across rows
-    y_s = Y.T.mean()
+    y_s = Y.T.mean()  # TODO: fix special case of non-np.nan fill values
     return x_s.values, y_s.values, Z.values
 
 # helper fcn for labelling axes with nonconsecutive values:

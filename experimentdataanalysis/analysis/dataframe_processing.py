@@ -168,7 +168,6 @@ def df_transform_dataset_df_to_fit_row(df, group_fit_params_dict,
     # might need to revisit this sometime
     return new_df.squeeze(axis=0)
 
-
 def df_minimize_fcn_on_datasets(df, residuals_fcn, fit_params,
                                 independent_vars_columns,
                                 measured_data_column,

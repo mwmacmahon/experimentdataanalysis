@@ -61,13 +61,18 @@ def process_directory_csvs_to_dataframes(parent_dir,
         for filename in filenames:
             if filename_key in filename:
                 unfiltered_filepath_list.append(os.path.join(dirpath, filename))
-    if run_criteria == 'directory':
+    if run_criteria == 'same':
+        pass
+    elif run_criteria == 'directory':
         last_dir = ''
-        run_counter = -1        
+        run_counter = -1
     else:
         raise NotImplementedError("currently only supported run " +
                                   "criteria is grouping-by-directory")
+    # extract and remove # header rows, but don't change original
+    pandas_read_csv_kwargs = pandas_read_csv_kwargs.copy()
     num_headerlines = pandas_read_csv_kwargs['skiprows']
+    pandas_read_csv_kwargs['skiprows'] = 0
     filtered_file_list_index = 0
     filtered_filepath_list = []
     file_metadata_list = []
@@ -80,6 +85,14 @@ def process_directory_csvs_to_dataframes(parent_dir,
                 file_dataframe = \
                     pd.read_csv(filepath_or_buffer=file_lines_iterator,
                                 **pandas_read_csv_kwargs)
+            except pd.errors.ParserError:
+                print("Pandas read_csv parser error, skipping file...")
+                print("Filepath: {}".format(filepath))
+                continue
+            except pd.errors.EmptyDataError:
+                print("No data found, skipping file...")
+                print("Filepath: {}".format(filepath))
+                continue
             except StopIteration:
                 print("Problem encountered in process_directory_csvs_to_dataframes():")
                 print("Tried to skip {} header lines, ".format(num_headerlines) +
@@ -91,7 +104,9 @@ def process_directory_csvs_to_dataframes(parent_dir,
         file_metadata = parse_filepath_and_header(filepath,
                                                   ''.join(header_lines),
                                                   parsing_keyword_lists)
-        if run_criteria == 'directory':
+        if run_criteria == 'same':
+            file_metadata['Run ID'] = 0
+        elif run_criteria == 'directory':
             current_dir = filepath.split('\\')[-2]
             if current_dir != last_dir:
                 last_dir = current_dir

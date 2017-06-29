@@ -25,6 +25,8 @@ def analyze_scan_filepath(filepath, scaninfo=None, keywordlists=None):
     scaninfo['Filepath'] = filepath
     try:
         scaninfo['File Last Modified'] = time.ctime(os.path.getmtime(filepath))
+    except OSError:
+        pass
     except FileNotFoundError:
         pass
     if keywordlists is not None:
@@ -35,20 +37,31 @@ def analyze_scan_filepath(filepath, scaninfo=None, keywordlists=None):
         # DEFAULT SEARCH TERMS AND SEARCH RULES:
         # 1. If first string found, register second string as
         #    tag containing third string/value
-        #        e.g. if keyword_list contains ("warmup", "Warmup?", "Yes"):
-        #             "...warmup..." -> {"Warmup?": "Yes"}
-        this_element_keyword_list = []
+        #        e.g. ("warmup", "Warmup?", "Yes")
+        #             result: "..._warmup_..." -> {"Warmup?": "Yes"}
+        this_element_keyword_list = [
+            ("ExampleTargetKey", "ExampleStorageKey", "ExampleStoredValue"),
+        ]
         # 2. Grab next element(s) if this one CONTAINS first string,
         #    tag next element(s) as second string(s)
-        #        e.g. "..._Ind_3_..." -> {"FastScanIndex": 3}
-        #        e.g. "..._2Dscan_MirrorY_MirrorZ_..."
-        #                 -> {"SecondScanType": "MirrorY",
-        #                     "FirstScanType": "MirrorZ"}
-        next_element_keyword_list = []
+        #        e.g. ("Ind", "FastScanIndex")
+        #             result: "..._Ind_3_..." -> {"FastScanIndex": 3}
+        #        e.g. ("2DScan", ["SecondScanType", "FirstScanType"])
+        #             result: "..._2Dscan_MirrorY_MirrorZ_..."
+        #                         -> {"SecondScanType": "MirrorY",
+        #                             "FirstScanType": "MirrorZ"}
+        next_element_keyword_list = [
+            ("ExampleTargetKey1", "ExampleStorageKey1"),
+            ("ExampleTargetKey2", ["ExampleStorageKey2",
+                                   "ExampleStorageKey3"]),
+        ]
         # 3. Grab this element if it CONTAINS first string,
         #    tag remainder as second string
-        #        e.g. "..._30K_..." -> {"SetTemperature": 30}
-        inside_this_element_keyword_list = []
+        #        e.g. ("K", "SetTemperature")
+        #             result: "..._30K_..." -> {"SetTemperature": 30}
+        inside_this_element_keyword_list = [
+            ("ExampleTargetKey", "ExampleStorageKey"),
+        ]
 
     # get rid of idiosyncratic delimiters by swapping with _
     filepath = filepath.replace("\\", "__")
@@ -62,15 +75,16 @@ def analyze_scan_filepath(filepath, scaninfo=None, keywordlists=None):
             except ValueError:  # if not a numeric value:
                 # ignore trailing keywords, e.g. units
                 value = element
-                for matchstr, _ in inside_this_element_keyword_list:
-                    if element.endswith(matchstr):
-                        value = element.replace(matchstr, "")
-                try:
-                    value = float(value)
-                except ValueError:  # still non-numeric
-                    pass
+                if len(inside_this_element_keyword_list) > 0:
+                    for matchstr, _ in inside_this_element_keyword_list:
+                        if element.endswith(matchstr):
+                            value = element.replace(matchstr, "")
+                    try:
+                        value = float(value)
+                    except ValueError:  # still non-numeric
+                        value = element
             scaninfo[next_element_tags.pop(0)] = value
-        else:
+        elif len(next_element_keyword_list) > 0:
             for matchstr, tags in next_element_keyword_list:
                 if element == matchstr:
                     if isinstance(tags, str):  # only one string
@@ -82,21 +96,22 @@ def analyze_scan_filepath(filepath, scaninfo=None, keywordlists=None):
                 scaninfo[tag] = value
         # a little trickier, must use _best_ keyword match or none
         # e.g. "0Vcm": '0' units 'Vcm', NOT ALSO '0cm' units 'V'
-        inside_this_element_keys, inside_this_element_tags = \
-            zip(*inside_this_element_keyword_list)
-        keymatches = [key in element for key in inside_this_element_keys]
-        keylengths = [len(key) for key in inside_this_element_keys]
-        best_match_index = \
-            np.argmax([matched * length  # use bool -> 0, 1 conversion
-                       for matched, length in zip(keymatches, keylengths)])
-        matchstr, tag = inside_this_element_keyword_list[best_match_index]
-        if matchstr in element:  # avoid likely case of no match
-            value = element.replace(matchstr, "")
-            try:
-                value = float(value)
-                scaninfo[tag] = value
-            except ValueError:
-                pass  # by this rule, only take numerical values
+        if len(inside_this_element_keyword_list) > 0:
+            inside_this_element_keys, inside_this_element_tags = \
+                zip(*inside_this_element_keyword_list)
+            keymatches = [key in element for key in inside_this_element_keys]
+            keylengths = [len(key) for key in inside_this_element_keys]
+            best_match_index = \
+                np.argmax([matched * length  # use bool -> 0, 1 conversion
+                           for matched, length in zip(keymatches, keylengths)])
+            matchstr, tag = inside_this_element_keyword_list[best_match_index]
+            if matchstr in element:  # avoid likely case of no match
+                value = element.replace(matchstr, "")
+                try:
+                    value = float(value)
+                    scaninfo[tag] = value
+                except ValueError:
+                    pass  # by this rule, only take numerical values
     return scaninfo
 
 

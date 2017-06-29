@@ -97,7 +97,8 @@ def plot_dataframe_waterfall(df, data_column,
                              x_values_column=None, y_values_column=None,
                              fill_value=np.nan,
                              xlabel=None, ylabel=None,
-                             ax=None):
+                             ax=None, add_legend=True,
+                             **plot_kwargs):
     xvec, yvec, Zmat = \
         get_dataframe_2d_matrix_and_axes_vecs(df, data_column,
                                               x_values_column,
@@ -109,9 +110,13 @@ def plot_dataframe_waterfall(df, data_column,
         yvec = np.arange(len(yvec))
     if num_waterfall_plots is None:  # default 5 plots
         num_waterfall_plots = 5
-    num_waterfall_plots = min(num_waterfall_plots, len(yvec))
-    waterfall_indices = np.linspace(0, len(yvec) - 1,
-                                    num_waterfall_plots)
+    num_waterfall_plots = np.array(num_waterfall_plots)
+    if num_waterfall_plots.size > 1:
+        waterfall_indices = num_waterfall_plots
+    else:
+        num_waterfall_plots = min(num_waterfall_plots, len(yvec))
+        waterfall_indices = np.linspace(0, len(yvec) - 1,
+                                        num_waterfall_plots)
     waterfall_indices = np.int64(np.trunc(waterfall_indices))
     z_offset = 0
     for y_ind in waterfall_indices:
@@ -120,9 +125,15 @@ def plot_dataframe_waterfall(df, data_column,
         zvals = zvals[valid_indices]
         zvals -= zvals.max()
         ax.plot(xvec[valid_indices], zvals + z_offset,
-                'd-', label=str(yvec[y_ind]))
+                'd-', label=str(yvec[y_ind]),
+                **plot_kwargs)
         z_offset += zvals.min()
-    ax.legend()
+    if add_legend:
+        if len(waterfall_indices) < 10:
+            ax.legend()
+        else:
+            print('large # plots in waterfall, legend ' +
+                  'omitted to avoid overflow.')
     if xlabel is not None:
         ax.set_xlabel(xlabel)
     if ylabel is not None:
